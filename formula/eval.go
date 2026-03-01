@@ -1,0 +1,591 @@
+package formula
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+)
+
+const (
+	maxExcelRows = 1048576 // maximum rows in an Excel worksheet
+	maxExcelCols = 16384   // maximum columns in an Excel worksheet (XFD)
+)
+
+// CellResolver abstracts cell/range lookups so the VM has no dependency on Sheet.
+type CellResolver interface {
+	GetCellValue(addr CellAddr) Value
+	GetRangeValues(addr RangeAddr) [][]Value
+}
+
+// EvalContext provides context about the current evaluation environment.
+type EvalContext struct {
+	CurrentCol     int
+	CurrentRow     int
+	CurrentSheet   string
+	IsArrayFormula bool // true for CSE (Ctrl+Shift+Enter) array formulas
+}
+
+// Eval executes a compiled formula and returns the result.
+func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, error) {
+	stack := make([]Value, 0, 16)
+
+	push := func(v Value) { stack = append(stack, v) }
+	pop := func() (Value, error) {
+		if len(stack) == 0 {
+			return Value{}, fmt.Errorf("stack underflow")
+		}
+		v := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		return v, nil
+	}
+
+	for _, inst := range cf.Code {
+		switch inst.Op {
+		case OpPushNum:
+			push(cf.Consts[inst.Operand])
+		case OpPushStr:
+			push(cf.Consts[inst.Operand])
+		case OpPushBool:
+			push(BoolVal(inst.Operand != 0))
+		case OpPushError:
+			push(ErrorVal(ErrorValue(inst.Operand)))
+		case OpPushEmpty:
+			push(EmptyVal())
+
+		case OpLoadCell:
+			addr := cf.Refs[inst.Operand]
+			push(resolver.GetCellValue(addr))
+
+		case OpLoadRange:
+			addr := cf.Ranges[inst.Operand]
+			// Implicit intersection: when a full-column or full-row range is
+			// used in a non-array formula, reduce to the single cell at the
+			// formula's own row/column rather than loading the entire range.
+			if ctx != nil && !ctx.IsArrayFormula {
+				isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
+				isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+				if isFullCol && addr.FromCol == addr.ToCol && ctx.CurrentRow >= addr.FromRow {
+					// Full-column ref like F:F → intersect at current row
+					push(resolver.GetCellValue(CellAddr{
+						Sheet: addr.Sheet,
+						Col:   addr.FromCol,
+						Row:   ctx.CurrentRow,
+					}))
+					continue
+				}
+				if isFullRow && addr.FromRow == addr.ToRow && ctx.CurrentCol >= addr.FromCol {
+					// Full-row ref like 1:1 → intersect at current column
+					push(resolver.GetCellValue(CellAddr{
+						Sheet: addr.Sheet,
+						Col:   ctx.CurrentCol,
+						Row:   addr.FromRow,
+					}))
+					continue
+				}
+			}
+			rows := resolver.GetRangeValues(addr)
+			// Pad trailing blank rows for bounded ranges. GetRangeValues
+			// clamps toRow to MaxRow to avoid huge allocations for
+			// full-column refs, but bounded ranges like A1:A5 need all
+			// requested rows so functions like COUNTBLANK see every blank.
+			isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
+			isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+			if !isFullCol && !isFullRow {
+				expectedRows := addr.ToRow - addr.FromRow + 1
+				cols := addr.ToCol - addr.FromCol + 1
+				for len(rows) < expectedRows {
+					emptyRow := make([]Value, cols)
+					for j := range emptyRow {
+						emptyRow[j] = EmptyVal()
+					}
+					rows = append(rows, emptyRow)
+				}
+			}
+			push(Value{Type: ValueArray, Array: rows})
+
+		case OpLoadCellRef:
+			addr := cf.Refs[inst.Operand]
+			// Encode col and row into Num: col + row*100_000.
+			// Max col = 16384 < 100_000, max row = 1_048_576, product < 2^53.
+			push(Value{Type: ValueRef, Num: float64(addr.Col + addr.Row*100_000)})
+
+		case OpAdd:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			bn, be := coerceNum(b)
+			if ae != nil {
+				push(*ae)
+			} else if be != nil {
+				push(*be)
+			} else {
+				push(NumberVal(an + bn))
+			}
+
+		case OpSub:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			bn, be := coerceNum(b)
+			if ae != nil {
+				push(*ae)
+			} else if be != nil {
+				push(*be)
+			} else {
+				push(NumberVal(an - bn))
+			}
+
+		case OpMul:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			bn, be := coerceNum(b)
+			if ae != nil {
+				push(*ae)
+			} else if be != nil {
+				push(*be)
+			} else {
+				push(NumberVal(an * bn))
+			}
+
+		case OpDiv:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			bn, be := coerceNum(b)
+			if ae != nil {
+				push(*ae)
+			} else if be != nil {
+				push(*be)
+			} else if bn == 0 {
+				push(ErrorVal(ErrValDIV0))
+			} else {
+				push(NumberVal(an / bn))
+			}
+
+		case OpPow:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			bn, be := coerceNum(b)
+			if ae != nil {
+				push(*ae)
+			} else if be != nil {
+				push(*be)
+			} else {
+				push(NumberVal(math.Pow(an, bn)))
+			}
+
+		case OpNeg:
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			if ae != nil {
+				push(*ae)
+			} else {
+				push(NumberVal(-an))
+			}
+
+		case OpPercent:
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			an, ae := coerceNum(a)
+			if ae != nil {
+				push(*ae)
+			} else {
+				push(NumberVal(an / 100))
+			}
+
+		case OpConcat:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			push(StringVal(valueToString(a) + valueToString(b)))
+
+		case OpEq:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) == 0))
+			}
+
+		case OpNe:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) != 0))
+			}
+
+		case OpLt:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) < 0))
+			}
+
+		case OpLe:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) <= 0))
+			}
+
+		case OpGt:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) > 0))
+			}
+
+		case OpGe:
+			b, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			a, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			if a.Type == ValueError {
+				push(a)
+			} else if b.Type == ValueError {
+				push(b)
+			} else {
+				push(BoolVal(compareValues(a, b) >= 0))
+			}
+
+		case OpCall:
+			funcID := int(inst.Operand >> 8)
+			argc := int(inst.Operand & 0xFF)
+			if argc > len(stack) {
+				return Value{}, fmt.Errorf("stack underflow in function call")
+			}
+			args := make([]Value, argc)
+			copy(args, stack[len(stack)-argc:])
+			stack = stack[:len(stack)-argc]
+
+			result, err := CallFunc(funcID, args, ctx)
+			if err != nil {
+				return Value{}, err
+			}
+			push(result)
+
+		case OpMakeArray:
+			rows := int(inst.Operand >> 16)
+			cols := int(inst.Operand & 0xFFFF)
+			total := rows * cols
+			if total > len(stack) {
+				return Value{}, fmt.Errorf("stack underflow in array construction")
+			}
+			elems := make([]Value, total)
+			copy(elems, stack[len(stack)-total:])
+			stack = stack[:len(stack)-total]
+
+			arr := make([][]Value, rows)
+			for r := 0; r < rows; r++ {
+				arr[r] = elems[r*cols : (r+1)*cols]
+			}
+			push(Value{Type: ValueArray, Array: arr})
+
+		default:
+			return Value{}, fmt.Errorf("unknown opcode %d", inst.Op)
+		}
+	}
+
+	if len(stack) != 1 {
+		return Value{}, fmt.Errorf("expected 1 value on stack, got %d", len(stack))
+	}
+	return stack[0], nil
+}
+
+// coerceNum converts a Value to float64 for arithmetic.
+// Returns the number and nil on success, or 0 and a pointer to an error Value.
+func coerceNum(v Value) (float64, *Value) {
+	switch v.Type {
+	case ValueNumber:
+		return v.Num, nil
+	case ValueEmpty:
+		return 0, nil
+	case ValueBool:
+		if v.Bool {
+			return 1, nil
+		}
+		return 0, nil
+	case ValueString:
+		if v.Str == "" {
+			return 0, nil
+		}
+		n, err := strconv.ParseFloat(v.Str, 64)
+		if err != nil {
+			e := ErrorVal(ErrValVALUE)
+			return 0, &e
+		}
+		return n, nil
+	case ValueError:
+		return 0, &v
+	default:
+		e := ErrorVal(ErrValVALUE)
+		return 0, &e
+	}
+}
+
+func valueToString(v Value) string {
+	switch v.Type {
+	case ValueNumber:
+		return strconv.FormatFloat(v.Num, 'f', -1, 64)
+	case ValueString:
+		return v.Str
+	case ValueBool:
+		if v.Bool {
+			return "TRUE"
+		}
+		return "FALSE"
+	case ValueError:
+		return errorValueToString(v.Err)
+	default:
+		return ""
+	}
+}
+
+func errorValueToString(e ErrorValue) string {
+	switch e {
+	case ErrValDIV0:
+		return "#DIV/0!"
+	case ErrValNA:
+		return "#N/A"
+	case ErrValNAME:
+		return "#NAME?"
+	case ErrValNULL:
+		return "#NULL!"
+	case ErrValNUM:
+		return "#NUM!"
+	case ErrValREF:
+		return "#REF!"
+	case ErrValVALUE:
+		return "#VALUE!"
+	case ErrValSPILL:
+		return "#SPILL!"
+	case ErrValCALC:
+		return "#CALC!"
+	case ErrValGETTINGDATA:
+		return "#GETTING_DATA"
+	default:
+		return "#VALUE!"
+	}
+}
+
+// compareValues compares two values for ordering. Returns -1, 0, or 1.
+func compareValues(a, b Value) int {
+	if a.Type == ValueEmpty {
+		a = NumberVal(0)
+	}
+	if b.Type == ValueEmpty {
+		b = NumberVal(0)
+	}
+
+	if a.Type == b.Type {
+		switch a.Type {
+		case ValueNumber:
+			return cmpFloat(a.Num, b.Num)
+		case ValueString:
+			return strings.Compare(strings.ToLower(a.Str), strings.ToLower(b.Str))
+		case ValueBool:
+			if a.Bool == b.Bool {
+				return 0
+			}
+			if !a.Bool {
+				return -1
+			}
+			return 1
+		}
+	}
+
+	return typeRank(a.Type) - typeRank(b.Type)
+}
+
+func typeRank(t ValueType) int {
+	switch t {
+	case ValueError:
+		return 0
+	case ValueNumber, ValueEmpty:
+		return 1
+	case ValueString:
+		return 2
+	case ValueBool:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func cmpFloat(a, b float64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func isTruthy(v Value) bool {
+	switch v.Type {
+	case ValueBool:
+		return v.Bool
+	case ValueNumber:
+		return v.Num != 0
+	case ValueString:
+		return v.Str != ""
+	default:
+		return false
+	}
+}
+
+// callFunction is replaced by CallFunc in registry.go.
+
+// liftUnary applies a scalar function element-wise over a ValueArray,
+// returning a new ValueArray of the same shape. Used for array-formula
+// evaluation of functions like ABS, ISNUMBER, etc.
+func liftUnary(arr Value, fn func(Value) Value) Value {
+	rows := make([][]Value, len(arr.Array))
+	for i, row := range arr.Array {
+		out := make([]Value, len(row))
+		for j, cell := range row {
+			out[j] = fn(cell)
+		}
+		rows[i] = out
+	}
+	return Value{Type: ValueArray, Array: rows}
+}
+
+// arrayElement returns element [i][j] from arr if it is an array,
+// or returns the scalar arr otherwise. Used for broadcasting scalars
+// alongside arrays in element-wise operations.
+func arrayElement(v Value, i, j int) Value {
+	if v.Type != ValueArray {
+		return v
+	}
+	if i < len(v.Array) && j < len(v.Array[i]) {
+		return v.Array[i][j]
+	}
+	return ErrorVal(ErrValNA)
+}
+
+// iterateNumeric calls fn for each numeric value in args, expanding arrays.
+// Non-numeric values in ranges are skipped; non-numeric scalar args cause #VALUE!.
+func iterateNumeric(args []Value, fn func(float64)) *Value {
+	for _, arg := range args {
+		if arg.Type == ValueArray {
+			for _, row := range arg.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return &cell
+					}
+					if cell.Type == ValueNumber {
+						fn(cell.Num)
+					}
+				}
+			}
+		} else {
+			if arg.Type == ValueError {
+				return &arg
+			}
+			n, e := coerceNum(arg)
+			if e != nil {
+				return e
+			}
+			fn(n)
+		}
+	}
+	return nil
+}
