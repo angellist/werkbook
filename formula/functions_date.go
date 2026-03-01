@@ -6,22 +6,22 @@ import (
 )
 
 func init() {
-	Register("DATE", noCtx(fnDATE))
-	Register("DAY", noCtx(fnDAY))
-	Register("MONTH", noCtx(fnMONTH))
-	Register("NOW", noCtx(fnNOW))
-	Register("TODAY", noCtx(fnTODAY))
-	Register("YEAR", noCtx(fnYEAR))
+	Register("DATE", NoCtx(fnDATE))
+	Register("DAY", NoCtx(fnDAY))
+	Register("MONTH", NoCtx(fnMONTH))
+	Register("NOW", NoCtx(fnNOW))
+	Register("TODAY", NoCtx(fnTODAY))
+	Register("YEAR", NoCtx(fnYEAR))
 }
 
 // Serial date helpers — duplicated from werkbook/date.go to avoid circular imports.
-var excelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
+var ExcelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
 
-// maxExcelSerial is the largest valid Excel serial date (Dec 31, 9999).
-const maxExcelSerial = 2958465
+// MaxExcelSerial is the largest valid Excel serial date (Dec 31, 9999).
+const MaxExcelSerial = 2958465
 
-func timeToExcelSerial(t time.Time) float64 {
-	duration := t.Sub(excelEpoch)
+func TimeToExcelSerial(t time.Time) float64 {
+	duration := t.Sub(ExcelEpoch)
 	days := duration.Hours() / 24
 	if days >= 60 {
 		days++
@@ -29,13 +29,13 @@ func timeToExcelSerial(t time.Time) float64 {
 	return days
 }
 
-func excelSerialToTime(serial float64) time.Time {
+func ExcelSerialToTime(serial float64) time.Time {
 	if serial > 60 {
 		serial--
 	}
 	days := int(serial)
 	frac := serial - float64(days)
-	t := excelEpoch.AddDate(0, 0, days)
+	t := ExcelEpoch.AddDate(0, 0, days)
 	t = t.Add(time.Duration(frac * 24 * float64(time.Hour)))
 	return t
 }
@@ -44,15 +44,15 @@ func fnDATE(args []Value) (Value, error) {
 	if len(args) != 3 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	year, e := coerceNum(args[0])
+	year, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	month, e := coerceNum(args[1])
+	month, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
-	day, e := coerceNum(args[2])
+	day, e := CoerceNum(args[2])
 	if e != nil {
 		return *e, nil
 	}
@@ -89,8 +89,8 @@ func fnDATE(args []Value) (Value, error) {
 	}
 
 	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
-	serial := timeToExcelSerial(t)
-	if serial < 0 || serial > maxExcelSerial {
+	serial := TimeToExcelSerial(t)
+	if serial < 0 || serial > MaxExcelSerial {
 		return ErrorVal(ErrValNUM), nil
 	}
 	return NumberVal(serial), nil
@@ -100,14 +100,14 @@ func fnDAY(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	if n < 0 || n > maxExcelSerial {
+	if n < 0 || n > MaxExcelSerial {
 		return ErrorVal(ErrValNUM), nil
 	}
-	t := excelSerialToTime(n)
+	t := ExcelSerialToTime(n)
 	return NumberVal(float64(t.Day())), nil
 }
 
@@ -115,14 +115,14 @@ func fnMONTH(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	if n < 0 || n > maxExcelSerial {
+	if n < 0 || n > MaxExcelSerial {
 		return ErrorVal(ErrValNUM), nil
 	}
-	t := excelSerialToTime(n)
+	t := ExcelSerialToTime(n)
 	return NumberVal(float64(t.Month())), nil
 }
 
@@ -130,7 +130,7 @@ func fnNOW(args []Value) (Value, error) {
 	if len(args) != 0 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	return NumberVal(timeToExcelSerial(time.Now())), nil
+	return NumberVal(TimeToExcelSerial(time.Now())), nil
 }
 
 func fnTODAY(args []Value) (Value, error) {
@@ -139,20 +139,20 @@ func fnTODAY(args []Value) (Value, error) {
 	}
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	return NumberVal(math.Floor(timeToExcelSerial(today))), nil
+	return NumberVal(math.Floor(TimeToExcelSerial(today))), nil
 }
 
 func fnYEAR(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	if n < 0 || n > maxExcelSerial {
+	if n < 0 || n > MaxExcelSerial {
 		return ErrorVal(ErrValNUM), nil
 	}
-	t := excelSerialToTime(n)
+	t := ExcelSerialToTime(n)
 	return NumberVal(float64(t.Year())), nil
 }

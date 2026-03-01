@@ -8,26 +8,26 @@ import (
 )
 
 func init() {
-	Register("AVERAGE", noCtx(fnAVERAGE))
-	Register("AVERAGEIF", noCtx(fnAVERAGEIF))
-	Register("COUNT", noCtx(fnCOUNT))
-	Register("COUNTA", noCtx(fnCOUNTA))
-	Register("COUNTBLANK", noCtx(fnCOUNTBLANK))
-	Register("COUNTIF", noCtx(fnCOUNTIF))
-	Register("COUNTIFS", noCtx(fnCOUNTIFS))
-	Register("LARGE", noCtx(fnLARGE))
-	Register("MAX", noCtx(fnMAX))
-	Register("MIN", noCtx(fnMIN))
-	Register("SMALL", noCtx(fnSMALL))
-	Register("SUM", noCtx(fnSUM))
-	Register("SUMIF", noCtx(fnSUMIF))
-	Register("SUMIFS", noCtx(fnSUMIFS))
-	Register("SUMPRODUCT", noCtx(fnSUMPRODUCT))
+	Register("AVERAGE", NoCtx(fnAVERAGE))
+	Register("AVERAGEIF", NoCtx(fnAVERAGEIF))
+	Register("COUNT", NoCtx(fnCOUNT))
+	Register("COUNTA", NoCtx(fnCOUNTA))
+	Register("COUNTBLANK", NoCtx(fnCOUNTBLANK))
+	Register("COUNTIF", NoCtx(fnCOUNTIF))
+	Register("COUNTIFS", NoCtx(fnCOUNTIFS))
+	Register("LARGE", NoCtx(fnLARGE))
+	Register("MAX", NoCtx(fnMAX))
+	Register("MIN", NoCtx(fnMIN))
+	Register("SMALL", NoCtx(fnSMALL))
+	Register("SUM", NoCtx(fnSUM))
+	Register("SUMIF", NoCtx(fnSUMIF))
+	Register("SUMIFS", NoCtx(fnSUMIFS))
+	Register("SUMPRODUCT", NoCtx(fnSUMPRODUCT))
 }
 
 func fnSUM(args []Value) (Value, error) {
 	sum := 0.0
-	if e := iterateNumeric(args, func(n float64) { sum += n }); e != nil {
+	if e := IterateNumeric(args, func(n float64) { sum += n }); e != nil {
 		return *e, nil
 	}
 	return NumberVal(sum), nil
@@ -36,7 +36,7 @@ func fnSUM(args []Value) (Value, error) {
 func fnAVERAGE(args []Value) (Value, error) {
 	sum := 0.0
 	count := 0
-	if e := iterateNumeric(args, func(n float64) { sum += n; count++ }); e != nil {
+	if e := IterateNumeric(args, func(n float64) { sum += n; count++ }); e != nil {
 		return *e, nil
 	}
 	if count == 0 {
@@ -89,7 +89,7 @@ func fnCOUNTA(args []Value) (Value, error) {
 func fnMIN(args []Value) (Value, error) {
 	min := math.MaxFloat64
 	found := false
-	if e := iterateNumeric(args, func(n float64) {
+	if e := IterateNumeric(args, func(n float64) {
 		if !found || n < min {
 			min = n
 			found = true
@@ -106,7 +106,7 @@ func fnMIN(args []Value) (Value, error) {
 func fnMAX(args []Value) (Value, error) {
 	max := -math.MaxFloat64
 	found := false
-	if e := iterateNumeric(args, func(n float64) {
+	if e := IterateNumeric(args, func(n float64) {
 		if !found || n > max {
 			max = n
 			found = true
@@ -138,13 +138,13 @@ func fnLARGE(args []Value) (Value, error) {
 			}
 		}
 	} else {
-		n, e := coerceNum(arr)
+		n, e := CoerceNum(arr)
 		if e != nil {
 			return *e, nil
 		}
 		nums = append(nums, n)
 	}
-	k, e := coerceNum(args[1])
+	k, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -174,13 +174,13 @@ func fnSMALL(args []Value) (Value, error) {
 			}
 		}
 	} else {
-		n, e := coerceNum(arr)
+		n, e := CoerceNum(arr)
 		if e != nil {
 			return *e, nil
 		}
 		nums = append(nums, n)
 	}
-	k, e := coerceNum(args[1])
+	k, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -213,55 +213,55 @@ func fnCOUNTBLANK(args []Value) (Value, error) {
 	return NumberVal(float64(count)), nil
 }
 
-// matchesCriteria checks if a value matches Excel-style criteria.
-func matchesCriteria(v Value, criteria Value) bool {
-	critStr := valueToString(criteria)
+// MatchesCriteria checks if a value matches Excel-style criteria.
+func MatchesCriteria(v Value, criteria Value) bool {
+	critStr := ValueToString(criteria)
 
 	if len(critStr) >= 2 {
 		switch {
 		case strings.HasPrefix(critStr, ">="):
-			return compareToCriteria(v, critStr[2:]) >= 0
+			return CompareToCriteria(v, critStr[2:]) >= 0
 		case strings.HasPrefix(critStr, "<="):
-			return compareToCriteria(v, critStr[2:]) <= 0
+			return CompareToCriteria(v, critStr[2:]) <= 0
 		case strings.HasPrefix(critStr, "<>"):
-			return compareToCriteria(v, critStr[2:]) != 0
+			return CompareToCriteria(v, critStr[2:]) != 0
 		case strings.HasPrefix(critStr, ">"):
-			return compareToCriteria(v, critStr[1:]) > 0
+			return CompareToCriteria(v, critStr[1:]) > 0
 		case strings.HasPrefix(critStr, "<"):
-			return compareToCriteria(v, critStr[1:]) < 0
+			return CompareToCriteria(v, critStr[1:]) < 0
 		case strings.HasPrefix(critStr, "="):
-			return compareToCriteria(v, critStr[1:]) == 0
+			return CompareToCriteria(v, critStr[1:]) == 0
 		}
 	}
 
 	if strings.ContainsAny(critStr, "*?") {
-		return wildcardMatch(valueToString(v), critStr)
+		return WildcardMatch(ValueToString(v), critStr)
 	}
 
 	if criteria.Type == ValueNumber {
-		n, e := coerceNum(v)
+		n, e := CoerceNum(v)
 		if e != nil {
 			return false
 		}
 		return n == criteria.Num
 	}
-	return strings.EqualFold(valueToString(v), critStr)
+	return strings.EqualFold(ValueToString(v), critStr)
 }
 
-func compareToCriteria(v Value, critValStr string) int {
-	if n, e := coerceNum(v); e == nil {
+func CompareToCriteria(v Value, critValStr string) int {
+	if n, e := CoerceNum(v); e == nil {
 		if cn, err := strconv.ParseFloat(critValStr, 64); err == nil {
 			return cmpFloat(n, cn)
 		}
 	}
-	return strings.Compare(strings.ToLower(valueToString(v)), strings.ToLower(critValStr))
+	return strings.Compare(strings.ToLower(ValueToString(v)), strings.ToLower(critValStr))
 }
 
-func wildcardMatch(s, pattern string) bool {
-	return wildcardHelper(strings.ToLower(s), strings.ToLower(pattern))
+func WildcardMatch(s, pattern string) bool {
+	return WildcardHelper(strings.ToLower(s), strings.ToLower(pattern))
 }
 
-func wildcardHelper(s, p string) bool {
+func WildcardHelper(s, p string) bool {
 	for len(p) > 0 {
 		switch p[0] {
 		case '*':
@@ -272,7 +272,7 @@ func wildcardHelper(s, p string) bool {
 				return true
 			}
 			for i := 0; i <= len(s); i++ {
-				if wildcardHelper(s[i:], p) {
+				if WildcardHelper(s[i:], p) {
 					return true
 				}
 			}
@@ -309,8 +309,8 @@ func fnSUMIF(args []Value) (Value, error) {
 	}
 
 	if rangeArg.Type != ValueArray {
-		if matchesCriteria(rangeArg, criteria) {
-			n, e := coerceNum(sumRange)
+		if MatchesCriteria(rangeArg, criteria) {
+			n, e := CoerceNum(sumRange)
 			if e != nil {
 				return NumberVal(0), nil
 			}
@@ -322,14 +322,14 @@ func fnSUMIF(args []Value) (Value, error) {
 	sum := 0.0
 	for i, row := range rangeArg.Array {
 		for j, cell := range row {
-			if matchesCriteria(cell, criteria) {
+			if MatchesCriteria(cell, criteria) {
 				var sv Value
 				if sumRange.Type == ValueArray && i < len(sumRange.Array) && j < len(sumRange.Array[i]) {
 					sv = sumRange.Array[i][j]
 				} else if sumRange.Type != ValueArray {
 					sv = sumRange
 				}
-				if n, e := coerceNum(sv); e == nil {
+				if n, e := CoerceNum(sv); e == nil {
 					sum += n
 				}
 			}
@@ -358,13 +358,13 @@ func fnSUMIFS(args []Value) (Value, error) {
 				if critRange.Type == ValueArray && r < len(critRange.Array) && c < len(critRange.Array[r]) {
 					cellVal = critRange.Array[r][c]
 				}
-				if !matchesCriteria(cellVal, criteria) {
+				if !MatchesCriteria(cellVal, criteria) {
 					allMatch = false
 					break
 				}
 			}
 			if allMatch {
-				if n, e := coerceNum(sumRange.Array[r][c]); e == nil {
+				if n, e := CoerceNum(sumRange.Array[r][c]); e == nil {
 					sum += n
 				}
 			}
@@ -386,12 +386,12 @@ func fnCOUNTIF(args []Value) (Value, error) {
 	if rangeArg.Type == ValueArray {
 		for _, row := range rangeArg.Array {
 			for _, cell := range row {
-				if matchesCriteria(cell, criteria) {
+				if MatchesCriteria(cell, criteria) {
 					count++
 				}
 			}
 		}
-	} else if matchesCriteria(rangeArg, criteria) {
+	} else if MatchesCriteria(rangeArg, criteria) {
 		count = 1
 	}
 	return NumberVal(float64(count)), nil
@@ -417,7 +417,7 @@ func fnCOUNTIFS(args []Value) (Value, error) {
 				if critRange.Type == ValueArray && r < len(critRange.Array) && c < len(critRange.Array[r]) {
 					cellVal = critRange.Array[r][c]
 				}
-				if !matchesCriteria(cellVal, criteria) {
+				if !MatchesCriteria(cellVal, criteria) {
 					allMatch = false
 					break
 				}
@@ -446,12 +446,12 @@ func fnAVERAGEIF(args []Value) (Value, error) {
 	if rangeArg.Type == ValueArray {
 		for i, row := range rangeArg.Array {
 			for j, cell := range row {
-				if matchesCriteria(cell, criteria) {
+				if MatchesCriteria(cell, criteria) {
 					var sv Value
 					if avgRange.Type == ValueArray && i < len(avgRange.Array) && j < len(avgRange.Array[i]) {
 						sv = avgRange.Array[i][j]
 					}
-					if n, e := coerceNum(sv); e == nil {
+					if n, e := CoerceNum(sv); e == nil {
 						sum += n
 						count++
 					}
@@ -502,7 +502,7 @@ func fnSUMPRODUCT(args []Value) (Value, error) {
 				if cell.Type == ValueError {
 					return cell, nil
 				}
-				n, e := coerceNum(cell)
+				n, e := CoerceNum(cell)
 				if e != nil {
 					n = 0
 				}

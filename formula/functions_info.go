@@ -1,7 +1,7 @@
 package formula
 
 func init() {
-	Register("IFNA", noCtx(fnIFNA))
+	Register("IFNA", NoCtx(fnIFNA))
 }
 
 func fnIFNA(args []Value) (Value, error) {

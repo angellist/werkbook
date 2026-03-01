@@ -7,26 +7,26 @@ import (
 )
 
 func init() {
-	Register("CHOOSE", noCtx(fnCHOOSE))
-	Register("CONCAT", noCtx(fnCONCATENATE))
-	Register("CONCATENATE", noCtx(fnCONCATENATE))
-	Register("FIND", noCtx(fnFIND))
-	Register("LEFT", noCtx(fnLEFT))
-	Register("LEN", noCtx(fnLEN))
-	Register("LOWER", noCtx(fnLOWER))
-	Register("MID", noCtx(fnMID))
-	Register("RIGHT", noCtx(fnRIGHT))
-	Register("SUBSTITUTE", noCtx(fnSUBSTITUTE))
-	Register("TEXT", noCtx(fnTEXT))
-	Register("TRIM", noCtx(fnTRIM))
-	Register("UPPER", noCtx(fnUPPER))
+	Register("CHOOSE", NoCtx(fnCHOOSE))
+	Register("CONCAT", NoCtx(fnCONCATENATE))
+	Register("CONCATENATE", NoCtx(fnCONCATENATE))
+	Register("FIND", NoCtx(fnFIND))
+	Register("LEFT", NoCtx(fnLEFT))
+	Register("LEN", NoCtx(fnLEN))
+	Register("LOWER", NoCtx(fnLOWER))
+	Register("MID", NoCtx(fnMID))
+	Register("RIGHT", NoCtx(fnRIGHT))
+	Register("SUBSTITUTE", NoCtx(fnSUBSTITUTE))
+	Register("TEXT", NoCtx(fnTEXT))
+	Register("TRIM", NoCtx(fnTRIM))
+	Register("UPPER", NoCtx(fnUPPER))
 }
 
 func fnCHOOSE(args []Value) (Value, error) {
 	if len(args) < 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	idx, e := coerceNum(args[0])
+	idx, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
@@ -43,7 +43,7 @@ func fnCONCATENATE(args []Value) (Value, error) {
 		if arg.Type == ValueError {
 			return arg, nil
 		}
-		b.WriteString(valueToString(arg))
+		b.WriteString(ValueToString(arg))
 	}
 	return StringVal(b.String()), nil
 }
@@ -52,11 +52,11 @@ func fnFIND(args []Value) (Value, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	findText := valueToString(args[0])
-	withinText := valueToString(args[1])
+	findText := ValueToString(args[0])
+	withinText := ValueToString(args[1])
 	startNum := 1
 	if len(args) == 3 {
-		sn, e := coerceNum(args[2])
+		sn, e := CoerceNum(args[2])
 		if e != nil {
 			return *e, nil
 		}
@@ -85,10 +85,10 @@ func fnLEFT(args []Value) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	s := valueToString(args[0])
+	s := ValueToString(args[0])
 	n := 1
 	if len(args) == 2 {
-		num, e := coerceNum(args[1])
+		num, e := CoerceNum(args[1])
 		if e != nil {
 			return *e, nil
 		}
@@ -108,7 +108,7 @@ func fnLEN(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	s := valueToString(args[0])
+	s := ValueToString(args[0])
 	return NumberVal(float64(utf8.RuneCountInString(s))), nil
 }
 
@@ -119,19 +119,19 @@ func fnLOWER(args []Value) (Value, error) {
 	if args[0].Type == ValueError {
 		return args[0], nil
 	}
-	return StringVal(strings.ToLower(valueToString(args[0]))), nil
+	return StringVal(strings.ToLower(ValueToString(args[0]))), nil
 }
 
 func fnMID(args []Value) (Value, error) {
 	if len(args) != 3 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	s := valueToString(args[0])
-	startNum, e := coerceNum(args[1])
+	s := ValueToString(args[0])
+	startNum, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
-	numChars, e := coerceNum(args[2])
+	numChars, e := CoerceNum(args[2])
 	if e != nil {
 		return *e, nil
 	}
@@ -155,10 +155,10 @@ func fnRIGHT(args []Value) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	s := valueToString(args[0])
+	s := ValueToString(args[0])
 	n := 1
 	if len(args) == 2 {
-		num, e := coerceNum(args[1])
+		num, e := CoerceNum(args[1])
 		if e != nil {
 			return *e, nil
 		}
@@ -178,12 +178,12 @@ func fnSUBSTITUTE(args []Value) (Value, error) {
 	if len(args) < 3 || len(args) > 4 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	text := valueToString(args[0])
-	oldText := valueToString(args[1])
-	newText := valueToString(args[2])
+	text := ValueToString(args[0])
+	oldText := ValueToString(args[1])
+	newText := ValueToString(args[2])
 
 	if len(args) == 4 {
-		instanceNum, e := coerceNum(args[3])
+		instanceNum, e := CoerceNum(args[3])
 		if e != nil {
 			return *e, nil
 		}
@@ -216,11 +216,11 @@ func fnTEXT(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	format := valueToString(args[1])
+	format := ValueToString(args[1])
 	return StringVal(formatNumber(n, format)), nil
 }
 
@@ -236,19 +236,19 @@ func formatNumber(n float64, format string) string {
 		return fmt.Sprintf("%.*f%%", decimals, n*100)
 
 	case upper == "YYYY-MM-DD" || upper == "YYYY/MM/DD":
-		t := excelSerialToTime(n)
+		t := ExcelSerialToTime(n)
 		return t.Format("2006-01-02")
 
 	case upper == "MM/DD/YYYY":
-		t := excelSerialToTime(n)
+		t := ExcelSerialToTime(n)
 		return t.Format("01/02/2006")
 
 	case upper == "HH:MM:SS" || upper == "H:MM:SS":
-		t := excelSerialToTime(n)
+		t := ExcelSerialToTime(n)
 		return t.Format("15:04:05")
 
 	case upper == "HH:MM" || upper == "H:MM":
-		t := excelSerialToTime(n)
+		t := ExcelSerialToTime(n)
 		return t.Format("15:04")
 
 	case strings.Contains(format, "#,##0") || strings.Contains(format, "#,###"):
@@ -256,7 +256,7 @@ func formatNumber(n float64, format string) string {
 		if dotIdx := strings.Index(format, "."); dotIdx >= 0 {
 			decimals = len(format) - dotIdx - 1
 		}
-		return formatWithCommas(n, decimals)
+		return FormatWithCommas(n, decimals)
 
 	case strings.Contains(format, "0."):
 		decimals := strings.Count(format[strings.Index(format, "."):], "0")
@@ -284,7 +284,7 @@ func isZeroPadFormat(format string) bool {
 	return true
 }
 
-func formatWithCommas(n float64, decimals int) string {
+func FormatWithCommas(n float64, decimals int) string {
 	s := fmt.Sprintf("%.*f", decimals, n)
 	parts := strings.SplitN(s, ".", 2)
 	intPart := parts[0]
@@ -316,7 +316,7 @@ func fnTRIM(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	s := valueToString(args[0])
+	s := ValueToString(args[0])
 	fields := strings.Fields(s)
 	return StringVal(strings.Join(fields, " ")), nil
 }
@@ -325,5 +325,5 @@ func fnUPPER(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	return StringVal(strings.ToUpper(valueToString(args[0]))), nil
+	return StringVal(strings.ToUpper(ValueToString(args[0]))), nil
 }

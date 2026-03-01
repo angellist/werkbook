@@ -6,18 +6,18 @@ import (
 )
 
 func init() {
-	Register("ABS", noCtx(fnABS))
-	Register("CEILING", noCtx(fnCEILING))
-	Register("FLOOR", noCtx(fnFLOOR))
-	Register("INT", noCtx(fnINT))
-	Register("MOD", noCtx(fnMOD))
-	Register("POWER", noCtx(fnPOWER))
-	Register("RAND", noCtx(fnRAND))
-	Register("RANDBETWEEN", noCtx(fnRANDBETWEEN))
-	Register("ROUND", noCtx(fnROUND))
-	Register("ROUNDDOWN", noCtx(fnROUNDDOWN))
-	Register("ROUNDUP", noCtx(fnROUNDUP))
-	Register("SQRT", noCtx(fnSQRT))
+	Register("ABS", NoCtx(fnABS))
+	Register("CEILING", NoCtx(fnCEILING))
+	Register("FLOOR", NoCtx(fnFLOOR))
+	Register("INT", NoCtx(fnINT))
+	Register("MOD", NoCtx(fnMOD))
+	Register("POWER", NoCtx(fnPOWER))
+	Register("RAND", NoCtx(fnRAND))
+	Register("RANDBETWEEN", NoCtx(fnRANDBETWEEN))
+	Register("ROUND", NoCtx(fnROUND))
+	Register("ROUNDDOWN", NoCtx(fnROUNDDOWN))
+	Register("ROUNDUP", NoCtx(fnROUNDUP))
+	Register("SQRT", NoCtx(fnSQRT))
 }
 
 func fnABS(args []Value) (Value, error) {
@@ -25,15 +25,15 @@ func fnABS(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 	if args[0].Type == ValueArray {
-		return liftUnary(args[0], func(v Value) Value {
-			n, e := coerceNum(v)
+		return LiftUnary(args[0], func(v Value) Value {
+			n, e := CoerceNum(v)
 			if e != nil {
 				return *e
 			}
 			return NumberVal(math.Abs(n))
 		}), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
@@ -44,11 +44,11 @@ func fnCEILING(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	sig, e := coerceNum(args[1])
+	sig, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -62,11 +62,11 @@ func fnFLOOR(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	sig, e := coerceNum(args[1])
+	sig, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -80,7 +80,7 @@ func fnINT(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
@@ -91,11 +91,11 @@ func fnMOD(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	d, e := coerceNum(args[1])
+	d, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -116,11 +116,11 @@ func fnPOWER(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	base, e := coerceNum(args[0])
+	base, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	exp, e := coerceNum(args[1])
+	exp, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -142,11 +142,11 @@ func fnRANDBETWEEN(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	bottom, e := coerceNum(args[0])
+	bottom, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	top, e := coerceNum(args[1])
+	top, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -162,11 +162,11 @@ func fnROUND(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	digits, e := coerceNum(args[1])
+	digits, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -178,11 +178,11 @@ func fnROUNDDOWN(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	digits, e := coerceNum(args[1])
+	digits, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -197,11 +197,11 @@ func fnROUNDUP(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
-	digits, e := coerceNum(args[1])
+	digits, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -216,7 +216,7 @@ func fnSQRT(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	n, e := coerceNum(args[0])
+	n, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
 	}

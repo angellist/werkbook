@@ -57,8 +57,8 @@ func RegisteredFunctions() []string {
 	return out
 }
 
-// noCtx wraps a function that doesn't need EvalContext into a Func.
-func noCtx(fn func([]Value) (Value, error)) Func {
+// NoCtx wraps a function that doesn't need EvalContext into a Func.
+func NoCtx(fn func([]Value) (Value, error)) Func {
 	return func(args []Value, _ *EvalContext) (Value, error) {
 		return fn(args)
 	}

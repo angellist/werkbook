@@ -119,8 +119,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
-			bn, be := coerceNum(b)
+			an, ae := CoerceNum(a)
+			bn, be := CoerceNum(b)
 			if ae != nil {
 				push(*ae)
 			} else if be != nil {
@@ -138,8 +138,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
-			bn, be := coerceNum(b)
+			an, ae := CoerceNum(a)
+			bn, be := CoerceNum(b)
 			if ae != nil {
 				push(*ae)
 			} else if be != nil {
@@ -157,8 +157,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
-			bn, be := coerceNum(b)
+			an, ae := CoerceNum(a)
+			bn, be := CoerceNum(b)
 			if ae != nil {
 				push(*ae)
 			} else if be != nil {
@@ -176,8 +176,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
-			bn, be := coerceNum(b)
+			an, ae := CoerceNum(a)
+			bn, be := CoerceNum(b)
 			if ae != nil {
 				push(*ae)
 			} else if be != nil {
@@ -197,8 +197,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
-			bn, be := coerceNum(b)
+			an, ae := CoerceNum(a)
+			bn, be := CoerceNum(b)
 			if ae != nil {
 				push(*ae)
 			} else if be != nil {
@@ -212,7 +212,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
+			an, ae := CoerceNum(a)
 			if ae != nil {
 				push(*ae)
 			} else {
@@ -224,7 +224,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			an, ae := coerceNum(a)
+			an, ae := CoerceNum(a)
 			if ae != nil {
 				push(*ae)
 			} else {
@@ -240,7 +240,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			if err != nil {
 				return Value{}, err
 			}
-			push(StringVal(valueToString(a) + valueToString(b)))
+			push(StringVal(ValueToString(a) + ValueToString(b)))
 
 		case OpEq:
 			b, err := pop()
@@ -256,7 +256,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) == 0))
+				push(BoolVal(CompareValues(a, b) == 0))
 			}
 
 		case OpNe:
@@ -273,7 +273,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) != 0))
+				push(BoolVal(CompareValues(a, b) != 0))
 			}
 
 		case OpLt:
@@ -290,7 +290,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) < 0))
+				push(BoolVal(CompareValues(a, b) < 0))
 			}
 
 		case OpLe:
@@ -307,7 +307,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) <= 0))
+				push(BoolVal(CompareValues(a, b) <= 0))
 			}
 
 		case OpGt:
@@ -324,7 +324,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) > 0))
+				push(BoolVal(CompareValues(a, b) > 0))
 			}
 
 		case OpGe:
@@ -341,7 +341,7 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			} else if b.Type == ValueError {
 				push(b)
 			} else {
-				push(BoolVal(compareValues(a, b) >= 0))
+				push(BoolVal(CompareValues(a, b) >= 0))
 			}
 
 		case OpCall:
@@ -388,9 +388,9 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 	return stack[0], nil
 }
 
-// coerceNum converts a Value to float64 for arithmetic.
+// CoerceNum converts a Value to float64 for arithmetic.
 // Returns the number and nil on success, or 0 and a pointer to an error Value.
-func coerceNum(v Value) (float64, *Value) {
+func CoerceNum(v Value) (float64, *Value) {
 	switch v.Type {
 	case ValueNumber:
 		return v.Num, nil
@@ -419,7 +419,7 @@ func coerceNum(v Value) (float64, *Value) {
 	}
 }
 
-func valueToString(v Value) string {
+func ValueToString(v Value) string {
 	switch v.Type {
 	case ValueNumber:
 		return strconv.FormatFloat(v.Num, 'f', -1, 64)
@@ -464,8 +464,8 @@ func errorValueToString(e ErrorValue) string {
 	}
 }
 
-// compareValues compares two values for ordering. Returns -1, 0, or 1.
-func compareValues(a, b Value) int {
+// CompareValues compares two values for ordering. Returns -1, 0, or 1.
+func CompareValues(a, b Value) int {
 	if a.Type == ValueEmpty {
 		a = NumberVal(0)
 	}
@@ -518,7 +518,7 @@ func cmpFloat(a, b float64) int {
 	return 0
 }
 
-func isTruthy(v Value) bool {
+func IsTruthy(v Value) bool {
 	switch v.Type {
 	case ValueBool:
 		return v.Bool
@@ -533,10 +533,10 @@ func isTruthy(v Value) bool {
 
 // callFunction is replaced by CallFunc in registry.go.
 
-// liftUnary applies a scalar function element-wise over a ValueArray,
+// LiftUnary applies a scalar function element-wise over a ValueArray,
 // returning a new ValueArray of the same shape. Used for array-formula
 // evaluation of functions like ABS, ISNUMBER, etc.
-func liftUnary(arr Value, fn func(Value) Value) Value {
+func LiftUnary(arr Value, fn func(Value) Value) Value {
 	rows := make([][]Value, len(arr.Array))
 	for i, row := range arr.Array {
 		out := make([]Value, len(row))
@@ -548,10 +548,10 @@ func liftUnary(arr Value, fn func(Value) Value) Value {
 	return Value{Type: ValueArray, Array: rows}
 }
 
-// arrayElement returns element [i][j] from arr if it is an array,
+// ArrayElement returns element [i][j] from arr if it is an array,
 // or returns the scalar arr otherwise. Used for broadcasting scalars
 // alongside arrays in element-wise operations.
-func arrayElement(v Value, i, j int) Value {
+func ArrayElement(v Value, i, j int) Value {
 	if v.Type != ValueArray {
 		return v
 	}
@@ -561,9 +561,9 @@ func arrayElement(v Value, i, j int) Value {
 	return ErrorVal(ErrValNA)
 }
 
-// iterateNumeric calls fn for each numeric value in args, expanding arrays.
+// IterateNumeric calls fn for each numeric value in args, expanding arrays.
 // Non-numeric values in ranges are skipped; non-numeric scalar args cause #VALUE!.
-func iterateNumeric(args []Value, fn func(float64)) *Value {
+func IterateNumeric(args []Value, fn func(float64)) *Value {
 	for _, arg := range args {
 		if arg.Type == ValueArray {
 			for _, row := range arg.Array {
@@ -580,7 +580,7 @@ func iterateNumeric(args []Value, fn func(float64)) *Value {
 			if arg.Type == ValueError {
 				return &arg
 			}
-			n, e := coerceNum(arg)
+			n, e := CoerceNum(arg)
 			if e != nil {
 				return e
 			}

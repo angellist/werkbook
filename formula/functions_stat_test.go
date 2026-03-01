@@ -133,7 +133,7 @@ func TestSUMPRODUCT(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// matchesCriteria — helper used by *IF functions
+// MatchesCriteria — helper used by *IF functions
 // ---------------------------------------------------------------------------
 
 func TestMatchesCriteria(t *testing.T) {
@@ -154,9 +154,9 @@ func TestMatchesCriteria(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := matchesCriteria(tt.v, tt.crit)
+		got := MatchesCriteria(tt.v, tt.crit)
 		if got != tt.want {
-			t.Errorf("matchesCriteria(%v, %v) = %v, want %v", tt.v, tt.crit, got, tt.want)
+			t.Errorf("MatchesCriteria(%v, %v) = %v, want %v", tt.v, tt.crit, got, tt.want)
 		}
 	}
 }
@@ -739,7 +739,7 @@ func TestSUMErrorInRange(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// matchesCriteria — extended edge cases
+// MatchesCriteria — extended edge cases
 // ---------------------------------------------------------------------------
 
 func TestMatchesCriteriaExtended(t *testing.T) {
@@ -770,9 +770,9 @@ func TestMatchesCriteriaExtended(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := matchesCriteria(tt.v, tt.crit)
+			got := MatchesCriteria(tt.v, tt.crit)
 			if got != tt.want {
-				t.Errorf("matchesCriteria(%v, %v) = %v, want %v", tt.v, tt.crit, got, tt.want)
+				t.Errorf("MatchesCriteria(%v, %v) = %v, want %v", tt.v, tt.crit, got, tt.want)
 			}
 		})
 	}

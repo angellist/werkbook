@@ -1,11 +1,11 @@
 package formula
 
 func init() {
-	Register("AND", noCtx(fnAND))
-	Register("IF", noCtx(fnIF))
-	Register("IFERROR", noCtx(fnIFERROR))
-	Register("NOT", noCtx(fnNOT))
-	Register("OR", noCtx(fnOR))
+	Register("AND", NoCtx(fnAND))
+	Register("IF", NoCtx(fnIF))
+	Register("IFERROR", NoCtx(fnIFERROR))
+	Register("NOT", NoCtx(fnNOT))
+	Register("OR", NoCtx(fnOR))
 }
 
 func fnIF(args []Value) (Value, error) {
@@ -19,10 +19,10 @@ func fnIF(args []Value) (Value, error) {
 		for i, row := range cond.Array {
 			out := make([]Value, len(row))
 			for j, cell := range row {
-				if isTruthy(cell) {
-					out[j] = arrayElement(args[1], i, j)
+				if IsTruthy(cell) {
+					out[j] = ArrayElement(args[1], i, j)
 				} else if len(args) == 3 {
-					out[j] = arrayElement(args[2], i, j)
+					out[j] = ArrayElement(args[2], i, j)
 				} else {
 					out[j] = BoolVal(false)
 				}
@@ -34,7 +34,7 @@ func fnIF(args []Value) (Value, error) {
 	if args[0].Type == ValueError {
 		return args[0], nil
 	}
-	if isTruthy(args[0]) {
+	if IsTruthy(args[0]) {
 		return args[1], nil
 	}
 	if len(args) == 3 {
@@ -61,7 +61,7 @@ func fnAND(args []Value) (Value, error) {
 		if arg.Type == ValueError {
 			return arg, nil
 		}
-		if !isTruthy(arg) {
+		if !IsTruthy(arg) {
 			return BoolVal(false), nil
 		}
 	}
@@ -76,7 +76,7 @@ func fnOR(args []Value) (Value, error) {
 		if arg.Type == ValueError {
 			return arg, nil
 		}
-		if isTruthy(arg) {
+		if IsTruthy(arg) {
 			return BoolVal(true), nil
 		}
 	}
@@ -90,5 +90,5 @@ func fnNOT(args []Value) (Value, error) {
 	if args[0].Type == ValueError {
 		return args[0], nil
 	}
-	return BoolVal(!isTruthy(args[0])), nil
+	return BoolVal(!IsTruthy(args[0])), nil
 }

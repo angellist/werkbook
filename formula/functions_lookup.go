@@ -1,10 +1,10 @@
 package formula
 
 func init() {
-	Register("HLOOKUP", noCtx(fnHLOOKUP))
-	Register("INDEX", noCtx(fnINDEX))
-	Register("MATCH", noCtx(fnMATCH))
-	Register("VLOOKUP", noCtx(fnVLOOKUP))
+	Register("HLOOKUP", NoCtx(fnHLOOKUP))
+	Register("INDEX", NoCtx(fnINDEX))
+	Register("MATCH", NoCtx(fnMATCH))
+	Register("VLOOKUP", NoCtx(fnVLOOKUP))
 }
 
 func fnVLOOKUP(args []Value) (Value, error) {
@@ -19,7 +19,7 @@ func fnVLOOKUP(args []Value) (Value, error) {
 	if table.Type != ValueArray {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	colIdx, e := coerceNum(args[2])
+	colIdx, e := CoerceNum(args[2])
 	if e != nil {
 		return *e, nil
 	}
@@ -30,7 +30,7 @@ func fnVLOOKUP(args []Value) (Value, error) {
 
 	rangeLookup := true
 	if len(args) == 4 {
-		rangeLookup = isTruthy(args[3])
+		rangeLookup = IsTruthy(args[3])
 	}
 
 	if rangeLookup {
@@ -39,7 +39,7 @@ func fnVLOOKUP(args []Value) (Value, error) {
 			if len(row) == 0 {
 				continue
 			}
-			cmp := compareValues(row[0], lookup)
+			cmp := CompareValues(row[0], lookup)
 			if cmp == 0 {
 				lastMatch = i
 				break
@@ -62,7 +62,7 @@ func fnVLOOKUP(args []Value) (Value, error) {
 		if len(row) == 0 {
 			continue
 		}
-		if compareValues(row[0], lookup) == 0 {
+		if CompareValues(row[0], lookup) == 0 {
 			if ci > len(row) {
 				return ErrorVal(ErrValREF), nil
 			}
@@ -81,7 +81,7 @@ func fnHLOOKUP(args []Value) (Value, error) {
 	if table.Type != ValueArray || len(table.Array) == 0 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	rowIdx, e := coerceNum(args[2])
+	rowIdx, e := CoerceNum(args[2])
 	if e != nil {
 		return *e, nil
 	}
@@ -92,7 +92,7 @@ func fnHLOOKUP(args []Value) (Value, error) {
 
 	rangeLookup := true
 	if len(args) == 4 {
-		rangeLookup = isTruthy(args[3])
+		rangeLookup = IsTruthy(args[3])
 	}
 
 	firstRow := table.Array[0]
@@ -100,7 +100,7 @@ func fnHLOOKUP(args []Value) (Value, error) {
 	if rangeLookup {
 		lastMatch := -1
 		for i, cell := range firstRow {
-			cmp := compareValues(cell, lookup)
+			cmp := CompareValues(cell, lookup)
 			if cmp == 0 {
 				lastMatch = i
 				break
@@ -120,7 +120,7 @@ func fnHLOOKUP(args []Value) (Value, error) {
 	}
 
 	for i, cell := range firstRow {
-		if compareValues(cell, lookup) == 0 {
+		if CompareValues(cell, lookup) == 0 {
 			if i >= len(table.Array[ri-1]) {
 				return ErrorVal(ErrValREF), nil
 			}
@@ -138,7 +138,7 @@ func fnINDEX(args []Value) (Value, error) {
 	if arr.Type != ValueArray {
 		return arr, nil
 	}
-	rowNum, e := coerceNum(args[1])
+	rowNum, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
 	}
@@ -146,7 +146,7 @@ func fnINDEX(args []Value) (Value, error) {
 
 	colNum := 0
 	if len(args) == 3 {
-		cn, e := coerceNum(args[2])
+		cn, e := CoerceNum(args[2])
 		if e != nil {
 			return *e, nil
 		}
@@ -170,7 +170,7 @@ func fnMATCH(args []Value) (Value, error) {
 	arr := args[1]
 	matchType := 1
 	if len(args) == 3 {
-		mt, e := coerceNum(args[2])
+		mt, e := CoerceNum(args[2])
 		if e != nil {
 			return *e, nil
 		}
@@ -189,7 +189,7 @@ func fnMATCH(args []Value) (Value, error) {
 	switch matchType {
 	case 0:
 		for i, v := range values {
-			if compareValues(v, lookup) == 0 {
+			if CompareValues(v, lookup) == 0 {
 				return NumberVal(float64(i + 1)), nil
 			}
 		}
@@ -198,7 +198,7 @@ func fnMATCH(args []Value) (Value, error) {
 	case 1:
 		last := -1
 		for i, v := range values {
-			cmp := compareValues(v, lookup)
+			cmp := CompareValues(v, lookup)
 			if cmp <= 0 {
 				last = i
 			}
@@ -214,7 +214,7 @@ func fnMATCH(args []Value) (Value, error) {
 	case -1:
 		last := -1
 		for i, v := range values {
-			cmp := compareValues(v, lookup)
+			cmp := CompareValues(v, lookup)
 			if cmp >= 0 {
 				last = i
 			}
