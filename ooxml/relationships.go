@@ -10,6 +10,10 @@ const (
 	RelTypeStyles    = NSOfficeDocument + "/styles"
 	RelTypeSharedStr = NSOfficeDocument + "/sharedStrings"
 	NSSpreadsheetML  = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+
+	// Strict OOXML namespaces (ISO/IEC 29500 Strict).
+	NSOfficeDocumentStrict = "http://purl.oclc.org/ooxml/officeDocument/relationships"
+	RelTypeWorksheetStrict = NSOfficeDocumentStrict + "/worksheet"
 )
 
 type xlsxRelationships struct {

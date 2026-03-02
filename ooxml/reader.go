@@ -28,7 +28,7 @@ func ReadWorkbook(r io.ReaderAt, size int64) (*WorkbookData, error) {
 	}
 	sheetRels := make(map[string]string) // rId -> target path
 	for _, rel := range wbRels.Relationships {
-		if rel.Type == RelTypeWorksheet {
+		if rel.Type == RelTypeWorksheet || rel.Type == RelTypeWorksheetStrict {
 			sheetRels[rel.ID] = rel.Target
 		}
 	}
@@ -51,8 +51,15 @@ func ReadWorkbook(r io.ReaderAt, size int64) (*WorkbookData, error) {
 		if !ok {
 			continue
 		}
-		// Target is relative to xl/
-		path := "xl/" + target
+		// Target may be relative (e.g. "worksheets/sheet1.xml") or
+		// absolute (e.g. "/xl/worksheets/sheet1.xml"). Absolute paths
+		// start with "/" and are relative to the ZIP root.
+		var path string
+		if strings.HasPrefix(target, "/") {
+			path = target[1:]
+		} else {
+			path = "xl/" + target
+		}
 		ws, err := readXML[xlsxWorksheet](files, path)
 		if err != nil {
 			return nil, fmt.Errorf("read sheet %q: %w", s.Name, err)

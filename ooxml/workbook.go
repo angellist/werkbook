@@ -1,6 +1,10 @@
 package ooxml
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"fmt"
+	"strconv"
+)
 
 type xlsxWorkbook struct {
 	XMLName xml.Name   `xml:"workbook"`
@@ -14,9 +18,42 @@ type xlsxSheets struct {
 }
 
 type xlsxSheet struct {
-	Name    string `xml:"name,attr"`
-	SheetID int    `xml:"sheetId,attr"`
-	RID     string `xml:"http://schemas.openxmlformats.org/officeDocument/2006/relationships id,attr"`
+	Name    string
+	SheetID int
+	RID     string
+}
+
+// UnmarshalXML handles both transitional and strict OOXML namespaces for the r:id attribute.
+func (s *xlsxSheet) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "name":
+			s.Name = attr.Value
+		case "sheetId":
+			id, err := strconv.Atoi(attr.Value)
+			if err != nil {
+				return err
+			}
+			s.SheetID = id
+		case "id":
+			if attr.Name.Space == NSOfficeDocument || attr.Name.Space == NSOfficeDocumentStrict {
+				s.RID = attr.Value
+			}
+		}
+	}
+	return d.Skip()
+}
+
+// MarshalXML writes the sheet element with the r:id attribute in the transitional namespace.
+func (s xlsxSheet) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Name = xml.Name{Local: "sheet"}
+	start.Attr = []xml.Attr{
+		{Name: xml.Name{Local: "name"}, Value: s.Name},
+		{Name: xml.Name{Local: "sheetId"}, Value: fmt.Sprintf("%d", s.SheetID)},
+		{Name: xml.Name{Space: NSOfficeDocument, Local: "id"}, Value: s.RID},
+	}
+	e.EncodeToken(start)
+	return e.EncodeToken(start.End())
 }
 
 // WorkbookData is the internal boundary between the public API and the ooxml package.
