@@ -51,6 +51,43 @@ func TestExcelSerialToTime(t *testing.T) {
 	}
 }
 
+func TestExcelSerialToTimeExported(t *testing.T) {
+	got := ExcelSerialToTime(36526)
+	want := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("ExcelSerialToTime(36526) = %v, want %v", got, want)
+	}
+}
+
+func TestIsDateFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		numFmt  string
+		numFmtID int
+		want    bool
+	}{
+		{"built-in 14", "", 14, true},
+		{"built-in 22", "", 22, true},
+		{"built-in 0", "", 0, false},
+		{"built-in 1", "", 1, false},
+		{"custom date", "yyyy-mm-dd", 0, true},
+		{"custom time", "h:mm:ss", 0, true},
+		{"custom datetime", "yyyy-mm-dd h:mm", 0, true},
+		{"number format", "#,##0.00", 0, false},
+		{"percentage", "0.00%", 0, false},
+		{"empty", "", 0, false},
+		{"custom with quotes", `"Date: "yyyy-mm-dd`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsDateFormat(tt.numFmt, tt.numFmtID)
+			if got != tt.want {
+				t.Errorf("IsDateFormat(%q, %d) = %v, want %v", tt.numFmt, tt.numFmtID, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDateRoundTrip(t *testing.T) {
 	dates := []time.Time{
 		time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC),

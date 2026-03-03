@@ -16,6 +16,39 @@ type editData struct {
 
 func cmdEdit(args []string, globals globalFlags) int {
 	cmd := "edit"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook edit [flags] <file>
+
+Apply JSON patch operations to an existing workbook.
+
+Flags:
+  --patch <json>     Patch JSON array (or pass via stdin)
+  --sheet <name>     Default sheet for operations (default: first sheet)
+  --output <path>    Save to a different file (default: overwrite input)
+  --dry-run          Report changes without saving
+
+Patch format:
+  [
+    {"cell": "A1", "value": "hello"},
+    {"cell": "B1", "value": 42},
+    {"cell": "C1", "formula": "SUM(A1:B1)"},
+    {"cell": "D1", "style": {"font": {"bold": true}}},
+    {"cell": "A1", "clear": true},
+    {"cell": "A1:C3", "clear": true},
+    {"add_sheet": "NewSheet"},
+    {"delete_sheet": "OldSheet"},
+    {"cell": "A", "column_width": 25.0},
+    {"row": 1, "row_height": 30.0}
+  ]
+
+Examples:
+  werkbook edit --patch '[{"cell":"A1","value":"updated"}]' data.xlsx
+  echo '[{"cell":"B1","formula":"SUM(A1:A10)"}]' | werkbook edit data.xlsx
+  werkbook edit --dry-run --patch '[{"cell":"A1","clear":true}]' data.xlsx`)
+		return ExitSuccess
+	}
+
 	var sheetFlag, patchFlag, outputFlag string
 	var dryRun bool
 

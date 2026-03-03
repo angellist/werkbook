@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"sort"
 
 	"github.com/werkbook/werkbook/formula"
@@ -13,6 +15,19 @@ type formulaListData struct {
 
 func cmdFormula(args []string, globals globalFlags) int {
 	cmd := "formula"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook formula <subcommand>
+
+Formula-related subcommands.
+
+Subcommands:
+  list    List all registered formula functions
+
+Examples:
+  werkbook formula list`)
+		return ExitSuccess
+	}
 
 	if len(args) == 0 {
 		writeError(cmd, errUsage("subcommand required: 'formula list'"), globals)

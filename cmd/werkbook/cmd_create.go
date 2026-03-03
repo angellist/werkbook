@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 
@@ -9,8 +10,15 @@ import (
 )
 
 type createSpec struct {
-	Sheets []string  `json:"sheets"`
-	Cells  []patchOp `json:"cells"`
+	Sheets []string    `json:"sheets"`
+	Cells  []patchOp   `json:"cells"`
+	Rows   []createRow `json:"rows"`
+}
+
+type createRow struct {
+	Sheet string          `json:"sheet"`
+	Start string          `json:"start"`
+	Data  [][]json.RawMessage `json:"data"`
 }
 
 type createData struct {
@@ -21,6 +29,42 @@ type createData struct {
 
 func cmdCreate(args []string, globals globalFlags) int {
 	cmd := "create"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook create [flags] <file>
+
+Create a new workbook from a JSON spec.
+
+Flags:
+  --spec <json>   Spec JSON (or pass via stdin)
+
+Spec format:
+  {
+    "sheets": ["Sheet1", "Sheet2"],
+    "cells": [
+      {"cell": "A1", "value": "Name"},
+      {"cell": "B1", "value": 42},
+      {"cell": "C1", "formula": "SUM(A1:B1)"}
+    ],
+    "rows": [
+      {"sheet": "Sheet1", "start": "A2", "data": [["Alice", 10], ["Bob", 20]]}
+    ]
+  }
+
+Fields:
+  sheets   Array of sheet names (default: ["Sheet1"])
+  cells    Array of cell patch operations (same format as edit)
+  rows     Array of row-oriented data blocks:
+    sheet  Target sheet (default: first sheet)
+    start  Top-left cell for the data block (default: "A1")
+    data   Array of rows, each an array of values (string, number, bool, null)
+
+Examples:
+  werkbook create --spec '{"sheets":["S1"],"cells":[{"cell":"A1","value":"hello"}]}' out.xlsx
+  echo '{"rows":[{"start":"A1","data":[["a","b"],[1,2]]}]}' | werkbook create out.xlsx`)
+		return ExitSuccess
+	}
+
 	var specFlag string
 
 	i := 0
@@ -82,11 +126,19 @@ func cmdCreate(args []string, globals globalFlags) int {
 		f = werkbook.New()
 	}
 
-	// Apply cell operations.
+	// Convert row-oriented data into patch operations.
 	defaultSheet := f.SheetNames()[0]
+	rowOps, err := rowsToPatchOps(spec.Rows, defaultSheet)
+	if err != nil {
+		writeError(cmd, errInvalidSpec(err), globals)
+		return ExitValidate
+	}
+
+	// Apply cell operations, then row operations.
+	allOps := append(spec.Cells, rowOps...)
 	cellsApplied := 0
-	if len(spec.Cells) > 0 {
-		_, cellsApplied = applyPatches(f, spec.Cells, defaultSheet)
+	if len(allOps) > 0 {
+		_, cellsApplied = applyPatches(f, allOps, defaultSheet)
 	}
 
 	if err := f.SaveAs(filePath); err != nil {
@@ -101,4 +153,37 @@ func cmdCreate(args []string, globals globalFlags) int {
 	}
 	writeSuccess(cmd, data, globals)
 	return ExitSuccess
+}
+
+// rowsToPatchOps converts row-oriented data blocks into patch operations.
+func rowsToPatchOps(rows []createRow, defaultSheet string) ([]patchOp, error) {
+	var ops []patchOp
+	for _, r := range rows {
+		sheet := r.Sheet
+		if sheet == "" {
+			sheet = defaultSheet
+		}
+		startCell := r.Start
+		if startCell == "" {
+			startCell = "A1"
+		}
+		startCol, startRow, err := werkbook.CellNameToCoordinates(startCell)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start cell %q: %v", startCell, err)
+		}
+		for ri, dataRow := range r.Data {
+			for ci, rawVal := range dataRow {
+				cellRef, err := werkbook.CoordinatesToCellName(startCol+ci, startRow+ri)
+				if err != nil {
+					return nil, fmt.Errorf("cell coordinates out of range at row %d col %d", ri, ci)
+				}
+				ops = append(ops, patchOp{
+					Cell:  cellRef,
+					Sheet: sheet,
+					Value: rawVal,
+				})
+			}
+		}
+	}
+	return ops, nil
 }

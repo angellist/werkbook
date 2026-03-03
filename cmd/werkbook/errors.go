@@ -83,7 +83,7 @@ func errInvalidSpec(err error) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeInvalidSpec,
 		Message: fmt.Sprintf("invalid spec JSON: %v", err),
-		Hint:    "Provide a JSON object with 'sheets' and/or 'cells' fields.",
+		Hint:    "Provide a JSON object with 'sheets', 'cells', and/or 'rows' fields. Run 'werkbook create --help' for the spec format.",
 	}
 }
 
@@ -91,7 +91,7 @@ func errUsage(msg string) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeUsage,
 		Message: msg,
-		Hint:    "Run 'werkbook' with no arguments for usage information.",
+		Hint:    "Run 'werkbook <command> --help' for command usage.",
 	}
 }
 

@@ -20,6 +20,7 @@ type patchOp struct {
 	RowHeight   *float64         `json:"row_height,omitempty"`
 	AddSheet    string           `json:"add_sheet,omitempty"`
 	DeleteSheet string           `json:"delete_sheet,omitempty"`
+	Clear       bool             `json:"clear,omitempty"`
 }
 
 // opResult reports the outcome of a single patch operation.
@@ -111,6 +112,29 @@ func applyOnePatch(f *werkbook.File, op patchOp, defaultSheet string, index int)
 			return opResult{Index: index, Cell: op.Cell, Action: "set_column_width", Status: "error", Error: err.Error()}
 		}
 		return opResult{Index: index, Cell: op.Cell, Action: "set_column_width", Status: "ok"}
+	}
+
+	// Clear cell(s).
+	if op.Clear {
+		if strings.Contains(op.Cell, ":") {
+			col1, row1, col2, row2, err := werkbook.RangeToCoordinates(op.Cell)
+			if err != nil {
+				return opResult{Index: index, Cell: op.Cell, Action: "clear", Status: "error", Error: err.Error()}
+			}
+			for r := row1; r <= row2; r++ {
+				for c := col1; c <= col2; c++ {
+					ref, _ := werkbook.CoordinatesToCellName(c, r)
+					_ = s.SetValue(ref, nil)
+					_ = s.SetFormula(ref, "")
+				}
+			}
+		} else {
+			if err := s.SetValue(op.Cell, nil); err != nil {
+				return opResult{Index: index, Cell: op.Cell, Action: "clear", Status: "error", Error: err.Error()}
+			}
+			_ = s.SetFormula(op.Cell, "")
+		}
+		return opResult{Index: index, Cell: op.Cell, Action: "clear", Status: "ok"}
 	}
 
 	// Style on a range (contains colon).

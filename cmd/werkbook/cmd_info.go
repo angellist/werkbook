@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	werkbook "github.com/werkbook/werkbook"
@@ -23,6 +24,21 @@ type sheetInfo struct {
 
 func cmdInfo(args []string, globals globalFlags) int {
 	cmd := "info"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook info [flags] <file>
+
+Show sheet metadata including dimensions, cell counts, and formula presence.
+
+Flags:
+  --sheet <name>   Show only the named sheet (default: all sheets)
+
+Examples:
+  werkbook info data.xlsx
+  werkbook info --sheet Sheet1 data.xlsx`)
+		return ExitSuccess
+	}
+
 	var sheetFlag string
 
 	// Parse flags.

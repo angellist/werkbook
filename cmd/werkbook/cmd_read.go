@@ -21,14 +21,41 @@ type rowData struct {
 }
 
 type cellData struct {
-	Value   any    `json:"value"`
-	Type    string `json:"type"`
-	Formula string `json:"formula,omitempty"`
-	Style   any    `json:"style,omitempty"`
+	Value      any    `json:"value"`
+	Type       string `json:"type"`
+	Formatted  string `json:"formatted,omitempty"`
+	Formula    string `json:"formula,omitempty"`
+	HasFormula bool   `json:"has_formula,omitempty"`
+	Style      any    `json:"style,omitempty"`
 }
 
 func cmdRead(args []string, globals globalFlags) int {
 	cmd := "read"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook read [flags] <file>
+
+Read cell data from a workbook. Returns stored/cached values.
+Use 'calc' to force formula recalculation.
+
+Flags:
+  --sheet <name>        Read from the named sheet (default: first sheet)
+  --range <A1:D10>      Read a specific range (default: full used range)
+  --include-formulas    Include formula strings in output
+  --include-styles      Include style objects in output
+  --headers             Treat first row as headers
+
+Date cells are automatically detected and returned with type "date"
+and a "formatted" field containing an ISO 8601 date string.
+
+Examples:
+  werkbook read data.xlsx
+  werkbook read --range A1:C10 data.xlsx
+  werkbook read --headers --include-formulas data.xlsx
+  werkbook read --format csv --headers data.xlsx`)
+		return ExitSuccess
+	}
+
 	var sheetFlag, rangeFlag string
 	var includeFormulas, includeStyles, headersFlag bool
 
@@ -152,7 +179,11 @@ func cmdRead(args []string, globals globalFlags) int {
 			for c := col1; c <= col2; c++ {
 				ref, _ := werkbook.CoordinatesToCellName(c, r)
 				v, _ := s.GetValue(ref)
-				row = append(row, valueToString(v))
+				if v.Type == werkbook.TypeNumber && isDateCell(s, ref) {
+					row = append(row, werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02"))
+				} else {
+					row = append(row, valueToString(v))
+				}
 			}
 			tableRows = append(tableRows, row)
 		}
@@ -177,9 +208,19 @@ func cmdRead(args []string, globals globalFlags) int {
 				Type:  valueTypeName(v),
 			}
 
-			if includeFormulas {
-				formula, _ := s.GetFormula(ref)
-				if formula != "" {
+			// Detect date cells.
+			if v.Type == werkbook.TypeNumber {
+				if isDateCell(s, ref) {
+					cd.Type = "date"
+					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
+				}
+			}
+
+			// Always signal if the cell has a formula.
+			formula, _ := s.GetFormula(ref)
+			if formula != "" {
+				cd.HasFormula = true
+				if includeFormulas {
 					cd.Formula = formula
 				}
 			}
@@ -249,4 +290,13 @@ func valueTypeName(v werkbook.Value) string {
 	default:
 		return "empty"
 	}
+}
+
+// isDateCell checks whether the cell's style indicates a date number format.
+func isDateCell(s *werkbook.Sheet, ref string) bool {
+	style, _ := s.GetStyle(ref)
+	if style == nil {
+		return false
+	}
+	return werkbook.IsDateFormat(style.NumFmt, style.NumFmtID)
 }

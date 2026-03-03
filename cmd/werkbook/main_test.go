@@ -611,6 +611,133 @@ func TestEditClearCell(t *testing.T) {
 	}
 }
 
+// --- Help ---
+
+func TestHelpCommand(t *testing.T) {
+	_, stderr, code := captureRun([]string{"help", "read"})
+	if code != ExitSuccess {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(stderr, "Usage: werkbook read") {
+		t.Errorf("expected help text, got:\n%s", stderr)
+	}
+}
+
+func TestHelpFlag(t *testing.T) {
+	_, stderr, code := captureRun([]string{"create", "--help"})
+	if code != ExitSuccess {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(stderr, "Usage: werkbook create") {
+		t.Errorf("expected help text, got:\n%s", stderr)
+	}
+}
+
+// --- Has formula ---
+
+func TestReadHasFormula(t *testing.T) {
+	path := createTestFile(t)
+	stdout, _, code := captureRun([]string{"read", path})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	// B4 has a formula; has_formula should be true even without --include-formulas.
+	if !strings.Contains(stdout, `"has_formula": true`) {
+		t.Error("expected has_formula:true in output")
+	}
+	// Formula text should NOT appear without --include-formulas.
+	if strings.Contains(stdout, `"formula": "SUM`) {
+		t.Error("did not expect formula text without --include-formulas")
+	}
+}
+
+// --- Clear ---
+
+func TestEditClearFlag(t *testing.T) {
+	path := createTestFile(t)
+	patch := `[{"cell":"A1","clear":true}]`
+	stdout, _, code := captureRun([]string{"edit", path, "--patch", patch})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	resp := parseResponse(t, stdout)
+	if !resp.OK {
+		t.Fatal("expected ok=true")
+	}
+	data, _ := json.Marshal(resp.Data)
+	var ed editData
+	json.Unmarshal(data, &ed)
+	if ed.Operations[0].Action != "clear" {
+		t.Errorf("expected action=clear, got %s", ed.Operations[0].Action)
+	}
+
+	// Verify A1 is now empty.
+	stdout2, _, _ := captureRun([]string{"read", "--range", "A1:A1", path})
+	resp2 := parseResponse(t, stdout2)
+	data2, _ := json.Marshal(resp2.Data)
+	var rd readData
+	json.Unmarshal(data2, &rd)
+	for _, row := range rd.Rows {
+		if _, ok := row.Cells["A1"]; ok {
+			t.Error("expected A1 to be cleared")
+		}
+	}
+}
+
+func TestEditClearRange(t *testing.T) {
+	path := createTestFile(t)
+	patch := `[{"cell":"A1:B2","clear":true}]`
+	stdout, _, code := captureRun([]string{"edit", path, "--patch", patch})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	resp := parseResponse(t, stdout)
+	if !resp.OK {
+		t.Fatal("expected ok=true")
+	}
+
+	// Verify A1, B1, A2, B2 are cleared.
+	stdout2, _, _ := captureRun([]string{"read", "--range", "A1:B2", path})
+	resp2 := parseResponse(t, stdout2)
+	data2, _ := json.Marshal(resp2.Data)
+	var rd readData
+	json.Unmarshal(data2, &rd)
+	if len(rd.Rows) != 0 {
+		t.Errorf("expected no data rows after clearing A1:B2, got %d", len(rd.Rows))
+	}
+}
+
+// --- Create with rows ---
+
+func TestCreateWithRows(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rows.xlsx")
+	spec := `{"rows":[{"start":"A1","data":[["Name","Age"],["Alice",30],["Bob",25]]}]}`
+	stdout, _, code := captureRun([]string{"create", path, "--spec", spec})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	resp := parseResponse(t, stdout)
+	if !resp.OK {
+		t.Fatal("expected ok=true")
+	}
+	data, _ := json.Marshal(resp.Data)
+	var cd createData
+	json.Unmarshal(data, &cd)
+	if cd.Cells != 6 {
+		t.Errorf("expected 6 cells applied, got %d", cd.Cells)
+	}
+
+	// Verify content.
+	stdout2, _, code2 := captureRun([]string{"read", "--range", "A1:B3", path})
+	if code2 != 0 {
+		t.Fatalf("expected exit 0 on read, got %d", code2)
+	}
+	if !strings.Contains(stdout2, "Alice") || !strings.Contains(stdout2, "Bob") {
+		t.Error("expected Alice and Bob in read output")
+	}
+}
+
 // --- Partial failure ---
 
 func TestEditPartialFailure(t *testing.T) {

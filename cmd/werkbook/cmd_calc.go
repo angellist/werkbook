@@ -9,6 +9,25 @@ import (
 
 func cmdCalc(args []string, globals globalFlags) int {
 	cmd := "calc"
+
+	if hasHelpFlag(args) {
+		fmt.Fprintln(os.Stderr, `Usage: werkbook calc [flags] <file>
+
+Force recalculation of all formulas and return results.
+Unlike 'read' (which returns cached values), 'calc' evaluates every formula.
+
+Flags:
+  --sheet <name>       Recalculate and show the named sheet (default: first sheet)
+  --range <A1:D10>     Return results for a specific range (default: full used range)
+  --output <path>      Save the recalculated workbook to a file
+
+Examples:
+  werkbook calc data.xlsx
+  werkbook calc --range A1:C10 data.xlsx
+  werkbook calc --output recalculated.xlsx data.xlsx`)
+		return ExitSuccess
+	}
+
 	var sheetFlag, rangeFlag, outputFlag string
 
 	i := 0
@@ -129,8 +148,16 @@ func cmdCalc(args []string, globals globalFlags) int {
 				Value: v.Raw(),
 				Type:  valueTypeName(v),
 			}
+			// Detect date cells.
+			if v.Type == werkbook.TypeNumber {
+				if isDateCell(s, ref) {
+					cd.Type = "date"
+					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
+				}
+			}
 			formula, _ := s.GetFormula(ref)
 			if formula != "" {
+				cd.HasFormula = true
 				cd.Formula = formula
 			}
 			cells[ref] = cd

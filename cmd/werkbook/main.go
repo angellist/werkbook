@@ -68,6 +68,8 @@ func run(args []string) int {
 		return cmdFormula(cmdArgs, globals)
 	case "version":
 		return cmdVersion(globals)
+	case "help":
+		return cmdHelp(cmdArgs, globals)
 	default:
 		writeError("", errUsage(fmt.Sprintf("unknown command %q", command)), globals)
 		return ExitUsage
@@ -107,5 +109,44 @@ Commands:
   version   Print version info
 
 Global flags:
-  --format <json|markdown|csv>   Output format (default: json)`)
+  --format <json|markdown|csv>   Output format (default: json)
+
+Run 'werkbook <command> --help' for detailed command usage.`)
+}
+
+// hasHelpFlag checks if --help is present in the args.
+func hasHelpFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+// cmdHelp dispatches to the per-command help by injecting --help.
+func cmdHelp(args []string, globals globalFlags) int {
+	if len(args) == 0 {
+		printUsage()
+		return ExitUsage
+	}
+	switch args[0] {
+	case "info":
+		return cmdInfo([]string{"--help"}, globals)
+	case "read":
+		return cmdRead([]string{"--help"}, globals)
+	case "edit":
+		return cmdEdit([]string{"--help"}, globals)
+	case "create":
+		return cmdCreate([]string{"--help"}, globals)
+	case "calc":
+		return cmdCalc([]string{"--help"}, globals)
+	case "formula":
+		return cmdFormula([]string{"--help"}, globals)
+	case "version":
+		return cmdVersion(globals)
+	default:
+		writeError("", errUsage(fmt.Sprintf("unknown command %q", args[0])), globals)
+		return ExitUsage
+	}
 }
