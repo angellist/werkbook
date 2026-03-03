@@ -17,7 +17,7 @@ func cmdFormula(args []string, globals globalFlags) int {
 	cmd := "formula"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook formula <subcommand>
+		fmt.Fprintln(os.Stderr, `Usage: wb formula <subcommand>
 
 Formula-related subcommands.
 
@@ -25,7 +25,7 @@ Subcommands:
   list    List all registered formula functions
 
 Examples:
-  werkbook formula list`)
+  wb formula list`)
 		return ExitSuccess
 	}
 

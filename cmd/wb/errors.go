@@ -33,7 +33,7 @@ func errFileNotFound(path string, err error) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeFileNotFound,
 		Message: fmt.Sprintf("could not open %q: %v", path, err),
-		Hint:    "Check the file path. Use 'werkbook create' to create a new file.",
+		Hint:    "Check the file path. Use 'wb create' to create a new file.",
 	}
 }
 
@@ -57,7 +57,7 @@ func errSheetNotFound(name string) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeSheetNotFound,
 		Message: fmt.Sprintf("sheet %q not found", name),
-		Hint:    "Use 'werkbook info' to list available sheets.",
+		Hint:    "Use 'wb info' to list available sheets.",
 	}
 }
 
@@ -85,7 +85,7 @@ func errInvalidSpec(err error) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeInvalidSpec,
 		Message: fmt.Sprintf("invalid spec JSON: %v", err),
-		Hint:    "Provide a JSON object with 'sheets', 'cells', and/or 'rows' fields. Run 'werkbook create --help' for the spec format.",
+		Hint:    "Provide a JSON object with 'sheets', 'cells', and/or 'rows' fields. Run 'wb create --help' for the spec format.",
 	}
 }
 
@@ -93,7 +93,7 @@ func errUsage(msg string) *ErrorInfo {
 	return &ErrorInfo{
 		Code:    ErrCodeUsage,
 		Message: msg,
-		Hint:    "Run 'werkbook <command> --help' for command usage.",
+		Hint:    "Run 'wb <command> --help' for command usage.",
 	}
 }
 

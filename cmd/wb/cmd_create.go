@@ -31,7 +31,7 @@ func cmdCreate(args []string, globals globalFlags) int {
 	cmd := "create"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook create [flags] <file>
+		fmt.Fprintln(os.Stderr, `Usage: wb create [flags] <file>
 
 Create a new workbook from a JSON spec.
 
@@ -60,8 +60,8 @@ Fields:
     data   Array of rows, each an array of values (string, number, bool, null)
 
 Examples:
-  werkbook create --spec '{"sheets":["S1"],"cells":[{"cell":"A1","value":"hello"}]}' out.xlsx
-  echo '{"rows":[{"start":"A1","data":[["a","b"],[1,2]]}]}' | werkbook create out.xlsx`)
+  wb create --spec '{"sheets":["S1"],"cells":[{"cell":"A1","value":"hello"}]}' out.xlsx
+  echo '{"rows":[{"start":"A1","data":[["a","b"],[1,2]]}]}' | wb create out.xlsx`)
 		return ExitSuccess
 	}
 

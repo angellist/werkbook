@@ -618,7 +618,7 @@ func TestHelpCommand(t *testing.T) {
 	if code != ExitSuccess {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stderr, "Usage: werkbook read") {
+	if !strings.Contains(stderr, "Usage: wb read") {
 		t.Errorf("expected help text, got:\n%s", stderr)
 	}
 }
@@ -628,7 +628,7 @@ func TestHelpFlag(t *testing.T) {
 	if code != ExitSuccess {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stderr, "Usage: werkbook create") {
+	if !strings.Contains(stderr, "Usage: wb create") {
 		t.Errorf("expected help text, got:\n%s", stderr)
 	}
 }
@@ -776,7 +776,7 @@ func TestGlobalHelpFlag(t *testing.T) {
 	if code != ExitSuccess {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stderr, "Usage: werkbook") {
+	if !strings.Contains(stderr, "Usage: wb") {
 		t.Errorf("expected usage text, got:\n%s", stderr)
 	}
 }
@@ -786,7 +786,7 @@ func TestGlobalHelpShortFlag(t *testing.T) {
 	if code != ExitSuccess {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if !strings.Contains(stderr, "Usage: werkbook") {
+	if !strings.Contains(stderr, "Usage: wb") {
 		t.Errorf("expected usage text, got:\n%s", stderr)
 	}
 }

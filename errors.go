@@ -1,6 +1,10 @@
 package werkbook
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/jpoz/werkbook/ooxml"
+)
 
 var (
 	// ErrInvalidCellRef is returned when a cell reference string is invalid.
@@ -9,4 +13,6 @@ var (
 	ErrSheetNotFound = errors.New("sheet not found")
 	// ErrUnsupportedType is returned when a value type cannot be stored in a cell.
 	ErrUnsupportedType = errors.New("unsupported value type")
+	// ErrEncryptedFile is returned when the file is encrypted/password-protected.
+	ErrEncryptedFile = ooxml.ErrEncryptedFile
 )

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,7 +12,7 @@ func cmdCalc(args []string, globals globalFlags) int {
 	cmd := "calc"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook calc [flags] <file>
+		fmt.Fprintln(os.Stderr, `Usage: wb calc [flags] <file>
 
 Force recalculation of all formulas and return results.
 Unlike 'read' (which returns cached values), 'calc' evaluates every formula.
@@ -23,9 +24,9 @@ Flags:
   --no-dates           Disable date detection; show numbers as-is
 
 Examples:
-  werkbook calc data.xlsx
-  werkbook calc --range A1:C10 data.xlsx
-  werkbook calc --output recalculated.xlsx data.xlsx`)
+  wb calc data.xlsx
+  wb calc --range A1:C10 data.xlsx
+  wb calc --output recalculated.xlsx data.xlsx`)
 		return ExitSuccess
 	}
 
@@ -81,6 +82,8 @@ Examples:
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeError(cmd, errFileNotFound(filePath, err), globals)
+		} else if errors.Is(err, werkbook.ErrEncryptedFile) {
+			writeError(cmd, errEncryptedFile(filePath), globals)
 		} else {
 			writeError(cmd, errFileOpen(filePath, err), globals)
 		}

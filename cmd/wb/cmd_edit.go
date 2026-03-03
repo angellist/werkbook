@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 type editData struct {
 	File       string     `json:"file"`
+	DryRun     bool       `json:"dry_run,omitempty"`
 	Applied    int        `json:"applied"`
 	Operations []opResult `json:"operations"`
 }
@@ -18,7 +20,7 @@ func cmdEdit(args []string, globals globalFlags) int {
 	cmd := "edit"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook edit [flags] <file>
+		fmt.Fprintln(os.Stderr, `Usage: wb edit [flags] <file>
 
 Apply JSON patch operations to an existing workbook.
 
@@ -43,9 +45,9 @@ Patch format:
   ]
 
 Examples:
-  werkbook edit --patch '[{"cell":"A1","value":"updated"}]' data.xlsx
-  echo '[{"cell":"B1","formula":"SUM(A1:A10)"}]' | werkbook edit data.xlsx
-  werkbook edit --dry-run --patch '[{"cell":"A1","clear":true}]' data.xlsx
+  wb edit --patch '[{"cell":"A1","value":"updated"}]' data.xlsx
+  echo '[{"cell":"B1","formula":"SUM(A1:A10)"}]' | wb edit data.xlsx
+  wb edit --dry-run --patch '[{"cell":"A1","clear":true}]' data.xlsx
 
 Note: Setting cell values does not auto-expand formula ranges. If you add
 data beyond a range like SUM(B2:B3), update the formula separately.`)
@@ -127,6 +129,8 @@ data beyond a range like SUM(B2:B3), update the formula separately.`)
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeError(cmd, errFileNotFound(filePath, err), globals)
+		} else if errors.Is(err, werkbook.ErrEncryptedFile) {
+			writeError(cmd, errEncryptedFile(filePath), globals)
 		} else {
 			writeError(cmd, errFileOpen(filePath, err), globals)
 		}
@@ -157,6 +161,7 @@ data beyond a range like SUM(B2:B3), update the formula separately.`)
 
 	data := editData{
 		File:       filePath,
+		DryRun:     dryRun,
 		Applied:    applied,
 		Operations: results,
 	}

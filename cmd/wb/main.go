@@ -97,7 +97,7 @@ func writeError(command string, ei *ErrorInfo, globals globalFlags) {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, `Usage: werkbook <command> [flags] <file>
+	fmt.Fprintln(os.Stderr, `Usage: wb <command> [flags] <file>
 
 Commands:
   info      Show sheet metadata (dimensions, cell counts)
@@ -111,7 +111,7 @@ Commands:
 Global flags:
   --format <json|markdown|csv>   Output format (default: json)
 
-Run 'werkbook <command> --help' for detailed command usage.`)
+Run 'wb <command> --help' for detailed command usage.`)
 }
 
 // hasHelpFlag checks if --help is present in the args.

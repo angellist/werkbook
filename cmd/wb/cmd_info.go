@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -26,7 +27,7 @@ func cmdInfo(args []string, globals globalFlags) int {
 	cmd := "info"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook info [flags] <file>
+		fmt.Fprintln(os.Stderr, `Usage: wb info [flags] <file>
 
 Show sheet metadata including dimensions, cell counts, and formula presence.
 
@@ -34,8 +35,8 @@ Flags:
   --sheet <name>   Show only the named sheet (default: all sheets)
 
 Examples:
-  werkbook info data.xlsx
-  werkbook info --sheet Sheet1 data.xlsx`)
+  wb info data.xlsx
+  wb info --sheet Sheet1 data.xlsx`)
 		return ExitSuccess
 	}
 
@@ -73,6 +74,8 @@ Examples:
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeError(cmd, errFileNotFound(filePath, err), globals)
+		} else if errors.Is(err, werkbook.ErrEncryptedFile) {
+			writeError(cmd, errEncryptedFile(filePath), globals)
 		} else {
 			writeError(cmd, errFileOpen(filePath, err), globals)
 		}

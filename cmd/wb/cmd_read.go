@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -41,7 +42,7 @@ func cmdRead(args []string, globals globalFlags) int {
 	cmd := "read"
 
 	if hasHelpFlag(args) {
-		fmt.Fprintln(os.Stderr, `Usage: werkbook read [flags] <file>
+		fmt.Fprintln(os.Stderr, `Usage: wb read [flags] <file>
 
 Read cell data from a workbook. Returns stored/cached values.
 Use 'calc' to force formula recalculation.
@@ -65,14 +66,14 @@ Date cells are automatically detected and returned with type "date"
 and a "formatted" field containing an ISO 8601 date string.
 
 Examples:
-  werkbook read data.xlsx
-  werkbook read --range A1:C10 data.xlsx
-  werkbook read --headers --include-formulas data.xlsx
-  werkbook read --format csv --headers data.xlsx
-  werkbook read --limit 5 --headers data.xlsx
-  werkbook read --all-sheets --format markdown data.xlsx
-  werkbook read --headers --where "Status=Failed" data.xlsx
-  werkbook read --style-summary data.xlsx`)
+  wb read data.xlsx
+  wb read --range A1:C10 data.xlsx
+  wb read --headers --include-formulas data.xlsx
+  wb read --format csv --headers data.xlsx
+  wb read --limit 5 --headers data.xlsx
+  wb read --all-sheets --format markdown data.xlsx
+  wb read --headers --where "Status=Failed" data.xlsx
+  wb read --style-summary data.xlsx`)
 		return ExitSuccess
 	}
 
@@ -172,6 +173,8 @@ Examples:
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeError(cmd, errFileNotFound(filePath, err), globals)
+		} else if errors.Is(err, werkbook.ErrEncryptedFile) {
+			writeError(cmd, errEncryptedFile(filePath), globals)
 		} else {
 			writeError(cmd, errFileOpen(filePath, err), globals)
 		}
@@ -353,7 +356,7 @@ func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRo
 	for _, fc := range opts.filters {
 		idx, err := resolveColumnIndex(fc.Column, filterHeaders, col1)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("column %q not found in headers; check header names with: werkbook read --headers <file>", fc.Column)
+			return nil, nil, "", fmt.Errorf("column %q not found in headers; check header names with: wb read --headers <file>", fc.Column)
 		}
 		resolved = append(resolved, resolvedFilter{cond: fc, colIdx: idx})
 	}
@@ -433,7 +436,7 @@ func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts)
 		idx, ferr := resolveColumnIndex(fc.Column, headers, col1)
 		if ferr != nil {
 			return readData{}, ExitValidate, errValidation(
-				fmt.Sprintf("column %q not found in headers; check header names with: werkbook read --headers <file>", fc.Column),
+				fmt.Sprintf("column %q not found in headers; check header names with: wb read --headers <file>", fc.Column),
 			)
 		}
 		resolved = append(resolved, resolvedFilter{cond: fc, colIdx: idx})
