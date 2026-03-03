@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 type readData struct {
@@ -59,6 +59,7 @@ Flags:
   --include-styles      Include style objects in output
   --style-summary       Include human-readable style summary per cell
   --headers             Treat first row as headers
+  --no-dates            Disable date detection; show numbers as-is
 
 Date cells are automatically detected and returned with type "date"
 and a "formatted" field containing an ISO 8601 date string.
@@ -76,7 +77,7 @@ Examples:
 	}
 
 	var sheetFlag, rangeFlag string
-	var includeFormulas, includeStyles, headersFlag, allSheets, styleSummaryFlag bool
+	var includeFormulas, includeStyles, headersFlag, allSheets, styleSummaryFlag, noDatesFlag bool
 	var limitFlag int
 	var whereExprs []string
 
@@ -132,6 +133,9 @@ Examples:
 		case "--headers":
 			headersFlag = true
 			i++
+		case "--no-dates":
+			noDatesFlag = true
+			i++
 		default:
 			if filePath == "" && len(args[i]) > 0 && args[i][0] != '-' {
 				filePath = args[i]
@@ -175,13 +179,14 @@ Examples:
 	}
 
 	opts := readOpts{
-		rangeFlag:      rangeFlag,
-		headersFlag:    headersFlag,
+		rangeFlag:       rangeFlag,
+		headersFlag:     headersFlag,
 		includeFormulas: includeFormulas,
-		includeStyles:  includeStyles,
-		styleSummary:   styleSummaryFlag,
-		limitFlag:      limitFlag,
-		filters:        filters,
+		includeStyles:   includeStyles,
+		styleSummary:    styleSummaryFlag,
+		noDates:         noDatesFlag,
+		limitFlag:       limitFlag,
+		filters:         filters,
 	}
 
 	if allSheets {
@@ -214,6 +219,7 @@ type readOpts struct {
 	includeFormulas bool
 	includeStyles   bool
 	styleSummary    bool
+	noDates         bool
 	limitFlag       int
 	filters         []filterCondition
 }
@@ -232,8 +238,11 @@ func readAllSheets(cmd string, f *werkbook.File, filePath string, opts readOpts,
 			if s == nil {
 				continue
 			}
-			headers, tableRows, rangeStr := readSheetTable(s, opts)
-			_ = rangeStr
+			headers, tableRows, _, err := readSheetTable(s, opts)
+			if err != nil {
+				writeError(cmd, errValidation(err.Error()), globals)
+				return ExitValidate
+			}
 
 			if globals.format == FormatMarkdown {
 				if i > 0 {
@@ -264,8 +273,9 @@ func readAllSheets(cmd string, f *werkbook.File, filePath string, opts readOpts,
 		if s == nil {
 			continue
 		}
-		rd, exitCode := buildReadData(s, filePath, name, opts)
+		rd, exitCode, err := buildReadData(s, filePath, name, opts)
 		if exitCode != ExitSuccess {
+			writeError(cmd, err, globals)
 			return exitCode
 		}
 		sheets = append(sheets, rd)
@@ -281,14 +291,19 @@ func readAllSheets(cmd string, f *werkbook.File, filePath string, opts readOpts,
 
 func readSingleSheet(cmd string, s *werkbook.Sheet, filePath, sheetName string, opts readOpts, globals globalFlags) int {
 	if globals.format == FormatMarkdown || globals.format == FormatCSV {
-		headers, tableRows, _ := readSheetTable(s, opts)
+		headers, tableRows, _, err := readSheetTable(s, opts)
+		if err != nil {
+			writeError(cmd, errValidation(err.Error()), globals)
+			return ExitValidate
+		}
 		output := formatTable(globals.format, headers, tableRows)
 		fmt.Print(output)
 		return ExitSuccess
 	}
 
-	rd, exitCode := buildReadData(s, filePath, sheetName, opts)
+	rd, exitCode, err := buildReadData(s, filePath, sheetName, opts)
 	if exitCode != ExitSuccess {
+		writeError(cmd, err, globals)
 		return exitCode
 	}
 	writeSuccess(cmd, rd, globals)
@@ -296,10 +311,10 @@ func readSingleSheet(cmd string, s *werkbook.Sheet, filePath, sheetName string, 
 }
 
 // readSheetTable reads a sheet and returns headers and string rows for markdown/CSV output.
-func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRows [][]string, rangeStr string) {
+func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRows [][]string, rangeStr string, retErr error) {
 	col1, row1, col2, row2, err := resolveRange(s, opts.rangeFlag)
 	if err != nil {
-		return nil, nil, ""
+		return nil, nil, "", fmt.Errorf("invalid range %q: %v", opts.rangeFlag, err)
 	}
 
 	rangeStr = buildRangeStr(opts.rangeFlag, col1, row1, col2, row2)
@@ -338,7 +353,7 @@ func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRo
 	for _, fc := range opts.filters {
 		idx, err := resolveColumnIndex(fc.Column, filterHeaders, col1)
 		if err != nil {
-			continue // skip unresolvable filters
+			return nil, nil, "", fmt.Errorf("column %q not found in headers; check header names with: werkbook read --headers <file>", fc.Column)
 		}
 		resolved = append(resolved, resolvedFilter{cond: fc, colIdx: idx})
 	}
@@ -349,7 +364,7 @@ func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRo
 		for c := col1; c <= col2; c++ {
 			ref, _ := werkbook.CoordinatesToCellName(c, r)
 			v, _ := s.GetValue(ref)
-			if v.Type == werkbook.TypeNumber && isDateCell(s, ref) {
+			if !opts.noDates && v.Type == werkbook.TypeNumber && isDateCell(s, ref, v) {
 				row = append(row, werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02"))
 			} else {
 				row = append(row, valueToString(v))
@@ -381,21 +396,21 @@ func readSheetTable(s *werkbook.Sheet, opts readOpts) (headers []string, tableRo
 		}
 	}
 
-	return headers, tableRows, rangeStr
+	return headers, tableRows, rangeStr, nil
 }
 
 // buildReadData builds JSON readData for a single sheet.
-func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts) (readData, int) {
+func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts) (readData, int, *ErrorInfo) {
 	col1, row1, col2, row2, err := resolveRange(s, opts.rangeFlag)
 	if err != nil {
-		return readData{}, ExitValidate
+		return readData{}, ExitValidate, errInvalidRange(opts.rangeFlag, err)
 	}
 
 	rangeStr := buildRangeStr(opts.rangeFlag, col1, row1, col2, row2)
 
 	if col1 == 0 {
 		// Empty sheet.
-		return readData{File: filePath, Sheet: sheetName, Rows: []rowData{}}, ExitSuccess
+		return readData{File: filePath, Sheet: sheetName, Rows: []rowData{}}, ExitSuccess, nil
 	}
 
 	var headers []string
@@ -417,7 +432,9 @@ func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts)
 	for _, fc := range opts.filters {
 		idx, ferr := resolveColumnIndex(fc.Column, headers, col1)
 		if ferr != nil {
-			continue
+			return readData{}, ExitValidate, errValidation(
+				fmt.Sprintf("column %q not found in headers; check header names with: werkbook read --headers <file>", fc.Column),
+			)
 		}
 		resolved = append(resolved, resolvedFilter{cond: fc, colIdx: idx})
 	}
@@ -451,8 +468,8 @@ func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts)
 				Type:  valueTypeName(v),
 			}
 
-			if v.Type == werkbook.TypeNumber {
-				if isDateCell(s, ref) {
+			if !opts.noDates && v.Type == werkbook.TypeNumber {
+				if isDateCell(s, ref, v) {
 					cd.Type = "date"
 					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
 				}
@@ -503,7 +520,7 @@ func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts)
 		Range:   rangeStr,
 		Headers: headers,
 		Rows:    rows,
-	}, ExitSuccess
+	}, ExitSuccess, nil
 }
 
 // resolveRange returns the column/row bounds for a sheet given an optional range flag.
@@ -570,7 +587,13 @@ func valueTypeName(v werkbook.Value) string {
 }
 
 // isDateCell checks whether the cell's style indicates a date number format.
-func isDateCell(s *werkbook.Sheet, ref string) bool {
+// It also applies a plausibility guard: serial numbers <= 0 or > 2958465 (year 9999)
+// are rejected to avoid obviously wrong date interpretations.
+func isDateCell(s *werkbook.Sheet, ref string, v werkbook.Value) bool {
+	// Plausibility guard: reject implausible serial numbers.
+	if v.Type == werkbook.TypeNumber && (v.Number <= 0 || v.Number > 2958465) {
+		return false
+	}
 	style, _ := s.GetStyle(ref)
 	if style == nil {
 		return false

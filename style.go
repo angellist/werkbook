@@ -3,7 +3,7 @@ package werkbook
 import (
 	"fmt"
 
-	"github.com/werkbook/werkbook/ooxml"
+	"github.com/jpoz/werkbook/ooxml"
 )
 
 // Style defines visual formatting for a cell.

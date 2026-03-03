@@ -5,7 +5,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/werkbook/werkbook/formula"
+	"github.com/jpoz/werkbook/formula"
 )
 
 type formulaListData struct {

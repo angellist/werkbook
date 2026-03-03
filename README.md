@@ -7,13 +7,13 @@ A Go library for reading and writing Excel XLSX files with a built-in formula en
 ### Library
 
 ```bash
-go get github.com/werkbook/werkbook
+go get github.com/jpoz/werkbook
 ```
 
 ### CLI
 
 ```bash
-go install github.com/werkbook/werkbook/cmd/werkbook@latest
+go install github.com/jpoz/werkbook/cmd/werkbook@latest
 ```
 
 This installs the `werkbook` binary, which provides commands for reading, editing, and creating XLSX files from the command line:
@@ -38,7 +38,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/werkbook/werkbook"
+    "github.com/jpoz/werkbook"
 )
 
 func main() {

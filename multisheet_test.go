@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 func TestMultiSheetRoundTrip(t *testing.T) {

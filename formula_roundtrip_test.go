@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 func TestSetFormulaGetFormula(t *testing.T) {

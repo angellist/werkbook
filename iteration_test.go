@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 func TestRowIteration(t *testing.T) {

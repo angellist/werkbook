@@ -3,7 +3,7 @@ package werkbook
 import (
 	"testing"
 
-	"github.com/werkbook/werkbook/ooxml"
+	"github.com/jpoz/werkbook/ooxml"
 )
 
 func TestStyleToStyleData_Nil(t *testing.T) {

@@ -3,16 +3,40 @@ package ooxml
 import (
 	"archive/zip"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 )
 
+// ErrEncryptedFile is returned when the input file is encrypted (password-protected).
+var ErrEncryptedFile = errors.New("file is password-protected or encrypted; werkbook cannot open encrypted files")
+
+// cfbMagic is the magic number for Microsoft Compound Binary Format (CFB/OLE2) files.
+// Encrypted OOXML files are wrapped in this format.
+var cfbMagic = []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1}
+
 // ReadWorkbook reads an XLSX file and returns the parsed WorkbookData.
 func ReadWorkbook(r io.ReaderAt, size int64) (*WorkbookData, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
+		// Check if the file is an encrypted CFB/OLE2 container.
+		if size >= 8 {
+			var header [8]byte
+			if _, readErr := r.ReadAt(header[:], 0); readErr == nil {
+				match := true
+				for i := range cfbMagic {
+					if header[i] != cfbMagic[i] {
+						match = false
+						break
+					}
+				}
+				if match {
+					return nil, ErrEncryptedFile
+				}
+			}
+		}
 		return nil, fmt.Errorf("open zip: %w", err)
 	}
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 // captureRun calls run() and captures stdout/stderr via a temp redirect.

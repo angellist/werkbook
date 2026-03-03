@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 // styleJSON is the JSON representation of a Style for input/output.

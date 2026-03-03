@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 type editData struct {

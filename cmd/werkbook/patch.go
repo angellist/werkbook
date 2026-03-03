@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 // patchOp represents a single operation in a patch array.

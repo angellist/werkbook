@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/werkbook/werkbook/formula"
-	"github.com/werkbook/werkbook/ooxml"
+	"github.com/jpoz/werkbook/formula"
+	"github.com/jpoz/werkbook/ooxml"
 )
 
 // File represents an XLSX workbook.
@@ -285,6 +285,7 @@ func (f *File) invalidateDependents(sheet string, col, row int) {
 // Recalculate evaluates all dirty formula cells. Cells are evaluated lazily
 // via GetValue, but this method forces evaluation of every dirty cell.
 func (f *File) Recalculate() {
+	f.calcGen++
 	for _, s := range f.sheets {
 		for _, r := range s.rows {
 			for col, c := range r.cells {

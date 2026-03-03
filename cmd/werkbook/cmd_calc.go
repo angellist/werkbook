@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 func cmdCalc(args []string, globals globalFlags) int {
@@ -20,6 +20,7 @@ Flags:
   --sheet <name>       Recalculate and show the named sheet (default: first sheet)
   --range <A1:D10>     Return results for a specific range (default: full used range)
   --output <path>      Save the recalculated workbook to a file
+  --no-dates           Disable date detection; show numbers as-is
 
 Examples:
   werkbook calc data.xlsx
@@ -29,11 +30,16 @@ Examples:
 	}
 
 	var sheetFlag, rangeFlag, outputFlag string
+	var noDatesFlag bool
 
 	i := 0
 	var filePath string
 	for i < len(args) {
 		switch args[i] {
+		case "--no-dates":
+			noDatesFlag = true
+			i++
+			continue
 		case "--sheet":
 			if i+1 >= len(args) {
 				writeError(cmd, errUsage("--sheet requires a value"), globals)
@@ -149,8 +155,8 @@ Examples:
 				Type:  valueTypeName(v),
 			}
 			// Detect date cells.
-			if v.Type == werkbook.TypeNumber {
-				if isDateCell(s, ref) {
+			if !noDatesFlag && v.Type == werkbook.TypeNumber {
+				if isDateCell(s, ref, v) {
 					cd.Type = "date"
 					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
 				}

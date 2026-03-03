@@ -3,7 +3,7 @@ package werkbook_test
 import (
 	"testing"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 // TestFormulaCacheInvalidation verifies that changing a cell value causes

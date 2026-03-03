@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/werkbook/werkbook/formula"
-	"github.com/werkbook/werkbook/ooxml"
+	"github.com/jpoz/werkbook/formula"
+	"github.com/jpoz/werkbook/ooxml"
 )
 
 // Sheet represents a single worksheet in the workbook.
@@ -379,6 +379,8 @@ func (s *Sheet) toSheetData(styleMap map[string]int, styles *[]ooxml.StyleData) 
 
 		for _, cn := range colNums {
 			c := r.cells[cn]
+			// Resolve dirty/stale formulas before serializing.
+			s.resolveCell(c, cn, rn)
 			if c.value.Type == TypeEmpty && c.formula == "" && c.style == nil {
 				continue
 			}

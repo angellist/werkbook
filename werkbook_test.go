@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 func TestNewSaveAsProducesValidZIP(t *testing.T) {

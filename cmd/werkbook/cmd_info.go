@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	werkbook "github.com/werkbook/werkbook"
+	werkbook "github.com/jpoz/werkbook"
 )
 
 type infoData struct {

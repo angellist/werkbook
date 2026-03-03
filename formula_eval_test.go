@@ -3,7 +3,7 @@ package werkbook_test
 import (
 	"testing"
 
-	"github.com/werkbook/werkbook"
+	"github.com/jpoz/werkbook"
 )
 
 // TestFormulaEvaluation verifies that formula cells compute their values.

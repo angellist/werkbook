@@ -12,7 +12,7 @@ gotestsum ./...
 gotestsum -- -run TestRoundTrip ./...
 ```
 
-No external dependencies beyond the Go standard library. Module: `github.com/werkbook/werkbook`.
+No external dependencies beyond the Go standard library. Module: `github.com/jpoz/werkbook`.
 
 ## Architecture
 

@@ -1,6 +1,6 @@
 package werkbook
 
-import "github.com/werkbook/werkbook/formula"
+import "github.com/jpoz/werkbook/formula"
 
 // Cell represents a single cell in a worksheet.
 type Cell struct {

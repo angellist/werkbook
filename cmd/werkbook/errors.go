@@ -25,6 +25,8 @@ const (
 	ErrCodeUsage           = "USAGE"
 	ErrCodeInternal        = "INTERNAL"
 	ErrCodePartialFailure  = "PARTIAL_FAILURE"
+	ErrCodeValidation      = "VALIDATION"
+	ErrCodeEncryptedFile   = "ENCRYPTED_FILE"
 )
 
 func errFileNotFound(path string, err error) *ErrorInfo {
@@ -92,6 +94,21 @@ func errUsage(msg string) *ErrorInfo {
 		Code:    ErrCodeUsage,
 		Message: msg,
 		Hint:    "Run 'werkbook <command> --help' for command usage.",
+	}
+}
+
+func errEncryptedFile(path string) *ErrorInfo {
+	return &ErrorInfo{
+		Code:    ErrCodeEncryptedFile,
+		Message: fmt.Sprintf("file %q is password-protected or encrypted", path),
+		Hint:    "Remove the password in Excel (File > Info > Protect Workbook > Encrypt with Password) and try again.",
+	}
+}
+
+func errValidation(msg string) *ErrorInfo {
+	return &ErrorInfo{
+		Code:    ErrCodeValidation,
+		Message: msg,
 	}
 }
 
