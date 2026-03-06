@@ -3,9 +3,7 @@
 [![Go](https://github.com/jpoz/werkbook/actions/workflows/go.yml/badge.svg)](https://github.com/jpoz/werkbook/actions/workflows/go.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jpoz/werkbook.svg)](https://pkg.go.dev/github.com/jpoz/werkbook)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jpoz/werkbook)](https://goreportcard.com/report/github.com/jpoz/werkbook)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-A Go library for reading and writing Excel XLSX files with a built-in formula engine. Zero external dependencies.
+A Go library for reading and writing `.xlsx` workbooks with a built-in formula engine. Zero external dependencies.
 
 ## Install
 
@@ -88,6 +86,12 @@ fmt.Println(v)
 
 Werkbook includes a formula engine with 198 built-in functions. See [FORMULAS.md](FORMULAS.md) for the full list of supported and unsupported functions.
 
+## Compatibility
+
+Werkbook targets `.xlsx` workbook interoperability and formula behavior compatibility with Microsoft Excel.
+
+Excel is a trademark of Microsoft Corporation. Werkbook is not affiliated with or endorsed by Microsoft.
+
 ## License
 
-MIT
+No license has been granted yet. Until a `LICENSE` file is added, all rights are reserved.

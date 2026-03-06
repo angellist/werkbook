@@ -58,7 +58,7 @@ type helpData struct {
 func wbToolSpec() toolSpec {
 	return toolSpec{
 		Name:    "wb",
-		Summary: "Read, write, and inspect Excel .xlsx workbooks.",
+		Summary: "Read, write, and inspect .xlsx workbooks.",
 		Usage:   "wb <command> [flags] <file>",
 		Modes: []modeSpec{
 			{
