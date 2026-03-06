@@ -1,6 +1,8 @@
 # wb CLI
 
-A command-line tool for reading, writing, and manipulating Excel `.xlsx` files.
+A command-line tool for reading, writing, and manipulating `.xlsx` workbooks.
+
+`Excel` is referenced only to describe compatibility. Excel is a trademark of Microsoft Corporation. `wb` is not affiliated with or endorsed by Microsoft.
 
 ## Install
 
