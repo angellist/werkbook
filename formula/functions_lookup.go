@@ -19,6 +19,8 @@ func init() {
 	Register("VLOOKUP", NoCtx(fnVLOOKUP))
 	Register("TAKE", NoCtx(fnTAKE))
 	Register("DROP", NoCtx(fnDROP))
+	Register("CHOOSECOLS", NoCtx(fnCHOOSECOLS))
+	Register("CHOOSEROWS", NoCtx(fnCHOOSEROWS))
 	Register("TOCOL", NoCtx(fnTOCOL))
 	Register("TOROW", NoCtx(fnTOROW))
 	Register("TRANSPOSE", NoCtx(fnTRANSPOSE))
@@ -377,10 +379,14 @@ func fnINDEX(args []Value) (Value, error) {
 	}
 
 	// row_num=0 means return the entire column (or array if col_num=0 too).
-	// The result is an array; in a single-cell (non-array) context the
-	// caller will reduce this to #VALUE! automatically.
+	// The result is an array marked NoSpill; in a single-cell (non-array)
+	// context the caller converts this to #VALUE!. Functions like SUM that
+	// consume the array directly still work because they read Array elements
+	// before the final scalar reduction.
 	if ri == 0 && colNum == 0 {
-		return arr, nil
+		v := arr
+		v.NoSpill = true
+		return v, nil
 	}
 	if ri == 0 {
 		// Return entire column as a single-column array.
@@ -392,7 +398,7 @@ func fnINDEX(args []Value) (Value, error) {
 			}
 			col = append(col, []Value{row[ci]})
 		}
-		return Value{Type: ValueArray, Array: col}, nil
+		return Value{Type: ValueArray, Array: col, NoSpill: true}, nil
 	}
 	if colNum == 0 {
 		// Return entire row as a single-row array.
@@ -400,7 +406,7 @@ func fnINDEX(args []Value) (Value, error) {
 		if ri < 0 || ri >= len(arr.Array) {
 			return ErrorVal(ErrValREF), nil
 		}
-		return Value{Type: ValueArray, Array: [][]Value{arr.Array[ri]}}, nil
+		return Value{Type: ValueArray, Array: [][]Value{arr.Array[ri]}, NoSpill: true}, nil
 	}
 
 	ri--
@@ -1370,6 +1376,99 @@ func fnDROP(args []Value) (Value, error) {
 			}
 		}
 		result[i-rowStart] = row
+	}
+
+	if len(result) == 1 && len(result[0]) == 1 {
+		return result[0][0], nil
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// normalizeChooserIndex converts a CHOOSECOLS/CHOOSEROWS selector to a
+// zero-based index, supporting negative indexes from the end.
+func normalizeChooserIndex(arg Value, max int) (int, *Value) {
+	idxNum, e := CoerceNum(arg)
+	if e != nil {
+		return 0, e
+	}
+
+	idx := int(idxNum)
+	if idx == 0 || idx > max || idx < -max {
+		errVal := ErrorVal(ErrValVALUE)
+		return 0, &errVal
+	}
+	if idx < 0 {
+		idx = max + idx + 1
+	}
+	return idx - 1, nil
+}
+
+// fnCHOOSECOLS implements CHOOSECOLS(array, col_num1, [col_num2], ...).
+func fnCHOOSECOLS(args []Value) (Value, error) {
+	if len(args) < 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	grid, errVal := normalizeToGrid(args[0])
+	if errVal != nil {
+		return *errVal, nil
+	}
+
+	_, numCols := gridDims(grid)
+	selectCols := make([]int, len(args)-1)
+	for i, arg := range args[1:] {
+		colIdx, e := normalizeChooserIndex(arg, numCols)
+		if e != nil {
+			return *e, nil
+		}
+		selectCols[i] = colIdx
+	}
+
+	result := make([][]Value, len(grid))
+	for r, srcRow := range grid {
+		row := make([]Value, len(selectCols))
+		for c, srcCol := range selectCols {
+			if srcCol < len(srcRow) {
+				row[c] = srcRow[srcCol]
+			} else {
+				row[c] = EmptyVal()
+			}
+		}
+		result[r] = row
+	}
+
+	if len(result) == 1 && len(result[0]) == 1 {
+		return result[0][0], nil
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnCHOOSEROWS implements CHOOSEROWS(array, row_num1, [row_num2], ...).
+func fnCHOOSEROWS(args []Value) (Value, error) {
+	if len(args) < 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	grid, errVal := normalizeToGrid(args[0])
+	if errVal != nil {
+		return *errVal, nil
+	}
+
+	numRows, _ := gridDims(grid)
+	selectRows := make([]int, len(args)-1)
+	for i, arg := range args[1:] {
+		rowIdx, e := normalizeChooserIndex(arg, numRows)
+		if e != nil {
+			return *e, nil
+		}
+		selectRows[i] = rowIdx
+	}
+
+	result := make([][]Value, len(selectRows))
+	for i, srcRow := range selectRows {
+		row := make([]Value, len(grid[srcRow]))
+		copy(row, grid[srcRow])
+		result[i] = row
 	}
 
 	if len(result) == 1 && len(result[0]) == 1 {

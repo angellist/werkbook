@@ -692,10 +692,10 @@ const (
 // classifyWildcard examines a criteria string and returns what kind of
 // wildcard processing it needs.
 //
-// In Excel, ~* escapes a literal * and also absorbs any immediately
-// following identical wildcard characters.  So "~**" has no unescaped
-// wildcards (it matches literal "**"), whereas "*~**" still has unescaped
-// wildcards at the leading and trailing positions.
+// In Excel, ~* escapes a single literal *, ~? escapes a single literal ?,
+// and ~~ escapes a single literal ~.  So "~**" has an escaped * followed
+// by an unescaped wildcard *, meaning it matches strings starting with
+// a literal '*'.
 func classifyWildcard(s string) wildcardMode {
 	hasEscape := false
 	for i := 0; i < len(s); i++ {
@@ -703,14 +703,7 @@ func classifyWildcard(s string) wildcardMode {
 		case '~':
 			if i+1 < len(s) && (s[i+1] == '*' || s[i+1] == '?' || s[i+1] == '~') {
 				hasEscape = true
-				escaped := s[i+1]
 				i++ // skip the escaped char
-				// Also skip any immediately following identical wildcard chars.
-				if escaped == '*' || escaped == '?' {
-					for i+1 < len(s) && s[i+1] == escaped {
-						i++
-					}
-				}
 			}
 		case '*', '?':
 			return wildcardFull
@@ -731,13 +724,6 @@ func unescapePattern(s string) string {
 		if s[i] == '~' && i+1 < len(s) && (s[i+1] == '*' || s[i+1] == '?' || s[i+1] == '~') {
 			b.WriteByte(s[i+1])
 			i++ // skip escaped char
-			// Also emit any immediately following identical wildcard chars.
-			if s[i] == '*' || s[i] == '?' {
-				for i+1 < len(s) && s[i+1] == s[i] {
-					i++
-					b.WriteByte(s[i])
-				}
-			}
 		} else {
 			b.WriteByte(s[i])
 		}
@@ -2659,7 +2645,23 @@ func fnNormInv(args []Value) (Value, error) {
 	if stdev <= 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
-	return NumberVal(mean + stdev*normSInv(p)), nil
+	x := mean + stdev*normSInv(p)
+	// When mean=0 and stdev=1 the result must equal NORM.S.INV exactly
+	// (Excel treats NORM.INV(p,0,1) identically to NORM.S.INV(p)).
+	// For all other parameters, refine with Newton-Raphson on the full
+	// normal distribution. The Acklam approximation gives ~8 digits;
+	// two iterations bring us to ~16 digits of precision.
+	if mean != 0 || stdev != 1 {
+		for range 2 {
+			z := (x - mean) / stdev
+			cdf := normSDistCDF(z)
+			pdf := normSDistPDF(z)
+			if pdf > 0 {
+				x -= (cdf - p) / (pdf / stdev)
+			}
+		}
+	}
+	return NumberVal(x), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -2743,21 +2745,24 @@ func normSInv(p float64) float64 {
 		}
 	)
 
+	var x float64
 	if p < pLow {
 		// Lower region.
 		q := math.Sqrt(-2 * math.Log(p))
-		return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
+		x = (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
 			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
-	}
-	if p <= pHigh {
+	} else if p <= pHigh {
 		// Central region.
 		q := p - 0.5
 		r := q * q
-		return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r + a[5]) * q /
+		x = (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r + a[5]) * q /
 			(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r + 1)
+	} else {
+		// Upper region.
+		q := math.Sqrt(-2 * math.Log(1-p))
+		x = -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
+			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
 	}
-	// Upper region.
-	q := math.Sqrt(-2 * math.Log(1-p))
-	return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q + c[5]) /
-		((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
+
+	return x
 }

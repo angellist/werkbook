@@ -2812,8 +2812,8 @@ func TestCOUNTIFWildcardEscapes(t *testing.T) {
 		{`COUNTIF(A1:A8,"star~*")`, 1}, // star*
 		// a~?b means: "a" then literal ? then "b"
 		{`COUNTIF(A1:A8,"a~?b")`, 1}, // a?b
-		// ~** alone: no unescaped wildcards, matches literal "**" (Excel behaviour).
-		{`COUNTIF(A1:A8,"~**")`, 0}, // no cell is exactly "**"
+		// ~** means: literal * then wildcard * (match anything) → cells starting with *
+		{`COUNTIF(A1:A8,"~**")`, 1}, // *star
 		// ~* alone: matches literal "*"
 		{`COUNTIF(A1:A8,"~*")`, 0}, // no cell is exactly "*"
 		// SUMIF with wildcard escapes
@@ -5701,9 +5701,11 @@ func TestMatchesCriteriaExtended(t *testing.T) {
 		{name: "eq20_matches_str_20", v: StringVal("20"), crit: StringVal("=20"), want: true},
 		// Numeric operand with ordering operators does NOT match text-numbers
 		{name: "gt10_no_match_str_15", v: StringVal("15"), crit: StringVal(">10"), want: false},
-		// Tilde escape without remaining wildcards: "~**" matches literal "**"
-		{name: "tilde_star_star_no_match", v: StringVal("*Special"), crit: StringVal("~**"), want: false},
+		// Tilde escape: "~**" means literal * followed by wildcard * (match anything)
+		{name: "tilde_star_star_match", v: StringVal("*Special"), crit: StringVal("~**"), want: true},
 		{name: "tilde_star_star_exact", v: StringVal("**"), crit: StringVal("~**"), want: true},
+		{name: "tilde_star_star_just_star", v: StringVal("*"), crit: StringVal("~**"), want: true},
+		{name: "tilde_star_star_no_star", v: StringVal("abc"), crit: StringVal("~**"), want: false},
 		// "~*" matches literal "*"
 		{name: "tilde_star_exact", v: StringVal("*"), crit: StringVal("~*"), want: true},
 		{name: "tilde_star_no_match", v: StringVal("*abc"), crit: StringVal("~*"), want: false},
@@ -12371,6 +12373,16 @@ func TestNORMSDIST_argcount(t *testing.T) {
 	if got.Type != ValueError {
 		t.Errorf("NORM.S.DIST(0,TRUE,1) should error, got type=%d", got.Type)
 	}
+
+	// IFERROR should catch the #VALUE! from NORM.S.DIST with 1 arg.
+	cf = evalCompile(t, `IFERROR(NORM.S.DIST(1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(NORM.S.DIST(1),"err") = %v, want string "err"`, got)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -12463,7 +12475,9 @@ func TestNORMSINV_argcount(t *testing.T) {
 }
 
 func TestNORMSINV_NORMSDIST_roundtrip(t *testing.T) {
-	const tol = 1e-6
+	// Excel's NORM.S.INV uses Acklam's approximation without refinement,
+	// so the roundtrip through NORM.S.DIST is only accurate to ~8 digits.
+	const tol = 1e-8
 	resolver := &mockResolver{}
 
 	probs := []float64{0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.001, 0.999}
@@ -12674,7 +12688,7 @@ func TestNORMINV_argCount(t *testing.T) {
 }
 
 func TestNORMINV_NORMDIST_roundtrip(t *testing.T) {
-	const tol = 1e-6
+	const tol = 1e-14
 	resolver := &mockResolver{}
 
 	cases := []struct {
@@ -12683,14 +12697,15 @@ func TestNORMINV_NORMDIST_roundtrip(t *testing.T) {
 		sd   float64
 	}{
 		{0.1, 40, 1.5},
+		{0.025, 40, 1.5},
 		{0.25, 100, 15},
 		{0.5, 0, 1},
 		{0.75, -50, 10},
 		{0.9, 200, 30},
 		{0.95, 0, 0.5},
 		{0.99, 50, 5},
-		{0.001, 0, 1},
-		{0.999, 0, 1},
+		{0.001, 10, 2},
+		{0.999, 10, 2},
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("roundtrip_p%g_m%g_s%g", tc.p, tc.mean, tc.sd), func(t *testing.T) {

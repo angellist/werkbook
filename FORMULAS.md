@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **304** Excel formula functions.
+Werkbook supports **306** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -38,6 +38,8 @@ Werkbook supports **304** Excel formula functions.
 | CEILING.PRECISE | Math & Trig | 37 |
 | CHAR | Text | 8 |
 | CHOOSE | Text | 24 |
+| CHOOSECOLS | Lookup & Reference | 7 |
+| CHOOSEROWS | Lookup & Reference | 7 |
 | CLEAN | Text | - |
 | CODE | Text | 12 |
 | COLUMN | Information | - |
@@ -122,10 +124,10 @@ Werkbook supports **304** Excel formula functions.
 | HOUR | Date & Time | - |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
-| IFERROR | Logical | 24 |
+| IFERROR | Logical | 25 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
-| INDEX | Lookup & Reference | 12 |
+| INDEX | Lookup & Reference | 13 |
 | INDIRECT | Lookup & Reference | 17 |
 | INT | Math & Trig | 24 |
 | INTERCEPT | Statistical | 16 |
@@ -254,7 +256,7 @@ Werkbook supports **304** Excel formula functions.
 | STEYX | Statistical | 25 |
 | SUBSTITUTE | Text | 23 |
 | SUBTOTAL | Math & Trig | - |
-| SUM | Statistical | 33 |
+| SUM | Statistical | 34 |
 | SUMIF | Statistical | 36 |
 | SUMIFS | Statistical | 41 |
 | SUMPRODUCT | Statistical | 22 |
@@ -311,7 +313,7 @@ Werkbook supports **304** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **164** Excel functions are not yet supported.
+The following **162** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -340,8 +342,6 @@ The following **164** Excel functions are not yet supported.
 | CHISQ.INV | Statistical |
 | CHISQ.INV.RT | Statistical |
 | CHISQ.TEST | Statistical |
-| CHOOSECOLS | Lookup & Reference |
-| CHOOSEROWS | Lookup & Reference |
 | COMPLEX | Engineering |
 | CONFIDENCE.NORM | Statistical |
 | CONFIDENCE.T | Statistical |
