@@ -54,7 +54,7 @@ func renderTextTableSection(title string, headers []string, rows [][]string) str
 		return sb.String()
 	}
 
-	sb.WriteString(formatTextTable(headers, rows))
+	sb.WriteString(formatAlignedMarkdownTable(headers, rows))
 	if len(rows) == 0 {
 		sb.WriteString("(no rows)\n")
 	}
@@ -128,7 +128,7 @@ func csvEscape(s string) string {
 	return s
 }
 
-func formatTextTable(headers []string, rows [][]string) string {
+func formatAlignedMarkdownTable(headers []string, rows [][]string) string {
 	width := len(headers)
 	for _, row := range rows {
 		if len(row) > width {
@@ -155,38 +155,47 @@ func formatTextTable(headers []string, rows [][]string) string {
 
 	var sb strings.Builder
 	if len(headers) > 0 {
-		writeTextRow(&sb, headers, widths)
-		divider := make([]string, len(widths))
-		for i, w := range widths {
-			if w < 3 {
-				w = 3
-			}
-			divider[i] = strings.Repeat("-", w)
-		}
-		writeTextRow(&sb, divider, widths)
+		writeMarkdownRow(&sb, headers, widths)
+		writeMarkdownDivider(&sb, widths)
 	}
 	for _, row := range rows {
-		writeTextRow(&sb, row, widths)
+		writeMarkdownRow(&sb, row, widths)
 	}
 	return sb.String()
 }
 
-func writeTextRow(sb *strings.Builder, fields []string, widths []int) {
-	last := len(widths) - 1
+func writeMarkdownRow(sb *strings.Builder, fields []string, widths []int) {
+	sb.WriteString("|")
 	for i := range widths {
-		if i > 0 {
-			sb.WriteString("  ")
-		}
 		value := ""
 		if i < len(fields) {
 			value = fields[i]
 		}
-		sb.WriteString(value)
-		if i < last {
-			sb.WriteString(strings.Repeat(" ", widths[i]-len(value)))
-		}
+		sb.WriteString(" ")
+		sb.WriteString(padRight(value, widths[i]))
+		sb.WriteString(" |")
 	}
 	sb.WriteString("\n")
+}
+
+func writeMarkdownDivider(sb *strings.Builder, widths []int) {
+	sb.WriteString("|")
+	for _, width := range widths {
+		if width < 3 {
+			width = 3
+		}
+		sb.WriteString(" ")
+		sb.WriteString(strings.Repeat("-", width))
+		sb.WriteString(" |")
+	}
+	sb.WriteString("\n")
+}
+
+func padRight(value string, width int) string {
+	if len(value) >= width {
+		return value
+	}
+	return value + strings.Repeat(" ", width-len(value))
 }
 
 func compactTableColumns(headers []string, rows [][]string) ([]string, [][]string) {

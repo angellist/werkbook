@@ -319,15 +319,15 @@ func TestReadTextDefault(t *testing.T) {
 	if !strings.Contains(stdout, "Sheet: Sheet1") {
 		t.Errorf("expected sheet heading, got:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "|") {
-		t.Errorf("did not expect markdown pipe formatting, got:\n%s", stdout)
-	}
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) < 4 {
+	if len(lines) < 5 {
 		t.Fatalf("expected heading plus table, got:\n%s", stdout)
 	}
-	if got := strings.Join(strings.Fields(lines[2]), ","); got != "Name,Value" {
-		t.Errorf("expected compact text header row, got %q", lines[2])
+	if lines[2] != "| Name | Value |" {
+		t.Errorf("expected markdown header row, got %q", lines[2])
+	}
+	if lines[3] != "| ---- | ----- |" {
+		t.Errorf("expected markdown divider row, got %q", lines[3])
 	}
 }
 
@@ -521,17 +521,14 @@ func TestCalcTextCompactsEmptyColumns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	if strings.Contains(stdout, "|") {
-		t.Errorf("did not expect markdown pipe formatting, got:\n%s", stdout)
-	}
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) < 5 {
+	if len(lines) < 6 {
 		t.Fatalf("expected heading plus compact table, got:\n%s", stdout)
 	}
-	if got := strings.Join(strings.Fields(lines[2]), ","); got != "Values,Returns,Large" {
+	if lines[2] != "| Values | Returns | Large   |" {
 		t.Errorf("expected empty columns to be removed, got header %q", lines[2])
 	}
-	if got := strings.Join(strings.Fields(lines[4]), ","); got != "2,1.05,1000000" {
+	if lines[4] != "| 2      | 1.05    | 1000000 |" {
 		t.Errorf("expected first data row to stay aligned, got %q", lines[4])
 	}
 }
