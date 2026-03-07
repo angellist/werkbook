@@ -87,6 +87,7 @@ func init() {
 	Register("NORM.S.DIST", NoCtx(fnNormSDist))
 	Register("NORM.S.INV", NoCtx(fnNormSInv))
 	Register("BINOM.DIST", NoCtx(fnBinomDist))
+	Register("BINOM.INV", NoCtx(fnBinomInv))
 	Register("POISSON.DIST", NoCtx(fnPoissonDist))
 	Register("EXPON.DIST", NoCtx(fnExponDist))
 	Register("WEIBULL.DIST", NoCtx(fnWeibullDist))
@@ -2872,6 +2873,54 @@ func binomPMF(n, k int, p float64) float64 {
 	logBinom := logC - logK - logNK
 	logProb := logBinom + float64(k)*math.Log(p) + float64(n-k)*math.Log(1-p)
 	return math.Exp(logProb)
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.INV — Inverse binomial distribution
+// ---------------------------------------------------------------------------
+
+// fnBinomInv implements BINOM.INV(trials, probability_s, alpha).
+// Returns the smallest k such that BINOM.DIST(k, trials, p, TRUE) >= alpha.
+func fnBinomInv(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	tf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate trials to integer.
+	n := int(tf)
+
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if p <= 0 || p >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Accumulate the binomial CDF and return the first k where CDF >= alpha.
+	cum := 0.0
+	for k := 0; k <= n; k++ {
+		cum += binomPMF(n, k, p)
+		if cum >= alpha {
+			return NumberVal(float64(k)), nil
+		}
+	}
+	// Fallback: should not be reached for valid inputs since CDF(n) = 1.
+	return NumberVal(float64(n)), nil
 }
 
 // fnPoissonDist implements POISSON.DIST(x, mean, cumulative).

@@ -12,6 +12,7 @@ var xlfnPrefix = map[string]string{
 	"BETA.DIST":       "_xlfn.",
 	"BETA.INV":        "_xlfn.",
 	"BINOM.DIST":      "_xlfn.",
+	"BINOM.INV":       "_xlfn.",
 	"BYCOL":           "_xlfn.",
 	"BYROW":           "_xlfn.",
 	"CHISQ.DIST":      "_xlfn.",

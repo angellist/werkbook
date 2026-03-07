@@ -16784,3 +16784,174 @@ func TestNEGBINOM_DIST_argcount(t *testing.T) {
 		t.Errorf(`IFERROR(NEGBINOM.DIST(10,5,0.25),"err") = %v, want string "err"`, got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// BINOM.INV
+// ---------------------------------------------------------------------------
+
+func TestBINOM_INV(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic case from Excel docs
+		{"basic", "BINOM.INV(6,0.5,0.75)", 4, false, 0},
+
+		// Median of symmetric binomial
+		{"median_symmetric", "BINOM.INV(10,0.5,0.5)", 5, false, 0},
+
+		// Very low alpha — CDF(0)=0.000977 < 0.001, CDF(1)=0.01074 >= 0.001
+		{"low_alpha", "BINOM.INV(10,0.5,0.001)", 1, false, 0},
+
+		// Very high alpha — expect near n
+		{"high_alpha", "BINOM.INV(10,0.5,0.999)", 9, false, 0},
+
+		// Single trial, alpha below p(0)=0.5
+		{"single_trial_low", "BINOM.INV(1,0.5,0.4)", 0, false, 0},
+
+		// Single trial, alpha above p(0)=0.5
+		{"single_trial_high", "BINOM.INV(1,0.5,0.6)", 1, false, 0},
+
+		// Single trial, alpha exactly at boundary
+		{"single_trial_exact", "BINOM.INV(1,0.5,0.5)", 0, false, 0},
+
+		// Zero trials: CDF(0,0,p)=1, so any alpha < 1 returns 0
+		{"zero_trials", "BINOM.INV(0,0.5,0.5)", 0, false, 0},
+
+		// High probability of success
+		{"high_prob", "BINOM.INV(10,0.9,0.5)", 9, false, 0},
+
+		// Low probability of success
+		{"low_prob", "BINOM.INV(10,0.1,0.5)", 1, false, 0},
+
+		// High probability, low alpha
+		{"high_prob_low_alpha", "BINOM.INV(10,0.9,0.01)", 6, false, 0},
+
+		// Low probability, high alpha
+		{"low_prob_high_alpha", "BINOM.INV(10,0.1,0.99)", 4, false, 0},
+
+		// Truncation: 6.9 -> 6 trials
+		{"truncation", "BINOM.INV(6.9,0.5,0.75)", 4, false, 0},
+
+		// Alpha near lower boundary
+		{"alpha_near_zero", "BINOM.INV(10,0.5,0.01)", 1, false, 0},
+
+		// Larger n
+		{"larger_n", "BINOM.INV(100,0.5,0.5)", 50, false, 0},
+
+		// Asymmetric probability
+		{"asym_p03", "BINOM.INV(10,0.3,0.5)", 3, false, 0},
+
+		// Asymmetric probability with high alpha
+		{"asym_p03_high_alpha", "BINOM.INV(10,0.3,0.9)", 5, false, 0},
+
+		// Asymmetric probability with low alpha
+		{"asym_p07", "BINOM.INV(10,0.7,0.5)", 7, false, 0},
+
+		// p = 0.5, n = 20
+		{"n20_p05", "BINOM.INV(20,0.5,0.75)", 12, false, 0},
+
+		// ---- Error cases ----
+
+		// Negative trials
+		{"err_neg_trials", "BINOM.INV(-1,0.5,0.5)", 0, true, ErrValNUM},
+
+		// Probability <= 0
+		{"err_p_zero", "BINOM.INV(10,0,0.5)", 0, true, ErrValNUM},
+
+		// Probability >= 1
+		{"err_p_one", "BINOM.INV(10,1,0.5)", 0, true, ErrValNUM},
+
+		// Probability negative
+		{"err_p_neg", "BINOM.INV(10,-0.1,0.5)", 0, true, ErrValNUM},
+
+		// Probability > 1
+		{"err_p_gt1", "BINOM.INV(10,1.1,0.5)", 0, true, ErrValNUM},
+
+		// Alpha <= 0
+		{"err_alpha_zero", "BINOM.INV(10,0.5,0)", 0, true, ErrValNUM},
+
+		// Alpha >= 1
+		{"err_alpha_one", "BINOM.INV(10,0.5,1)", 0, true, ErrValNUM},
+
+		// Alpha negative
+		{"err_alpha_neg", "BINOM.INV(10,0.5,-0.1)", 0, true, ErrValNUM},
+
+		// Alpha > 1
+		{"err_alpha_gt1", "BINOM.INV(10,0.5,1.5)", 0, true, ErrValNUM},
+
+		// Non-numeric trials
+		{"err_non_numeric_trials", `BINOM.INV("abc",0.5,0.5)`, 0, true, ErrValVALUE},
+
+		// Non-numeric probability
+		{"err_non_numeric_prob", `BINOM.INV(10,"abc",0.5)`, 0, true, ErrValVALUE},
+
+		// Non-numeric alpha
+		{"err_non_numeric_alpha", `BINOM.INV(10,0.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s error = %v, want %v", tt.formula, got.Err, tt.wantErr)
+				}
+				return
+			}
+
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number %v", tt.formula, got, got.Type, tt.wantNum)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("%s = %v, want %v", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBINOM_INV_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "BINOM.INV(10,0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.INV(10,0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "BINOM.INV(10,0.5,0.5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.INV(10,0.5,0.5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(BINOM.INV(10,0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(BINOM.INV(10,0.5),"err") = %v, want string "err"`, got)
+	}
+}
