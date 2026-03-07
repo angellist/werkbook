@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **329** Excel formula functions.
+Werkbook supports **336** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -41,7 +41,9 @@ Werkbook supports **329** Excel formula functions.
 | CEILING.PRECISE | Math & Trig | 37 |
 | CHAR | Text | 8 |
 | CHISQ.DIST | Statistical | 39 |
+| CHISQ.DIST.RT | Statistical | 19 |
 | CHISQ.INV | Statistical | 36 |
+| CHISQ.INV.RT | Statistical | 20 |
 | CHOOSE | Text | 24 |
 | CHOOSECOLS | Lookup & Reference | 7 |
 | CHOOSEROWS | Lookup & Reference | 7 |
@@ -105,7 +107,9 @@ Werkbook supports **329** Excel formula functions.
 | EXP | Math & Trig | - |
 | EXPON.DIST | Statistical | 28 |
 | F.DIST | Statistical | 42 |
+| F.DIST.RT | Statistical | 19 |
 | F.INV | Statistical | 36 |
+| F.INV.RT | Statistical | 21 |
 | FACT | Math & Trig | - |
 | FACTDOUBLE | Math & Trig | - |
 | FILTER | Lookup & Reference | 31 |
@@ -285,9 +289,12 @@ Werkbook supports **329** Excel formula functions.
 | SUMXMY2 | Math & Trig | 31 |
 | SWITCH | Logical | 28 |
 | SYD | Financial | 23 |
-| T | Text | 14 |
+| T | Text | 17 |
 | T.DIST | Statistical | 41 |
+| T.DIST.2T | Statistical | 19 |
+| T.DIST.RT | Statistical | 18 |
 | T.INV | Statistical | 33 |
+| T.INV.2T | Statistical | 20 |
 | TAKE | Lookup & Reference | 30 |
 | TAN | Math & Trig | - |
 | TANH | Math & Trig | - |
@@ -336,7 +343,7 @@ Werkbook supports **329** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **139** Excel functions are not yet supported.
+The following **132** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -357,8 +364,6 @@ The following **139** Excel functions are not yet supported.
 | BYCOL | Logical |
 | BYROW | Logical |
 | CELL | Information |
-| CHISQ.DIST.RT | Statistical |
-| CHISQ.INV.RT | Statistical |
 | CHISQ.TEST | Statistical |
 | COMPLEX | Engineering |
 | COUPDAYBS | Financial |
@@ -384,8 +389,6 @@ The following **139** Excel functions are not yet supported.
 | DVARP | Database |
 | ENCODEURL | Web |
 | EXPAND | Lookup & Reference |
-| F.DIST.RT | Statistical |
-| F.INV.RT | Statistical |
 | F.TEST | Statistical |
 | FILTERXML | Web |
 | FINDB | Text |
@@ -464,9 +467,6 @@ The following **139** Excel functions are not yet supported.
 | SKEW.P | Statistical |
 | STDEVA | Statistical |
 | STDEVPA | Statistical |
-| T.DIST.2T | Statistical |
-| T.DIST.RT | Statistical |
-| T.INV.2T | Statistical |
 | T.TEST | Statistical |
 | TBILLEQ | Financial |
 | TBILLPRICE | Financial |

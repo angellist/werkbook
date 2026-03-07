@@ -15944,3 +15944,499 @@ func TestBETA_INV_round_trip(t *testing.T) {
 		})
 	}
 }
+
+func TestT_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic", "T.DIST.RT(2,10)", 0.03669402, false, 0},
+		{"zero", "T.DIST.RT(0,5)", 0.5, false, 0},
+		{"negative_x", "T.DIST.RT(-2,10)", 0.96330598, false, 0},
+		{"large_x", "T.DIST.RT(5,10)", 0.00026867, false, 0},
+		{"df1", "T.DIST.RT(1,1)", 0.25, false, 0},
+		{"df2", "T.DIST.RT(1,2)", 0.21132487, false, 0},
+		{"df30", "T.DIST.RT(1.96,30)", 0.02967116, false, 0},
+		{"df100", "T.DIST.RT(2.576,100)", 0.00572851, false, 0},
+		{"small_x", "T.DIST.RT(0.1,5)", 0.46211507, false, 0},
+		{"neg_large", "T.DIST.RT(-5,10)", 0.99973133, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.DIST.RT(2,10.7)", 0.03669402, false, 0},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST.RT(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST.RT(1,-1)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.DIST.RT(1,0.9)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST.RT("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST.RT(2,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.DIST.RT(2)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.DIST.RT(2,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestT_DIST_2T(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic", "T.DIST.2T(2,10)", 0.07338803, false, 0},
+		{"zero", "T.DIST.2T(0,5)", 1.0, false, 0},
+		{"large_x", "T.DIST.2T(5,10)", 0.00053733, false, 0},
+		{"df1", "T.DIST.2T(1,1)", 0.5, false, 0},
+		{"df2", "T.DIST.2T(1,2)", 0.42264973, false, 0},
+		{"df30", "T.DIST.2T(1.96,30)", 0.05934231, false, 0},
+		{"df100", "T.DIST.2T(2.576,100)", 0.01145702, false, 0},
+		{"small_x", "T.DIST.2T(0.1,5)", 0.92423014, false, 0},
+		{"df1_x2", "T.DIST.2T(2,1)", 0.29516724, false, 0},
+		{"df50", "T.DIST.2T(3,50)", 0.00420170, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.DIST.2T(2,10.7)", 0.07338803, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "T.DIST.2T(-1,10)", 0, true, ErrValNUM},
+		{"err_neg_x2", "T.DIST.2T(-0.001,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST.2T(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST.2T(1,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST.2T("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST.2T(2,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.DIST.2T(2)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.DIST.2T(2,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestT_INV_2T(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic_05_10", "T.INV.2T(0.05,10)", 2.22813885, false, 0},
+		{"p1_df5", "T.INV.2T(1,5)", 0, false, 0},
+		{"p01_df10", "T.INV.2T(0.01,10)", 3.16927267, false, 0},
+		{"p10_df20", "T.INV.2T(0.10,20)", 1.72471824, false, 0},
+		{"p05_df1", "T.INV.2T(0.05,1)", 12.7062047, false, 0},
+		{"p05_df2", "T.INV.2T(0.05,2)", 4.30265273, false, 0},
+		{"p05_df30", "T.INV.2T(0.05,30)", 2.04227246, false, 0},
+		{"p05_df100", "T.INV.2T(0.05,100)", 1.98397152, false, 0},
+		{"p50_df10", "T.INV.2T(0.5,10)", 0.69981200, false, 0},
+		{"p90_df10", "T.INV.2T(0.9,10)", 0.12891459, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.INV.2T(0.05,10.7)", 2.22813885, false, 0},
+
+		// Error: p <= 0
+		{"err_p_zero", "T.INV.2T(0,10)", 0, true, ErrValNUM},
+		{"err_p_neg", "T.INV.2T(-0.1,10)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "T.INV.2T(1.1,10)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "T.INV.2T(0.05,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.INV.2T(0.05,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `T.INV.2T("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.INV.2T(0.05,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.INV.2T(0.05)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.INV.2T(0.05,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_95", "CHISQ.DIST.RT(3.841,1)", 0.05001368, false, 0},
+		{"x0_df5", "CHISQ.DIST.RT(0,5)", 1.0, false, 0},
+		{"df2", "CHISQ.DIST.RT(5.991,2)", 0.05001162, false, 0},
+		{"df5", "CHISQ.DIST.RT(5,5)", 0.41588019, false, 0},
+		{"df10", "CHISQ.DIST.RT(10,10)", 0.44049329, false, 0},
+		{"df20", "CHISQ.DIST.RT(20,20)", 0.45792971, false, 0},
+		{"large_x", "CHISQ.DIST.RT(100,5)", 0, false, 0},
+		{"small_x", "CHISQ.DIST.RT(0.01,1)", 0.92034433, false, 0},
+		{"df1_x1", "CHISQ.DIST.RT(1,1)", 0.31731051, false, 0},
+		{"df3_x3", "CHISQ.DIST.RT(3,3)", 0.39162518, false, 0},
+
+		// Truncation: 3.7 → 3
+		{"trunc_df", "CHISQ.DIST.RT(3,3.7)", 0.39162518, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "CHISQ.DIST.RT(-1,3)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "CHISQ.DIST.RT(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "CHISQ.DIST.RT(1,-1)", 0, true, ErrValNUM},
+
+		// Error: df > 10^10
+		{"err_df_too_large", "CHISQ.DIST.RT(1,10000000001)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `CHISQ.DIST.RT("abc",1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.DIST.RT(1,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "CHISQ.DIST.RT(1)", 0, true, ErrValVALUE},
+		{"err_too_many", "CHISQ.DIST.RT(1,3,TRUE)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_INV_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_05_1", "CHISQ.INV.RT(0.05,1)", 3.84145882, false, 0},
+		{"critical_05_2", "CHISQ.INV.RT(0.05,2)", 5.99146455, false, 0},
+		{"critical_05_5", "CHISQ.INV.RT(0.05,5)", 11.0704977, false, 0},
+		{"critical_05_10", "CHISQ.INV.RT(0.05,10)", 18.3070380, false, 0},
+		{"critical_01_1", "CHISQ.INV.RT(0.01,1)", 6.63489660, false, 0},
+		{"p50_df5", "CHISQ.INV.RT(0.5,5)", 4.35146163, false, 0},
+		{"p90_df5", "CHISQ.INV.RT(0.9,5)", 1.61031160, false, 0},
+		{"p1_df5", "CHISQ.INV.RT(1,5)", 0, false, 0},
+		{"p10_df20", "CHISQ.INV.RT(0.10,20)", 28.4119982, false, 0},
+		{"critical_05_30", "CHISQ.INV.RT(0.05,30)", 43.7729690, false, 0},
+
+		// Truncation: 5.9 → 5
+		{"trunc_df", "CHISQ.INV.RT(0.05,5.9)", 11.0704977, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "CHISQ.INV.RT(-0.1,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "CHISQ.INV.RT(1.1,5)", 0, true, ErrValNUM},
+
+		// Error: p = 0
+		{"err_p_zero", "CHISQ.INV.RT(0,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "CHISQ.INV.RT(0.05,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "CHISQ.INV.RT(0.05,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `CHISQ.INV.RT("abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.INV.RT(0.05,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "CHISQ.INV.RT(0.05)", 0, true, ErrValVALUE},
+		{"err_too_many", "CHISQ.INV.RT(0.05,5,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestF_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_01", "F.DIST.RT(15.2069,6,4)", 0.01000, false, 0},
+		{"x0", "F.DIST.RT(0,5,5)", 1.0, false, 0},
+		{"basic1", "F.DIST.RT(1,5,5)", 0.50000, false, 0},
+		{"basic2", "F.DIST.RT(2,5,5)", 0.23251, false, 0},
+		{"basic3", "F.DIST.RT(5,2,3)", 0.11086, false, 0},
+		{"df1_1", "F.DIST.RT(1,1,1)", 0.50000, false, 0},
+		{"large_x", "F.DIST.RT(100,5,5)", 0.00001, false, 0},
+		{"small_x", "F.DIST.RT(0.1,5,5)", 0.98776, false, 0},
+		{"df10_10", "F.DIST.RT(2,10,10)", 0.14485, false, 0},
+		{"df30_30", "F.DIST.RT(1.5,30,30)", 0.13621, false, 0},
+
+		// Truncation: 6.9 → 6, 4.9 → 4
+		{"trunc_df", "F.DIST.RT(15.2069,6.9,4.9)", 0.01000, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "F.DIST.RT(-1,5,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df1_zero", "F.DIST.RT(1,0,5)", 0, true, ErrValNUM},
+		{"err_df2_zero", "F.DIST.RT(1,5,0)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `F.DIST.RT("abc",5,5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.DIST.RT(1,"abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.DIST.RT(1,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "F.DIST.RT(1,5)", 0, true, ErrValVALUE},
+		{"err_too_many", "F.DIST.RT(1,5,5,TRUE)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestF_INV_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-3
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_01", "F.INV.RT(0.01,6,4)", 15.2069, false, 0},
+		{"p1_df5_5", "F.INV.RT(1,5,5)", 0, false, 0},
+		{"p50_df5_5", "F.INV.RT(0.5,5,5)", 1.0, false, 0},
+		{"p05_df5_5", "F.INV.RT(0.05,5,5)", 5.0503, false, 0},
+		{"p10_df2_3", "F.INV.RT(0.10,2,3)", 5.4624, false, 0},
+		{"p05_df1_1", "F.INV.RT(0.05,1,1)", 161.448, false, 0},
+		{"p05_df10_10", "F.INV.RT(0.05,10,10)", 2.9782, false, 0},
+		{"p05_df30_30", "F.INV.RT(0.05,30,30)", 1.8409, false, 0},
+		{"p90_df5_5", "F.INV.RT(0.9,5,5)", 0.2896, false, 0},
+		{"p25_df10_10", "F.INV.RT(0.25,10,10)", 1.5513, false, 0},
+
+		// Truncation: 6.9 → 6, 4.9 → 4
+		{"trunc_df", "F.INV.RT(0.01,6.9,4.9)", 15.2069, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "F.INV.RT(-0.1,5,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "F.INV.RT(1.1,5,5)", 0, true, ErrValNUM},
+
+		// Error: p = 0
+		{"err_p_zero", "F.INV.RT(0,5,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df1_zero", "F.INV.RT(0.05,0,5)", 0, true, ErrValNUM},
+		{"err_df2_zero", "F.INV.RT(0.05,5,0)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `F.INV.RT("abc",5,5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.INV.RT(0.05,"abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.INV.RT(0.05,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "F.INV.RT(0.05,5)", 0, true, ErrValVALUE},
+		{"err_too_many", "F.INV.RT(0.05,5,5,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}

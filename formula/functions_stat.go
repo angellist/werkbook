@@ -97,11 +97,18 @@ func init() {
 	Register("GAMMA.DIST", NoCtx(fnGammaDist))
 	Register("GAMMA.INV", NoCtx(fnGammaInv))
 	Register("T.DIST", NoCtx(fnTDist))
+	Register("T.DIST.RT", NoCtx(fnTDistRT))
+	Register("T.DIST.2T", NoCtx(fnTDist2T))
 	Register("T.INV", NoCtx(fnTInv))
+	Register("T.INV.2T", NoCtx(fnTInv2T))
 	Register("BETA.DIST", NoCtx(fnBetaDist))
 	Register("BETA.INV", NoCtx(fnBetaInv))
+	Register("CHISQ.DIST.RT", NoCtx(fnChisqDistRT))
+	Register("CHISQ.INV.RT", NoCtx(fnChisqInvRT))
 	Register("F.DIST", NoCtx(fnFDist))
+	Register("F.DIST.RT", NoCtx(fnFDistRT))
 	Register("F.INV", NoCtx(fnFInv))
+	Register("F.INV.RT", NoCtx(fnFInvRT))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -3432,6 +3439,82 @@ func fnChisqInv(args []Value) (Value, error) {
 }
 
 // ---------------------------------------------------------------------------
+// CHISQ.DIST.RT — Right-tailed chi-squared distribution
+// ---------------------------------------------------------------------------
+// CHISQ.DIST.RT(x, deg_freedom)
+//   x           – must be >= 0 (if x < 0, #NUM!)
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 1 - CHISQ.DIST(x, df, TRUE).
+
+func fnChisqDistRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	alpha := df / 2.0
+	return NumberVal(1 - regLowerGamma(alpha, x/2.0)), nil
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.INV.RT — Right-tailed inverse chi-squared distribution
+// ---------------------------------------------------------------------------
+// CHISQ.INV.RT(probability, deg_freedom)
+//   probability  – 0 <= p <= 1
+//   deg_freedom  – truncated to integer, must be >= 1
+// Returns CHISQ.INV(1 - probability, df).
+
+func fnChisqInvRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 1 {
+		return NumberVal(0), nil
+	}
+	if p == 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Delegate to CHISQ.INV(1-p, df) = GAMMA.INV(1-p, df/2, 2).
+	return fnGammaInv([]Value{NumberVal(1 - p), NumberVal(df / 2), NumberVal(2)})
+}
+
+// ---------------------------------------------------------------------------
 // T.DIST — Student's t-distribution (left-tailed)
 // ---------------------------------------------------------------------------
 // T.DIST(x, deg_freedom, cumulative)
@@ -3597,6 +3680,108 @@ func tInv(p, df float64) (float64, bool) {
 	}
 
 	return 0, false
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST.RT — Right-tailed Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.DIST.RT(x, deg_freedom)
+//   x           – any numeric value
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 1 - T.DIST(x, df, TRUE).
+
+func fnTDistRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(1 - tDistCDF(x, df)), nil
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST.2T — Two-tailed Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.DIST.2T(x, deg_freedom)
+//   x           – must be >= 0 (if x < 0, return #NUM!)
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 2 * (1 - T.DIST(|x|, df, TRUE)).
+
+func fnTDist2T(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(2 * (1 - tDistCDF(x, df))), nil
+}
+
+// ---------------------------------------------------------------------------
+// T.INV.2T — Two-tailed inverse of Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.INV.2T(probability, deg_freedom)
+//   probability  – 0 < p <= 1 (p <= 0 or p > 1 → #NUM!)
+//   deg_freedom  – truncated to integer, must be >= 1
+// Returns T.INV(1 - probability/2, df), i.e. the positive t-value such that
+// P(|T| >= t) = probability.
+
+func fnTInv2T(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if p <= 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// T.INV.2T(p, df) = T.INV(1 - p/2, df)
+	// For p=1, 1 - p/2 = 0.5, so T.INV(0.5, df) = 0.
+	result, ok := tInv(1-p/2, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(result), nil
 }
 
 // regBetaInc returns the regularized incomplete beta function I_x(a, b).
@@ -3925,6 +4110,97 @@ func fnFInv(args []Value) (Value, error) {
 	}
 
 	return ErrorVal(ErrValNA), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.DIST.RT — Right-tailed F-distribution
+// ---------------------------------------------------------------------------
+// F.DIST.RT(x, deg_freedom1, deg_freedom2)
+//   x            – must be >= 0 (if x < 0, #NUM!)
+//   deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//   deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+// Returns 1 - F.DIST(x, df1, df2, TRUE).
+
+func fnFDistRT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	xRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if xRaw < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if xRaw == 0 {
+		return NumberVal(1), nil
+	}
+	z := d1 * xRaw / (d1*xRaw + d2)
+	return NumberVal(1 - regBetaInc(z, d1/2.0, d2/2.0)), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.INV.RT — Right-tailed inverse of the F probability distribution
+// ---------------------------------------------------------------------------
+// F.INV.RT(probability, deg_freedom1, deg_freedom2)
+//   probability  – 0 <= p <= 1
+//   deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//   deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+// Returns F.INV(1 - probability, df1, df2).
+
+func fnFInvRT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 1 {
+		return NumberVal(0), nil
+	}
+	if p == 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Delegate to F.INV(1-p, df1, df2).
+	return fnFInv([]Value{NumberVal(1 - p), NumberVal(d1), NumberVal(d2)})
 }
 
 // ---------------------------------------------------------------------------
