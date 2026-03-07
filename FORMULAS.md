@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **323** Excel formula functions.
+Werkbook supports **325** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -51,6 +51,8 @@ Werkbook supports **323** Excel formula functions.
 | COMBINA | Math & Trig | - |
 | CONCAT | Text | 33 |
 | CONCATENATE | Text | 38 |
+| CONFIDENCE.NORM | Statistical | 25 |
+| CONFIDENCE.T | Statistical | 29 |
 | CONVERT | Engineering | 57 |
 | CORREL | Statistical | 20 |
 | COS | Math & Trig | - |
@@ -133,7 +135,7 @@ Werkbook supports **323** Excel formula functions.
 | HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
-| IFERROR | Logical | 39 |
+| IFERROR | Logical | 41 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | INDEX | Lookup & Reference | 13 |
@@ -330,7 +332,7 @@ Werkbook supports **323** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **145** Excel functions are not yet supported.
+The following **143** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -357,8 +359,6 @@ The following **145** Excel functions are not yet supported.
 | CHISQ.INV.RT | Statistical |
 | CHISQ.TEST | Statistical |
 | COMPLEX | Engineering |
-| CONFIDENCE.NORM | Statistical |
-| CONFIDENCE.T | Statistical |
 | COUPDAYBS | Financial |
 | COUPDAYS | Financial |
 | COUPDAYSNC | Financial |

@@ -16,6 +16,8 @@ func init() {
 	Register("COUNT", NoCtx(fnCOUNT))
 	Register("COUNTA", NoCtx(fnCOUNTA))
 	Register("CORREL", NoCtx(fnCORREL))
+	Register("CONFIDENCE.NORM", NoCtx(fnConfidenceNorm))
+	Register("CONFIDENCE.T", NoCtx(fnConfidenceT))
 	Register("COVAR", NoCtx(fnCOVARIANCEP))
 	Register("COVARIANCE.P", NoCtx(fnCOVARIANCEP))
 	Register("COVARIANCE.S", NoCtx(fnCOVARIANCES))
@@ -3512,9 +3514,20 @@ func fnTInv(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
+	result, ok := tInv(p, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(result), nil
+}
+
+// tInv computes the inverse of the Student's t-distribution (left-tailed).
+// It returns the t-value such that CDF(t, df) = p, plus a boolean indicating
+// convergence. Caller must ensure 0 < p < 1 and df >= 1.
+func tInv(p, df float64) (float64, bool) {
 	// By symmetry, p = 0.5 always returns 0.
 	if p == 0.5 {
-		return NumberVal(0), nil
+		return 0, true
 	}
 
 	// Initial guess from the standard normal inverse.
@@ -3538,7 +3551,7 @@ func fnTInv(args []Value) (Value, error) {
 		cdf := tDistCDF(t, df)
 		f := cdf - p
 		if math.Abs(f) < tol {
-			return NumberVal(t), nil
+			return t, true
 		}
 
 		pdf := tDistPDF(t, df)
@@ -3567,7 +3580,7 @@ func fnTInv(args []Value) (Value, error) {
 		mid := (lo + hi) / 2
 		cdf := tDistCDF(mid, df)
 		if math.Abs(cdf-p) < tol {
-			return NumberVal(mid), nil
+			return mid, true
 		}
 		if cdf < p {
 			lo = mid
@@ -3575,11 +3588,11 @@ func fnTInv(args []Value) (Value, error) {
 			hi = mid
 		}
 		if (hi - lo) < tol*math.Abs(hi) {
-			return NumberVal((lo + hi) / 2), nil
+			return (lo + hi) / 2, true
 		}
 	}
 
-	return ErrorVal(ErrValNA), nil
+	return 0, false
 }
 
 // regBetaInc returns the regularized incomplete beta function I_x(a, b).
@@ -3908,4 +3921,98 @@ func fnFInv(args []Value) (Value, error) {
 	}
 
 	return ErrorVal(ErrValNA), nil
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM — Confidence interval for a population mean (normal dist)
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM(alpha, standard_dev, size)
+//
+//	alpha        – significance level, 0 < alpha < 1
+//	standard_dev – population standard deviation, must be > 0
+//	size         – sample size, truncated to integer, must be >= 1
+//
+// Returns NORM.S.INV(1 - alpha/2) * standard_dev / SQRT(size).
+
+func fnConfidenceNorm(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	alpha, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	stddev, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sizeRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	size := math.Trunc(sizeRaw)
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stddev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	z := normSInv(1 - alpha/2)
+	return NumberVal(z * stddev / math.Sqrt(size)), nil
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T — Confidence interval for a population mean (t-distribution)
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T(alpha, standard_dev, size)
+//
+//	alpha        – significance level, 0 < alpha < 1
+//	standard_dev – population standard deviation, must be > 0
+//	size         – sample size, truncated to integer, must be >= 1
+//	              (size = 1 returns #DIV/0! because df = 0)
+//
+// Returns T.INV(1 - alpha/2, size-1) * standard_dev / SQRT(size).
+
+func fnConfidenceT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	alpha, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	stddev, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sizeRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	size := math.Trunc(sizeRaw)
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stddev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size == 1 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	df := size - 1
+	t, ok := tInv(1-alpha/2, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(t * stddev / math.Sqrt(size)), nil
 }

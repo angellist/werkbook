@@ -15283,3 +15283,269 @@ func TestF_INV_argcount(t *testing.T) {
 		t.Errorf(`IFERROR(F.INV(0.5,5),"err") = %v, want string "err"`, got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM
+// ---------------------------------------------------------------------------
+
+func TestCONFIDENCE_NORM(t *testing.T) {
+	const tol = 1e-4
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values verified against Excel
+		{"basic_005_25_50", "CONFIDENCE.NORM(0.05,2.5,50)", 0.692952, false, 0},
+		{"basic_005_1_100", "CONFIDENCE.NORM(0.05,1,100)", 0.196, false, 0},
+		{"basic_001_25_50", "CONFIDENCE.NORM(0.01,2.5,50)", 0.910693, false, 0},
+		{"basic_01_1_25", "CONFIDENCE.NORM(0.1,1,25)", 0.328971, false, 0},
+		{"basic_005_1_30", "CONFIDENCE.NORM(0.05,1,30)", 0.357886, false, 0},
+		{"basic_01_5_200", "CONFIDENCE.NORM(0.1,5,200)", 0.581508, false, 0},
+
+		// Large sample size
+		{"large_sample", "CONFIDENCE.NORM(0.05,1,10000)", 0.0196, false, 0},
+
+		// Small alpha (high confidence)
+		{"small_alpha", "CONFIDENCE.NORM(0.001,1,100)", 0.329053, false, 0},
+
+		// Large stddev
+		{"large_stddev", "CONFIDENCE.NORM(0.05,100,50)", 27.718, false, 0},
+
+		// Fractional size should be truncated
+		{"size_truncation_29", "CONFIDENCE.NORM(0.05,2.5,50.9)", 0.692952, false, 0},
+		{"size_truncation_11", "CONFIDENCE.NORM(0.05,1,1.9)", 1.959964, false, 0},
+
+		// Error: alpha = 0
+		{"err_alpha_zero", "CONFIDENCE.NORM(0,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha = 1
+		{"err_alpha_one", "CONFIDENCE.NORM(1,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha < 0
+		{"err_alpha_neg", "CONFIDENCE.NORM(-0.05,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha > 1
+		{"err_alpha_gt1", "CONFIDENCE.NORM(1.5,2.5,50)", 0, true, ErrValNUM},
+		// Error: stddev = 0
+		{"err_stddev_zero", "CONFIDENCE.NORM(0.05,0,50)", 0, true, ErrValNUM},
+		// Error: stddev < 0
+		{"err_stddev_neg", "CONFIDENCE.NORM(0.05,-1,50)", 0, true, ErrValNUM},
+		// Error: size = 0
+		{"err_size_zero", "CONFIDENCE.NORM(0.05,2.5,0)", 0, true, ErrValNUM},
+		// Error: size < 1 (fractional truncates to 0)
+		{"err_size_frac", "CONFIDENCE.NORM(0.05,2.5,0.9)", 0, true, ErrValNUM},
+		// Error: size negative
+		{"err_size_neg", "CONFIDENCE.NORM(0.05,2.5,-5)", 0, true, ErrValNUM},
+		// Error: non-numeric alpha
+		{"err_nonnumeric_alpha", `CONFIDENCE.NORM("abc",2.5,50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric stddev
+		{"err_nonnumeric_stddev", `CONFIDENCE.NORM(0.05,"abc",50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric size
+		{"err_nonnumeric_size", `CONFIDENCE.NORM(0.05,2.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestCONFIDENCE_NORM_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few arguments
+	cf := evalCompile(t, "CONFIDENCE.NORM(0.05,2.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.NORM(0.05,2.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many arguments
+	cf = evalCompile(t, "CONFIDENCE.NORM(0.05,2.5,50,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.NORM(0.05,2.5,50,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CONFIDENCE.NORM(0.05,2.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CONFIDENCE.NORM(0.05,2.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T
+// ---------------------------------------------------------------------------
+
+func TestCONFIDENCE_T(t *testing.T) {
+	const tol = 1e-4
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values verified against Excel
+		{"basic_005_1_50", "CONFIDENCE.T(0.05,1,50)", 0.284196, false, 0},
+		{"basic_005_25_50", "CONFIDENCE.T(0.05,2.5,50)", 0.710492, false, 0},
+		{"basic_001_1_30", "CONFIDENCE.T(0.01,1,30)", 0.503245, false, 0},
+		{"basic_01_1_25", "CONFIDENCE.T(0.1,1,25)", 0.342176, false, 0},
+		{"basic_005_1_100", "CONFIDENCE.T(0.05,1,100)", 0.198422, false, 0},
+		{"basic_01_5_200", "CONFIDENCE.T(0.1,5,200)", 0.584264, false, 0},
+
+		// Small sample (df=1 for size=2)
+		{"small_sample_2", "CONFIDENCE.T(0.05,1,2)", 8.984644, false, 0},
+		// Small sample (df=2 for size=3)
+		{"small_sample_3", "CONFIDENCE.T(0.05,1,3)", 2.484159, false, 0},
+		// Small sample (df=4 for size=5)
+		{"small_sample_5", "CONFIDENCE.T(0.05,1,5)", 1.241617, false, 0},
+
+		// Large sample — should approach CONFIDENCE.NORM
+		{"large_sample", "CONFIDENCE.T(0.05,1,10000)", 0.019600, false, 0},
+
+		// Fractional size should be truncated
+		{"size_truncation", "CONFIDENCE.T(0.05,1,50.9)", 0.284196, false, 0},
+		{"size_truncation_2", "CONFIDENCE.T(0.05,2.5,50.1)", 0.710492, false, 0},
+
+		// Error: size = 1 → #DIV/0! (df=0)
+		{"err_size_one", "CONFIDENCE.T(0.05,1,1)", 0, true, ErrValDIV0},
+		// Error: size = 1 with fractional (truncates to 1)
+		{"err_size_one_frac", "CONFIDENCE.T(0.05,1,1.9)", 0, true, ErrValDIV0},
+		// Error: alpha = 0
+		{"err_alpha_zero", "CONFIDENCE.T(0,1,50)", 0, true, ErrValNUM},
+		// Error: alpha = 1
+		{"err_alpha_one", "CONFIDENCE.T(1,1,50)", 0, true, ErrValNUM},
+		// Error: alpha < 0
+		{"err_alpha_neg", "CONFIDENCE.T(-0.05,1,50)", 0, true, ErrValNUM},
+		// Error: alpha > 1
+		{"err_alpha_gt1", "CONFIDENCE.T(1.5,1,50)", 0, true, ErrValNUM},
+		// Error: stddev = 0
+		{"err_stddev_zero", "CONFIDENCE.T(0.05,0,50)", 0, true, ErrValNUM},
+		// Error: stddev < 0
+		{"err_stddev_neg", "CONFIDENCE.T(0.05,-1,50)", 0, true, ErrValNUM},
+		// Error: size = 0
+		{"err_size_zero", "CONFIDENCE.T(0.05,1,0)", 0, true, ErrValNUM},
+		// Error: size < 1 (fractional truncates to 0)
+		{"err_size_frac_below1", "CONFIDENCE.T(0.05,1,0.5)", 0, true, ErrValNUM},
+		// Error: size negative
+		{"err_size_neg", "CONFIDENCE.T(0.05,1,-5)", 0, true, ErrValNUM},
+		// Error: non-numeric alpha
+		{"err_nonnumeric_alpha", `CONFIDENCE.T("abc",1,50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric stddev
+		{"err_nonnumeric_stddev", `CONFIDENCE.T(0.05,"abc",50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric size
+		{"err_nonnumeric_size", `CONFIDENCE.T(0.05,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestCONFIDENCE_T_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few arguments
+	cf := evalCompile(t, "CONFIDENCE.T(0.05,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.T(0.05,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many arguments
+	cf = evalCompile(t, "CONFIDENCE.T(0.05,1,50,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.T(0.05,1,50,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CONFIDENCE.T(0.05,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CONFIDENCE.T(0.05,1),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestCONFIDENCE_T_convergesToNorm(t *testing.T) {
+	// For very large sample sizes, CONFIDENCE.T should converge to CONFIDENCE.NORM
+	const tol = 1e-3
+	resolver := &mockResolver{}
+
+	formula := "CONFIDENCE.T(0.05,1,100000)-CONFIDENCE.NORM(0.05,1,100000)"
+	cf := evalCompile(t, formula)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+	}
+	if math.Abs(got.Num) > tol {
+		t.Errorf("CONFIDENCE.T and CONFIDENCE.NORM should converge for large n, diff = %g", got.Num)
+	}
+}
