@@ -7,12 +7,12 @@ import (
 )
 
 type globalFlags struct {
-	format     string
-	formatSet  bool
-	mode       string
-	compact    bool
-	start      time.Time
-	warnings   []string
+	format    string
+	formatSet bool
+	mode      string
+	compact   bool
+	start     time.Time
+	warnings  []string
 }
 
 const (

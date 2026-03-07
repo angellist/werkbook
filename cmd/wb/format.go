@@ -47,12 +47,14 @@ func renderTextTableSection(title string, headers []string, rows [][]string) str
 		sb.WriteString("\n\n")
 	}
 
+	headers, rows = compactTableColumns(headers, rows)
+
 	if len(headers) == 0 && len(rows) == 0 {
 		sb.WriteString("(empty)\n")
 		return sb.String()
 	}
 
-	sb.WriteString(formatTable(FormatMarkdown, headers, rows))
+	sb.WriteString(formatTextTable(headers, rows))
 	if len(rows) == 0 {
 		sb.WriteString("(no rows)\n")
 	}
@@ -124,4 +126,121 @@ func csvEscape(s string) string {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 	}
 	return s
+}
+
+func formatTextTable(headers []string, rows [][]string) string {
+	width := len(headers)
+	for _, row := range rows {
+		if len(row) > width {
+			width = len(row)
+		}
+	}
+	if width == 0 {
+		return ""
+	}
+
+	widths := make([]int, width)
+	for i := 0; i < width; i++ {
+		if len(headers) > i {
+			widths[i] = len(headers[i])
+		}
+	}
+	for _, row := range rows {
+		for i, value := range row {
+			if len(value) > widths[i] {
+				widths[i] = len(value)
+			}
+		}
+	}
+
+	var sb strings.Builder
+	if len(headers) > 0 {
+		writeTextRow(&sb, headers, widths)
+		divider := make([]string, len(widths))
+		for i, w := range widths {
+			if w < 3 {
+				w = 3
+			}
+			divider[i] = strings.Repeat("-", w)
+		}
+		writeTextRow(&sb, divider, widths)
+	}
+	for _, row := range rows {
+		writeTextRow(&sb, row, widths)
+	}
+	return sb.String()
+}
+
+func writeTextRow(sb *strings.Builder, fields []string, widths []int) {
+	last := len(widths) - 1
+	for i := range widths {
+		if i > 0 {
+			sb.WriteString("  ")
+		}
+		value := ""
+		if i < len(fields) {
+			value = fields[i]
+		}
+		sb.WriteString(value)
+		if i < last {
+			sb.WriteString(strings.Repeat(" ", widths[i]-len(value)))
+		}
+	}
+	sb.WriteString("\n")
+}
+
+func compactTableColumns(headers []string, rows [][]string) ([]string, [][]string) {
+	width := len(headers)
+	for _, row := range rows {
+		if len(row) > width {
+			width = len(row)
+		}
+	}
+	if width == 0 {
+		return headers, rows
+	}
+
+	keep := make([]bool, width)
+	for i := 0; i < width; i++ {
+		if strings.TrimSpace(fieldAt(headers, i)) != "" {
+			keep[i] = true
+			continue
+		}
+		for _, row := range rows {
+			if strings.TrimSpace(fieldAt(row, i)) != "" {
+				keep[i] = true
+				break
+			}
+		}
+	}
+
+	var compactHeaders []string
+	if len(headers) > 0 {
+		compactHeaders = make([]string, 0, width)
+		for i, ok := range keep {
+			if ok {
+				compactHeaders = append(compactHeaders, fieldAt(headers, i))
+			}
+		}
+	}
+
+	compactRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		compact := make([]string, 0, width)
+		for i, ok := range keep {
+			if ok {
+				compact = append(compact, fieldAt(row, i))
+			}
+		}
+		compactRows = append(compactRows, compact)
+	}
+
+	return compactHeaders, compactRows
+}
+
+func fieldAt(fields []string, idx int) string {
+	if idx >= 0 && idx < len(fields) {
+		return fields[idx]
+	}
+	return ""
 }

@@ -78,7 +78,7 @@ func wbToolSpec() toolSpec {
 			{
 				Name:        "--format",
 				ValueName:   "text|json|markdown|csv",
-				Description: "Output format. Most commands support text and json. Read and calc also support markdown and csv; dep also supports markdown. Agent mode always forces json.",
+				Description: "Output format. Most commands support text and json. Read and calc also support markdown and csv; dep also supports markdown. Text output may omit columns that are entirely empty. Agent mode always forces json.",
 				Default:     FormatText,
 				AllowedValues: []string{
 					FormatText,
@@ -298,12 +298,12 @@ func wbToolSpec() toolSpec {
 				},
 			},
 			{
-				Name:        "help",
-				Path:        []string{"help"},
-				Summary:     "Show help for a command",
-				Description: "Show human-readable help in default mode or structured JSON help in agent mode.",
-				Usage:       "wb help [command]",
-				Aliases:     []string{"--help", "-h"},
+				Name:             "help",
+				Path:             []string{"help"},
+				Summary:          "Show help for a command",
+				Description:      "Show human-readable help in default mode or structured JSON help in agent mode.",
+				Usage:            "wb help [command]",
+				Aliases:          []string{"--help", "-h"},
 				SupportedFormats: []string{FormatText, FormatJSON},
 				Examples: []string{
 					"wb help",
