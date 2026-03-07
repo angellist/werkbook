@@ -13877,3 +13877,132 @@ func TestLOGNORMINV_RoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// GAMMA.DIST
+// ---------------------------------------------------------------------------
+
+func TestGAMMA_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// PDF tests
+		{"pdf_basic", "GAMMA.DIST(10.00001131,9,2,FALSE)", 0.032639, false, 0},
+		{"pdf_x0_alpha1", "GAMMA.DIST(0,1,1,FALSE)", 1, false, 0},
+		{"pdf_x0_alpha2", "GAMMA.DIST(0,2,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha1_beta2", "GAMMA.DIST(0,1,2,FALSE)", 0.5, false, 0},
+		{"pdf_exponential", "GAMMA.DIST(1,1,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha2_beta1", "GAMMA.DIST(1,2,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha3_beta1", "GAMMA.DIST(2,3,1,FALSE)", 0.270670566, false, 0},
+		{"pdf_alpha_half", "GAMMA.DIST(1,0.5,1,FALSE)", 0.207553749, false, 0},
+		{"pdf_alpha2_beta3", "GAMMA.DIST(5,2,3,FALSE)", 0.104930890, false, 0},
+		{"pdf_large_x", "GAMMA.DIST(20,5,2,FALSE)", 0.009458319, false, 0},
+		{"pdf_small_x", "GAMMA.DIST(0.1,2,1,FALSE)", 0.090483742, false, 0},
+		{"pdf_alpha05_beta2", "GAMMA.DIST(0.5,0.5,2,FALSE)", 0.439391289, false, 0},
+
+		// CDF tests
+		{"cdf_basic", "GAMMA.DIST(10.00001131,9,2,TRUE)", 0.068094, false, 0},
+		{"cdf_x0", "GAMMA.DIST(0,2,1,TRUE)", 0, false, 0},
+		{"cdf_exponential", "GAMMA.DIST(1,1,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha2_beta1", "GAMMA.DIST(1,2,1,TRUE)", 0.264241118, false, 0},
+		{"cdf_alpha3_beta1", "GAMMA.DIST(2,3,1,TRUE)", 0.323323584, false, 0},
+		{"cdf_standard_gamma", "GAMMA.DIST(2,3,1,TRUE)", 0.323323584, false, 0},
+		{"cdf_alpha2_beta3", "GAMMA.DIST(5,2,3,TRUE)", 0.496331726, false, 0},
+		{"cdf_large_x", "GAMMA.DIST(50,5,2,TRUE)", 0.999999733, false, 0},
+		{"cdf_alpha_half", "GAMMA.DIST(1,0.5,1,TRUE)", 0.842700793, false, 0},
+		{"cdf_alpha1_beta1_x2", "GAMMA.DIST(2,1,1,TRUE)", 0.864664717, false, 0},
+		{"cdf_alpha05_beta2", "GAMMA.DIST(0.5,0.5,2,TRUE)", 0.520499878, false, 0},
+		{"cdf_alpha10_beta05", "GAMMA.DIST(3,10,0.5,TRUE)", 0.083924017, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "GAMMA.DIST(-1,9,2,FALSE)", 0, true, ErrValNUM},
+		{"err_neg_x_cdf", "GAMMA.DIST(-0.001,1,1,TRUE)", 0, true, ErrValNUM},
+
+		// Error: alpha <= 0
+		{"err_alpha_zero", "GAMMA.DIST(1,0,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "GAMMA.DIST(1,-1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg2", "GAMMA.DIST(1,-0.5,1,TRUE)", 0, true, ErrValNUM},
+
+		// Error: beta <= 0
+		{"err_beta_zero", "GAMMA.DIST(1,1,0,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg", "GAMMA.DIST(1,1,-1,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg2", "GAMMA.DIST(1,1,-0.5,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `GAMMA.DIST("abc",1,1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `GAMMA.DIST(1,"abc",1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `GAMMA.DIST(1,1,"abc",FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `GAMMA.DIST(1,1,1,"abc")`, 0, true, ErrValVALUE},
+
+		// x=0 with alpha < 1 (PDF diverges)
+		{"err_x0_alpha_lt1_pdf", "GAMMA.DIST(0,0.5,1,FALSE)", 0, true, ErrValNUM},
+
+		// x=0 CDF always 0
+		{"cdf_x0_alpha1", "GAMMA.DIST(0,1,1,TRUE)", 0, false, 0},
+		{"cdf_x0_alpha05", "GAMMA.DIST(0,0.5,1,TRUE)", 0, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestGAMMA_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "GAMMA.DIST(1,1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.DIST(1,1,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "GAMMA.DIST(1,1,1,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.DIST(1,1,1,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(GAMMA.DIST(1,1,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(GAMMA.DIST(1,1,1),"err") = %v, want string "err"`, got)
+	}
+}

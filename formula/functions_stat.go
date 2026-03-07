@@ -3057,3 +3057,134 @@ func fnLognormInv(args []Value) (Value, error) {
 	// LOGNORM.INV(p, μ, σ) = exp(μ + σ * NORM.S.INV(p))
 	return NumberVal(math.Exp(mean + stdev*normSInv(p))), nil
 }
+
+// ---------------------------------------------------------------------------
+// GAMMA.DIST — Gamma distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+// regLowerGamma returns the regularized lower incomplete gamma function P(a, x).
+// It uses the series expansion for x < a+1 and the continued fraction
+// (via the complementary function Q) for x >= a+1.
+func regLowerGamma(a, x float64) float64 {
+	if x == 0 {
+		return 0
+	}
+	if x < a+1 {
+		return regLowerGammaSeries(a, x)
+	}
+	// Use complementary: P(a,x) = 1 - Q(a,x)
+	return 1 - regUpperGammaCF(a, x)
+}
+
+// regLowerGammaSeries computes P(a, x) via the series expansion:
+//
+//	P(a,x) = e^(-x) * x^a / Γ(a) * Σ_{n=0}^∞ x^n / (a*(a+1)*...*(a+n))
+func regLowerGammaSeries(a, x float64) float64 {
+	sum := 1.0 / a
+	term := 1.0 / a
+	for n := 1; n < 1000; n++ {
+		term *= x / (a + float64(n))
+		sum += term
+		if math.Abs(term) < 1e-15*math.Abs(sum) {
+			break
+		}
+	}
+	lgA, _ := math.Lgamma(a)
+	return math.Exp(-x+a*math.Log(x)-lgA) * sum
+}
+
+// regUpperGammaCF computes Q(a, x) = 1 - P(a, x) via the Lentz continued fraction.
+func regUpperGammaCF(a, x float64) float64 {
+	const eps = 1e-15
+	const tiny = 1e-30
+
+	// Modified Lentz's method for the CF representation of Q(a,x).
+	// CF: Q(a,x) = e^(-x)*x^a/Γ(a) * 1/(x+1-a- 1*(1-a)/(x+3-a- 2*(2-a)/(x+5-a- ...)))
+	// Using the standard form: b0=0, a1=1, b1=x+1-a, then an = -n*(n-a), bn = x+2n+1-a
+	f := tiny
+	c := f
+	d := 0.0
+	for n := 1; n < 1000; n++ {
+		an := float64(0)
+		bn := float64(0)
+		if n == 1 {
+			an = 1.0
+			bn = x + 1 - a
+		} else {
+			nf := float64(n - 1)
+			an = -nf * (nf - a)
+			bn = x + 2*nf + 1 - a
+		}
+
+		d = bn + an*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = bn + an/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		delta := c * d
+		f *= delta
+		if math.Abs(delta-1.0) < eps {
+			break
+		}
+	}
+
+	lgA, _ := math.Lgamma(a)
+	return math.Exp(-x+a*math.Log(x)-lgA) * f
+}
+
+func fnGammaDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: regularized lower incomplete gamma function P(alpha, x/beta)
+		return NumberVal(regLowerGamma(alpha, x/beta)), nil
+	}
+
+	// PDF: f(x) = (1 / (beta^alpha * Γ(alpha))) * x^(alpha-1) * exp(-x/beta)
+	if x == 0 {
+		if alpha == 1 {
+			return NumberVal(1 / beta), nil
+		}
+		if alpha > 1 {
+			return NumberVal(0), nil
+		}
+		// alpha < 1: PDF diverges to +Inf at x=0; Excel returns #NUM!
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	lgA, _ := math.Lgamma(alpha)
+	logPdf := (alpha-1)*math.Log(x) - x/beta - alpha*math.Log(beta) - lgA
+	return NumberVal(math.Exp(logPdf)), nil
+}

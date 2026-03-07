@@ -34,6 +34,7 @@ var xlfnPrefix = map[string]string{
 	"FLOOR.PRECISE":   "_xlfn.",
 	"FORECAST.LINEAR": "_xlfn.",
 	"GAMMA":           "_xlfn.",
+	"GAMMA.DIST":      "_xlfn.",
 	"GAMMALN.PRECISE": "_xlfn.",
 	"HSTACK":          "_xlfn.",
 	"IFNA":            "_xlfn.",

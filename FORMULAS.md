@@ -113,8 +113,8 @@ Werkbook supports **316** Excel formula functions.
 | FORMULATEXT | Information | 7 |
 | FREQUENCY | Statistical | 25 |
 | FV | Financial | 4 |
-| GAMMA | Math & Trig | 26 |
-| GAMMA.DIST | Statistical | - |
+| GAMMA | Math & Trig | 28 |
+| GAMMA.DIST | Statistical | 41 |
 | GAMMALN | Statistical | 23 |
 | GAMMALN.PRECISE | Statistical | 6 |
 | GCD | Math & Trig | - |
@@ -128,7 +128,7 @@ Werkbook supports **316** Excel formula functions.
 | HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
-| IFERROR | Logical | 31 |
+| IFERROR | Logical | 32 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | INDEX | Lookup & Reference | 13 |
