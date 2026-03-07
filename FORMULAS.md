@@ -70,7 +70,7 @@ Werkbook supports **306** Excel formula functions.
 | DATEDIF | Date & Time | 18 |
 | DATEVALUE | Date & Time | 38 |
 | DAY | Date & Time | 5 |
-| DAYS | Date & Time | - |
+| DAYS | Date & Time | 17 |
 | DAYS360 | Date & Time | 7 |
 | DB | Financial | 29 |
 | DDB | Financial | 27 |
@@ -85,9 +85,9 @@ Werkbook supports **306** Excel formula functions.
 | DOLLARDE | Financial | 18 |
 | DOLLARFR | Financial | 17 |
 | DROP | Lookup & Reference | 26 |
-| EDATE | Date & Time | - |
+| EDATE | Date & Time | 18 |
 | EFFECT | Financial | 18 |
-| EOMONTH | Date & Time | - |
+| EOMONTH | Date & Time | 17 |
 | ERF | Math & Trig | 22 |
 | ERF.PRECISE | Math & Trig | 18 |
 | ERFC | Math & Trig | 18 |
@@ -121,7 +121,7 @@ Werkbook supports **306** Excel formula functions.
 | HEX2DEC | Engineering | 39 |
 | HEX2OCT | Engineering | 35 |
 | HLOOKUP | Lookup & Reference | 22 |
-| HOUR | Date & Time | - |
+| HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
 | IFERROR | Logical | 25 |
@@ -165,7 +165,7 @@ Werkbook supports **306** Excel formula functions.
 | MIN | Statistical | 30 |
 | MINA | Statistical | 16 |
 | MINIFS | Statistical | - |
-| MINUTE | Date & Time | - |
+| MINUTE | Date & Time | 16 |
 | MINVERSE | Math & Trig | 33 |
 | MIRR | Financial | 24 |
 | MMULT | Math & Trig | 38 |
@@ -235,7 +235,7 @@ Werkbook supports **306** Excel formula functions.
 | SEARCH | Text | 15 |
 | SEC | Math & Trig | - |
 | SECH | Math & Trig | - |
-| SECOND | Date & Time | - |
+| SECOND | Date & Time | 16 |
 | SEQUENCE | Math & Trig | 46 |
 | SERIESSUM | Math & Trig | 27 |
 | SIGN | Math & Trig | - |
@@ -256,7 +256,7 @@ Werkbook supports **306** Excel formula functions.
 | STEYX | Statistical | 25 |
 | SUBSTITUTE | Text | 23 |
 | SUBTOTAL | Math & Trig | - |
-| SUM | Statistical | 35 |
+| SUM | Statistical | 36 |
 | SUMIF | Statistical | 36 |
 | SUMIFS | Statistical | 42 |
 | SUMPRODUCT | Statistical | 22 |
