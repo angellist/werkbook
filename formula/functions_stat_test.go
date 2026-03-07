@@ -16955,3 +16955,87 @@ func TestBINOM_INV_argcount(t *testing.T) {
 		t.Errorf(`IFERROR(BINOM.INV(10,0.5),"err") = %v, want string "err"`, got)
 	}
 }
+
+func TestPHI(t *testing.T) {
+	const tol = 1e-6
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+	}{
+		{"basic", "PHI(0.75)", 0.301137432, false},
+		{"zero", "PHI(0)", 0.398942280, false},
+		{"one", "PHI(1)", 0.241970725, false},
+		{"neg_one", "PHI(-1)", 0.241970725, false},
+		{"two", "PHI(2)", 0.053990967, false},
+		{"neg_two", "PHI(-2)", 0.053990967, false},
+		{"three", "PHI(3)", 0.004431848, false},
+		{"large", "PHI(10)", 0, false},
+		{"half", "PHI(0.5)", 0.352065327, false},
+		{"neg_half", "PHI(-0.5)", 0.352065327, false},
+		{"err_text", `PHI("abc")`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", tt.formula, got)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", tt.formula, got)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestGAUSS(t *testing.T) {
+	const tol = 1e-6
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+	}{
+		{"basic", "GAUSS(2)", 0.477250, false},
+		{"zero", "GAUSS(0)", 0, false},
+		{"one", "GAUSS(1)", 0.341345, false},
+		{"neg_one", "GAUSS(-1)", -0.341345, false},
+		{"three", "GAUSS(3)", 0.498650, false},
+		{"neg_two", "GAUSS(-2)", -0.477250, false},
+		{"half", "GAUSS(0.5)", 0.191462, false},
+		{"large", "GAUSS(6)", 0.5, false},
+		{"err_text", `GAUSS("abc")`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", tt.formula, got)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", tt.formula, got)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}

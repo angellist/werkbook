@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **339** Excel formula functions.
+Werkbook supports **341** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -131,6 +131,7 @@ Werkbook supports **339** Excel formula functions.
 | GAMMA.INV | Statistical | 34 |
 | GAMMALN | Statistical | 23 |
 | GAMMALN.PRECISE | Statistical | 6 |
+| GAUSS | Statistical | 9 |
 | GCD | Math & Trig | - |
 | GEOMEAN | Statistical | 24 |
 | GESTEP | Engineering | 29 |
@@ -227,6 +228,7 @@ Werkbook supports **339** Excel formula functions.
 | PERCENTRANK.INC | Statistical | 3 |
 | PERMUT | Math & Trig | - |
 | PERMUTATIONA | Statistical | 17 |
+| PHI | Statistical | 11 |
 | PI | Math & Trig | - |
 | PMT | Financial | 5 |
 | POISSON.DIST | Statistical | 26 |
@@ -346,7 +348,7 @@ Werkbook supports **339** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **129** Excel functions are not yet supported.
+The following **127** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -399,7 +401,6 @@ The following **129** Excel functions are not yet supported.
 | FORECAST.ETS.SEASONALITY | Statistical |
 | FORECAST.ETS.STAT | Statistical |
 | FVSCHEDULE | Financial |
-| GAUSS | Statistical |
 | GETPIVOTDATA | Lookup & Reference |
 | GROWTH | Statistical |
 | HYPERLINK | Lookup & Reference |
@@ -449,7 +450,6 @@ The following **129** Excel functions are not yet supported.
 | ODDLPRICE | Financial |
 | ODDLYIELD | Financial |
 | OFFSET | Lookup & Reference |
-| PHI | Statistical |
 | PHONETIC | Text |
 | PRICE | Financial |
 | PRICEDISC | Financial |

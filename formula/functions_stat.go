@@ -110,8 +110,10 @@ func init() {
 	Register("F.DIST.RT", NoCtx(fnFDistRT))
 	Register("F.INV", NoCtx(fnFInv))
 	Register("F.INV.RT", NoCtx(fnFInvRT))
+	Register("GAUSS", NoCtx(fnGauss))
 	Register("HYPGEOM.DIST", NoCtx(fnHypgeomDist))
 	Register("NEGBINOM.DIST", NoCtx(fnNegbinomDist))
+	Register("PHI", NoCtx(fnPhi))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -2714,6 +2716,36 @@ func fnNormSDist(args []Value) (Value, error) {
 		return NumberVal(normSDistCDF(z)), nil
 	}
 	return NumberVal(normSDistPDF(z)), nil
+}
+
+// ---------------------------------------------------------------------------
+// PHI — Standard normal PDF φ(x)
+// ---------------------------------------------------------------------------
+
+func fnPhi(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	return NumberVal(normSDistPDF(x)), nil
+}
+
+// ---------------------------------------------------------------------------
+// GAUSS — P(0 < Z < z) = NORM.S.DIST(z, TRUE) - 0.5
+// ---------------------------------------------------------------------------
+
+func fnGauss(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	z, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	return NumberVal(normSDistCDF(z) - 0.5), nil
 }
 
 // ---------------------------------------------------------------------------
