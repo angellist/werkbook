@@ -77,6 +77,7 @@ var xlfnPrefix = map[string]string{
 	"VAR.P":           "_xlfn.",
 	"VAR.S":           "_xlfn.",
 	"VSTACK":          "_xlfn.",
+	"WEIBULL.DIST":    "_xlfn.",
 	"WRAPCOLS":        "_xlfn.",
 	"WRAPROWS":        "_xlfn.",
 	"XLOOKUP":         "_xlfn.",

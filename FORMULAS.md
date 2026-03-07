@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **311** Excel formula functions.
+Werkbook supports **312** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -126,7 +126,7 @@ Werkbook supports **311** Excel formula functions.
 | HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
-| IFERROR | Logical | 28 |
+| IFERROR | Logical | 29 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | INDEX | Lookup & Reference | 13 |
@@ -304,6 +304,7 @@ Werkbook supports **311** Excel formula functions.
 | VSTACK | Lookup & Reference | 18 |
 | WEEKDAY | Date & Time | - |
 | WEEKNUM | Date & Time | - |
+| WEIBULL.DIST | Statistical | 33 |
 | WORKDAY | Date & Time | 23 |
 | WORKDAY.INTL | Date & Time | 33 |
 | WRAPCOLS | Lookup & Reference | 20 |
@@ -318,7 +319,7 @@ Werkbook supports **311** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **157** Excel functions are not yet supported.
+The following **156** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -474,7 +475,6 @@ The following **157** Excel functions are not yet supported.
 | UNICHAR | Text |
 | UNICODE | Text |
 | WEBSERVICE | Web |
-| WEIBULL.DIST | Statistical |
 | YIELD | Financial |
 | YIELDDISC | Financial |
 | YIELDMAT | Financial |

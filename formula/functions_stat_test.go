@@ -13465,3 +13465,116 @@ func TestEXPON_DIST_argcount(t *testing.T) {
 		t.Errorf(`IFERROR(EXPON.DIST(0.2,10),"err") = %v, want string "err"`, got)
 	}
 }
+
+// WEIBULL.DIST
+// ---------------------------------------------------------------------------
+
+func TestWEIBULL_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// PDF tests
+		{"pdf_basic", "WEIBULL.DIST(105,20,100,FALSE)", 0.035589, false, 0},
+		{"pdf_alpha1_beta1_x1", "WEIBULL.DIST(1,1,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha2_beta1_x1", "WEIBULL.DIST(1,2,1,FALSE)", 0.735758882, false, 0},
+		{"pdf_alpha1_beta2_x1", "WEIBULL.DIST(1,1,2,FALSE)", 0.303265330, false, 0},
+		{"pdf_alpha3_beta1_x05", "WEIBULL.DIST(0.5,3,1,FALSE)", 0.661873, false, 0},
+		{"pdf_alpha05_beta1_x1", "WEIBULL.DIST(1,0.5,1,FALSE)", 0.183939721, false, 0},
+		{"pdf_alpha10_beta5_x5", "WEIBULL.DIST(5,10,5,FALSE)", 0.735758882, false, 0},
+		{"pdf_large_alpha", "WEIBULL.DIST(1,10,1,FALSE)", 3.678794412, false, 0},
+
+		// PDF x=0 edge cases
+		{"pdf_x0_alpha1", "WEIBULL.DIST(0,1,2,FALSE)", 0.5, false, 0},
+		{"pdf_x0_alpha2", "WEIBULL.DIST(0,2,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha3", "WEIBULL.DIST(0,3,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha05", "WEIBULL.DIST(0,0.5,1,FALSE)", 0, true, ErrValNUM},
+
+		// CDF tests
+		{"cdf_basic", "WEIBULL.DIST(105,20,100,TRUE)", 0.929581, false, 0},
+		{"cdf_alpha1_beta1_x1", "WEIBULL.DIST(1,1,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha2_beta1_x1", "WEIBULL.DIST(1,2,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha1_beta2_x1", "WEIBULL.DIST(1,1,2,TRUE)", 0.393469340, false, 0},
+		{"cdf_x0", "WEIBULL.DIST(0,2,1,TRUE)", 0, false, 0},
+		{"cdf_x0_alpha1", "WEIBULL.DIST(0,1,1,TRUE)", 0, false, 0},
+		{"cdf_large_x", "WEIBULL.DIST(10,1,1,TRUE)", 0.999954600, false, 0},
+		{"cdf_small_x", "WEIBULL.DIST(0.01,1,1,TRUE)", 0.009950166, false, 0},
+		{"cdf_alpha10_beta5_x5", "WEIBULL.DIST(5,10,5,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha05_beta2_x3", "WEIBULL.DIST(3,0.5,2,TRUE)", 0.706167, false, 0},
+
+		// Error cases
+		{"err_neg_x", "WEIBULL.DIST(-1,1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_zero", "WEIBULL.DIST(1,0,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "WEIBULL.DIST(1,-1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_zero", "WEIBULL.DIST(1,1,0,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg", "WEIBULL.DIST(1,1,-1,FALSE)", 0, true, ErrValNUM},
+		{"err_non_numeric_x", `WEIBULL.DIST("abc",1,1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `WEIBULL.DIST(1,"abc",1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `WEIBULL.DIST(1,1,"abc",FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `WEIBULL.DIST(1,1,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestWEIBULL_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "WEIBULL.DIST(1,1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("WEIBULL.DIST(1,1,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "WEIBULL.DIST(1,1,1,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("WEIBULL.DIST(1,1,1,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(WEIBULL.DIST(1,1,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(WEIBULL.DIST(1,1,1),"err") = %v, want string "err"`, got)
+	}
+}

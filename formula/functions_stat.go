@@ -85,6 +85,7 @@ func init() {
 	Register("BINOM.DIST", NoCtx(fnBinomDist))
 	Register("POISSON.DIST", NoCtx(fnPoissonDist))
 	Register("EXPON.DIST", NoCtx(fnExponDist))
+	Register("WEIBULL.DIST", NoCtx(fnWeibullDist))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -2934,4 +2935,56 @@ func fnExponDist(args []Value) (Value, error) {
 	}
 	// PDF: f(x) = lambda * exp(-lambda * x)
 	return NumberVal(lambda * math.Exp(-lambda*x)), nil
+}
+
+// WEIBULL.DIST — Weibull distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnWeibullDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: F(x) = 1 - exp(-(x/beta)^alpha)
+		return NumberVal(1 - math.Exp(-math.Pow(x/beta, alpha))), nil
+	}
+	// PDF: f(x) = (alpha/beta) * (x/beta)^(alpha-1) * exp(-(x/beta)^alpha)
+	if x == 0 {
+		if alpha == 1 {
+			return NumberVal(1 / beta), nil
+		}
+		if alpha > 1 {
+			return NumberVal(0), nil
+		}
+		// alpha < 1: (x/beta)^(alpha-1) -> infinity
+		return ErrorVal(ErrValNUM), nil
+	}
+	return NumberVal((alpha / beta) * math.Pow(x/beta, alpha-1) * math.Exp(-math.Pow(x/beta, alpha))), nil
 }
