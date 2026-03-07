@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **307** Excel formula functions.
+Werkbook supports **308** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -307,6 +307,7 @@ Werkbook supports **307** Excel formula functions.
 | WRAPROWS | Lookup & Reference | 19 |
 | XIRR | Financial | 19 |
 | XLOOKUP | Lookup & Reference | 22 |
+| XMATCH | Lookup & Reference | 35 |
 | XNPV | Financial | 18 |
 | XOR | Logical | 32 |
 | YEAR | Date & Time | 26 |
@@ -314,7 +315,7 @@ Werkbook supports **307** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **161** Excel functions are not yet supported.
+The following **160** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -474,7 +475,6 @@ The following **161** Excel functions are not yet supported.
 | UNICODE | Text |
 | WEBSERVICE | Web |
 | WEIBULL.DIST | Statistical |
-| XMATCH | Lookup & Reference |
 | YIELD | Financial |
 | YIELDDISC | Financial |
 | YIELDMAT | Financial |
