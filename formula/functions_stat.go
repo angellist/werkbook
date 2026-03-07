@@ -93,6 +93,7 @@ func init() {
 	Register("GAMMA.DIST", NoCtx(fnGammaDist))
 	Register("GAMMA.INV", NoCtx(fnGammaInv))
 	Register("T.DIST", NoCtx(fnTDist))
+	Register("T.INV", NoCtx(fnTInv))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -3454,23 +3455,129 @@ func fnTDist(args []Value) (Value, error) {
 	}
 
 	if cum != 0 {
-		// CDF using the regularized incomplete beta function.
-		// CDF(t) = 1 - 0.5 * I(df/(df+t²), df/2, 0.5) for t >= 0
-		// CDF(t) = 0.5 * I(df/(df+t²), df/2, 0.5) for t < 0
-		bx := df / (df + x*x)
-		beta := regBetaInc(bx, df/2, 0.5)
-		if x >= 0 {
-			return NumberVal(1 - 0.5*beta), nil
-		}
-		return NumberVal(0.5 * beta), nil
+		return NumberVal(tDistCDF(x, df)), nil
 	}
+	return NumberVal(tDistPDF(x, df)), nil
+}
 
-	// PDF: f(t) = Γ((df+1)/2) / (√(df*π) * Γ(df/2)) * (1 + t²/df)^(-(df+1)/2)
-	// Computed in log space for numerical stability.
+// tDistCDF computes the CDF of the Student's t-distribution at x with df
+// degrees of freedom: P(T <= x).
+func tDistCDF(x, df float64) float64 {
+	bx := df / (df + x*x)
+	beta := regBetaInc(bx, df/2, 0.5)
+	if x >= 0 {
+		return 1 - 0.5*beta
+	}
+	return 0.5 * beta
+}
+
+// tDistPDF computes the PDF of the Student's t-distribution at x with df
+// degrees of freedom, evaluated in log space for numerical stability.
+func tDistPDF(x, df float64) float64 {
 	lgNum, _ := math.Lgamma((df + 1) / 2)
 	lgDen, _ := math.Lgamma(df / 2)
 	logPdf := lgNum - lgDen - 0.5*math.Log(df*math.Pi) - ((df+1)/2)*math.Log(1+x*x/df)
-	return NumberVal(math.Exp(logPdf)), nil
+	return math.Exp(logPdf)
+}
+
+// ---------------------------------------------------------------------------
+// T.INV — Inverse of the Student's t-distribution (left-tailed)
+// ---------------------------------------------------------------------------
+// T.INV(probability, deg_freedom)
+//   probability  – 0 < p < 1 (p=0 and p=1 return #NUM!)
+//   deg_freedom  – truncated to integer, must be >= 1
+
+func fnTInv(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if p <= 0 || p >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// By symmetry, p = 0.5 always returns 0.
+	if p == 0.5 {
+		return NumberVal(0), nil
+	}
+
+	// Initial guess from the standard normal inverse.
+	t := normSInv(p)
+
+	// For small df the normal approximation is poor; clamp the initial
+	// guess to keep it in a reasonable range.
+	if df <= 2 && math.Abs(t) > 10 {
+		if t > 0 {
+			t = 10
+		} else {
+			t = -10
+		}
+	}
+
+	// Newton-Raphson iteration: t_new = t - (CDF(t) - p) / PDF(t)
+	const maxIter = 100
+	const tol = 1e-12
+
+	for i := 0; i < maxIter; i++ {
+		cdf := tDistCDF(t, df)
+		f := cdf - p
+		if math.Abs(f) < tol {
+			return NumberVal(t), nil
+		}
+
+		pdf := tDistPDF(t, df)
+		if pdf < 1e-300 {
+			// PDF too small; fall back to bisection.
+			break
+		}
+
+		step := f / pdf
+		tNew := t - step
+		t = tNew
+	}
+
+	// Bisection fallback.
+	lo := -1000.0
+	hi := 1000.0
+	// Adjust bounds so that CDF(lo) < p < CDF(hi).
+	for tDistCDF(lo, df) > p {
+		lo *= 2
+	}
+	for tDistCDF(hi, df) < p {
+		hi *= 2
+	}
+
+	for i := 0; i < 200; i++ {
+		mid := (lo + hi) / 2
+		cdf := tDistCDF(mid, df)
+		if math.Abs(cdf-p) < tol {
+			return NumberVal(mid), nil
+		}
+		if cdf < p {
+			lo = mid
+		} else {
+			hi = mid
+		}
+		if (hi - lo) < tol*math.Abs(hi) {
+			return NumberVal((lo + hi) / 2), nil
+		}
+	}
+
+	return ErrorVal(ErrValNA), nil
 }
 
 // regBetaInc returns the regularized incomplete beta function I_x(a, b).

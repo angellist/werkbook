@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **320** Excel formula functions.
+Werkbook supports **321** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -131,7 +131,7 @@ Werkbook supports **320** Excel formula functions.
 | HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
 | IF | Logical | 21 |
-| IFERROR | Logical | 36 |
+| IFERROR | Logical | 37 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | INDEX | Lookup & Reference | 13 |
@@ -277,8 +277,9 @@ Werkbook supports **320** Excel formula functions.
 | SUMXMY2 | Math & Trig | 31 |
 | SWITCH | Logical | 28 |
 | SYD | Financial | 23 |
-| T | Text | 10 |
+| T | Text | 14 |
 | T.DIST | Statistical | 41 |
+| T.INV | Statistical | 33 |
 | TAKE | Lookup & Reference | 30 |
 | TAN | Math & Trig | - |
 | TANH | Math & Trig | - |
@@ -327,7 +328,7 @@ Werkbook supports **320** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **148** Excel functions are not yet supported.
+The following **147** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -465,7 +466,6 @@ The following **148** Excel functions are not yet supported.
 | STDEVPA | Statistical |
 | T.DIST.2T | Statistical |
 | T.DIST.RT | Statistical |
-| T.INV | Statistical |
 | T.INV.2T | Statistical |
 | T.TEST | Statistical |
 | TBILLEQ | Financial |

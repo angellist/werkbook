@@ -75,6 +75,7 @@ var xlfnPrefix = map[string]string{
 	"STDEV.P":         "_xlfn.",
 	"STDEV.S":         "_xlfn.",
 	"T.DIST":          "_xlfn.",
+	"T.INV":           "_xlfn.",
 	"SWITCH":          "_xlfn.",
 	"TAKE":            "_xlfn.",
 	"TEXTJOIN":        "_xlfn.",

@@ -14769,3 +14769,211 @@ func TestT_DIST_argCount(t *testing.T) {
 		t.Errorf(`IFERROR(T.DIST(1,5),"err") = %v, want string "err"`, got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// T.INV
+// ---------------------------------------------------------------------------
+
+func TestT_INV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values
+		{"basic_075_df2", "T.INV(0.75,2)", 0.8164966, false, 0},
+		{"p05_df5_zero", "T.INV(0.5,5)", 0, false, 0},
+		{"p05_df1_zero", "T.INV(0.5,1)", 0, false, 0},
+		{"p05_df100_zero", "T.INV(0.5,100)", 0, false, 0},
+
+		// Critical values (well-known from t-tables)
+		{"p0975_df10", "T.INV(0.975,10)", 2.228139, false, 0},
+		{"p0025_df10", "T.INV(0.025,10)", -2.228139, false, 0},
+		{"p095_df1", "T.INV(0.95,1)", 6.313752, false, 0},
+		{"p095_df2", "T.INV(0.95,2)", 2.919986, false, 0},
+		{"p095_df5", "T.INV(0.95,5)", 2.015048, false, 0},
+		{"p095_df30", "T.INV(0.95,30)", 1.697261, false, 0},
+
+		// Large df approaches normal
+		{"p0975_df1000", "T.INV(0.975,1000)", 1.962339, false, 0},
+
+		// Small and large p
+		{"p001_df5", "T.INV(0.01,5)", -3.364930, false, 0},
+		{"p099_df5", "T.INV(0.99,5)", 3.364930, false, 0},
+
+		// Cauchy distribution (df=1)
+		{"cauchy_p075", "T.INV(0.75,1)", 1.0, false, 0},
+		{"cauchy_p025", "T.INV(0.25,1)", -1.0, false, 0},
+		{"cauchy_p09", "T.INV(0.9,1)", 3.077684, false, 0},
+
+		// df truncation: T.INV(0.75, 2.9) should equal T.INV(0.75, 2)
+		{"df_truncation", "T.INV(0.75,2.9)", 0.8164966, false, 0},
+
+		// Extreme p values
+		{"p0001_df10", "T.INV(0.001,10)", -4.143700, false, 0},
+		{"p0999_df10", "T.INV(0.999,10)", 4.143700, false, 0},
+
+		// Various df values
+		{"p09_df3", "T.INV(0.9,3)", 1.637744, false, 0},
+		{"p01_df3", "T.INV(0.1,3)", -1.637744, false, 0},
+
+		// Error: p = 0
+		{"err_p_zero", "T.INV(0,5)", 0, true, ErrValNUM},
+		// Error: p < 0
+		{"err_p_neg", "T.INV(-0.1,5)", 0, true, ErrValNUM},
+		// Error: p = 1
+		{"err_p_one", "T.INV(1,5)", 0, true, ErrValNUM},
+		// Error: p > 1
+		{"err_p_gt1", "T.INV(1.5,5)", 0, true, ErrValNUM},
+		// Error: df = 0
+		{"err_df_zero", "T.INV(0.5,0)", 0, true, ErrValNUM},
+		// Error: df < 1
+		{"err_df_neg", "T.INV(0.5,-1)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.INV(0.5,0.9)", 0, true, ErrValNUM},
+		// Error: non-numeric
+		{"err_non_numeric_p", `T.INV("abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.INV(0.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestT_INV_roundTrip(t *testing.T) {
+	// T.INV(T.DIST(x, df, TRUE), df) should ≈ x
+	const tol = 1e-6
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{2, 5},
+		{-1.5, 10},
+		{0, 3},
+		{3.5, 20},
+		{-0.5, 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			formula := fmt.Sprintf("T.INV(T.DIST(%g,%d,TRUE),%d)", tc.x, tc.df, tc.df)
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tc.x) > tol {
+				t.Errorf("T.INV(T.DIST(%g,%d,TRUE),%d) = %g, want %g", tc.x, tc.df, tc.df, got.Num, tc.x)
+			}
+		})
+	}
+}
+
+func TestT_INV_symmetry(t *testing.T) {
+	// T.INV(p, df) = -T.INV(1-p, df)
+	const tol = 1e-8
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		p  float64
+		df int
+	}{
+		{0.025, 10},
+		{0.1, 5},
+		{0.9, 30},
+		{0.75, 1},
+		{0.99, 20},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("p=%g_df=%d", tc.p, tc.df), func(t *testing.T) {
+			fP := fmt.Sprintf("T.INV(%g,%d)", tc.p, tc.df)
+			fQ := fmt.Sprintf("T.INV(%g,%d)", 1-tc.p, tc.df)
+
+			cfP := evalCompile(t, fP)
+			gotP, err := Eval(cfP, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfQ := evalCompile(t, fQ)
+			gotQ, err := Eval(cfQ, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotP.Type != ValueNumber || gotQ.Type != ValueNumber {
+				t.Fatalf("want numbers, got P type=%d, Q type=%d", gotP.Type, gotQ.Type)
+			}
+
+			sum := gotP.Num + gotQ.Num
+			if math.Abs(sum) > tol {
+				t.Errorf("T.INV(%g,%d) + T.INV(%g,%d) = %g + %g = %g, want 0",
+					tc.p, tc.df, 1-tc.p, tc.df, gotP.Num, gotQ.Num, sum)
+			}
+		})
+	}
+}
+
+func TestT_INV_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "T.INV(0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.INV(0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "T.INV(0.5,5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.INV(0.5,5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch
+	cf = evalCompile(t, `IFERROR(T.INV(0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(T.INV(0.5),"err") = %v, want string "err"`, got)
+	}
+}
