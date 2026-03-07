@@ -92,6 +92,7 @@ func init() {
 	Register("CHISQ.INV", NoCtx(fnChisqInv))
 	Register("GAMMA.DIST", NoCtx(fnGammaDist))
 	Register("GAMMA.INV", NoCtx(fnGammaInv))
+	Register("T.DIST", NoCtx(fnTDist))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -3419,4 +3420,147 @@ func fnChisqInv(args []Value) (Value, error) {
 
 	// Delegate to GAMMA.INV(p, df/2, 2).
 	return fnGammaInv([]Value{NumberVal(p), NumberVal(df / 2), NumberVal(2)})
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST — Student's t-distribution (left-tailed)
+// ---------------------------------------------------------------------------
+// T.DIST(x, deg_freedom, cumulative)
+//   x           – numeric value at which to evaluate
+//   deg_freedom – degrees of freedom (truncated to integer, must be >= 1)
+//   cumulative  – TRUE for CDF, FALSE for PDF
+
+func fnTDist(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF using the regularized incomplete beta function.
+		// CDF(t) = 1 - 0.5 * I(df/(df+t²), df/2, 0.5) for t >= 0
+		// CDF(t) = 0.5 * I(df/(df+t²), df/2, 0.5) for t < 0
+		bx := df / (df + x*x)
+		beta := regBetaInc(bx, df/2, 0.5)
+		if x >= 0 {
+			return NumberVal(1 - 0.5*beta), nil
+		}
+		return NumberVal(0.5 * beta), nil
+	}
+
+	// PDF: f(t) = Γ((df+1)/2) / (√(df*π) * Γ(df/2)) * (1 + t²/df)^(-(df+1)/2)
+	// Computed in log space for numerical stability.
+	lgNum, _ := math.Lgamma((df + 1) / 2)
+	lgDen, _ := math.Lgamma(df / 2)
+	logPdf := lgNum - lgDen - 0.5*math.Log(df*math.Pi) - ((df+1)/2)*math.Log(1+x*x/df)
+	return NumberVal(math.Exp(logPdf)), nil
+}
+
+// regBetaInc returns the regularized incomplete beta function I_x(a, b).
+// It uses Lentz's continued fraction method for efficient evaluation.
+func regBetaInc(x, a, b float64) float64 {
+	if x <= 0 {
+		return 0
+	}
+	if x >= 1 {
+		return 1
+	}
+
+	// Use the symmetry relation: I_x(a,b) = 1 - I_{1-x}(b,a)
+	// when x > (a+1)/(a+b+2) for better convergence of the CF.
+	if x > (a+1)/(a+b+2) {
+		return 1 - regBetaInc(1-x, b, a)
+	}
+
+	// Log of the front factor: x^a * (1-x)^b / B(a,b)
+	lgA, _ := math.Lgamma(a)
+	lgB, _ := math.Lgamma(b)
+	lgAB, _ := math.Lgamma(a + b)
+	lbeta := lgA + lgB - lgAB
+	front := math.Exp(a*math.Log(x) + b*math.Log(1-x) - lbeta)
+
+	// Evaluate the continued fraction using the modified Lentz's method.
+	// From Numerical Recipes, the CF for I_x(a,b) / front is:
+	//   1/(1+ d1/(1+ d2/(1+ ...)))
+	// where the coefficients are:
+	//   d_{2m+1} = -(a+m)(a+b+m) x / ((a+2m)(a+2m+1))
+	//   d_{2m}   = m(b-m) x / ((a+2m-1)(a+2m))
+	//
+	// This evaluates to: betacf(a,b,x) and I_x(a,b) = front * betacf / a
+	return front * betacf(a, b, x) / a
+}
+
+// betacf evaluates the continued fraction for the incomplete beta function.
+// This implements the algorithm from Numerical Recipes (betacf).
+func betacf(a, b, x float64) float64 {
+	const eps = 1e-15
+	const tiny = 1e-30
+	const maxIter = 1000
+
+	qab := a + b
+	qap := a + 1
+	qam := a - 1
+
+	// Initial setup for modified Lentz's method.
+	c := 1.0
+	d := 1.0 - qab*x/qap
+	if math.Abs(d) < tiny {
+		d = tiny
+	}
+	d = 1.0 / d
+	h := d
+
+	for m := 1; m <= maxIter; m++ {
+		mf := float64(m)
+		m2 := 2.0 * mf
+
+		// Even coefficient: d_{2m} = m(b-m)x / ((a+2m-1)(a+2m))
+		aa := mf * (b - mf) * x / ((qam + m2) * (a + m2))
+		d = 1.0 + aa*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = 1.0 + aa/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		h *= d * c
+
+		// Odd coefficient: d_{2m+1} = -(a+m)(a+b+m)x / ((a+2m)(a+2m+1))
+		aa = -(a + mf) * (qab + mf) * x / ((a + m2) * (qap + m2))
+		d = 1.0 + aa*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = 1.0 + aa/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		delta := d * c
+		h *= delta
+
+		if math.Abs(delta-1.0) < eps {
+			break
+		}
+	}
+	return h
 }

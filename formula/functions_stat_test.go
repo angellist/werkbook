@@ -14522,3 +14522,250 @@ func TestCHISQ_INV_roundtrip(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// T.DIST
+// ---------------------------------------------------------------------------
+
+func TestT_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// CDF tests
+		{"cdf_60_1", "T.DIST(60,1,TRUE)", 0.99469533, false, 0},
+		{"cdf_zero_symmetric", "T.DIST(0,5,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df1", "T.DIST(0,1,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df10", "T.DIST(0,10,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df100", "T.DIST(0,100,TRUE)", 0.5, false, 0},
+		{"cdf_neg2_df10", "T.DIST(-2,10,TRUE)", 0.03669402, false, 0},
+		{"cdf_pos2_df10", "T.DIST(2,10,TRUE)", 0.96330598, false, 0},
+		{"cdf_large_df_normal_approx", "T.DIST(1.96,1000,TRUE)", 0.97486341, false, 0},
+		{"cdf_cauchy_1", "T.DIST(1,1,TRUE)", 0.75, false, 0},
+		{"cdf_cauchy_neg1", "T.DIST(-1,1,TRUE)", 0.25, false, 0},
+		{"cdf_2571_df5", "T.DIST(2.571,5,TRUE)", 0.97501268, false, 0},
+		{"cdf_neg3_df5", "T.DIST(-3,5,TRUE)", 0.01504962, false, 0},
+		{"cdf_3_df5", "T.DIST(3,5,TRUE)", 0.98495038, false, 0},
+		{"cdf_1_df2", "T.DIST(1,2,TRUE)", 0.78867513, false, 0},
+		{"cdf_neg1_df2", "T.DIST(-1,2,TRUE)", 0.21132487, false, 0},
+		{"cdf_large_x_df5", "T.DIST(100,5,TRUE)", 1.0, false, 0},
+		{"cdf_neg_large_x_df5", "T.DIST(-100,5,TRUE)", 0.0, false, 0},
+		{"cdf_05_df30", "T.DIST(0.5,30,TRUE)", 0.68963850, false, 0},
+
+		// PDF tests
+		{"pdf_8_3", "T.DIST(8,3,FALSE)", 0.00073691, false, 0},
+		{"pdf_zero_df5", "T.DIST(0,5,FALSE)", 0.37960669, false, 0},
+		{"pdf_zero_df1_cauchy", "T.DIST(0,1,FALSE)", 0.31830989, false, 0},
+		{"pdf_large_df_normal", "T.DIST(0,100,FALSE)", 0.39794974, false, 0},
+		{"pdf_very_large_df", "T.DIST(0,10000,FALSE)", 0.39894216, false, 0},
+		{"pdf_neg3_df5", "T.DIST(-3,5,FALSE)", 0.01729258, false, 0},
+		{"pdf_pos3_df5", "T.DIST(3,5,FALSE)", 0.01729258, false, 0},
+		{"pdf_1_df1", "T.DIST(1,1,FALSE)", 0.15915494, false, 0},
+		{"pdf_neg1_df1", "T.DIST(-1,1,FALSE)", 0.15915494, false, 0},
+		{"pdf_2_df10", "T.DIST(2,10,FALSE)", 0.06114577, false, 0},
+		{"pdf_neg2_df10", "T.DIST(-2,10,FALSE)", 0.06114577, false, 0},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST(1,0,TRUE)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST(1,-1,TRUE)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.DIST(1,0.9,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST("abc",5,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST(1,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `T.DIST(1,5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestT_DIST_symmetry(t *testing.T) {
+	// CDF(-x) + CDF(x) should equal 1 for the t-distribution.
+	const tol = 1e-10
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{2, 10},
+		{1, 1},
+		{3, 5},
+		{0.5, 30},
+		{1.96, 1000},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			fPos := fmt.Sprintf("T.DIST(%g,%d,TRUE)", tc.x, tc.df)
+			fNeg := fmt.Sprintf("T.DIST(%g,%d,TRUE)", -tc.x, tc.df)
+
+			cfPos := evalCompile(t, fPos)
+			gotPos, err := Eval(cfPos, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfNeg := evalCompile(t, fNeg)
+			gotNeg, err := Eval(cfNeg, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotPos.Type != ValueNumber || gotNeg.Type != ValueNumber {
+				t.Fatalf("expected numbers, got pos=%d neg=%d", gotPos.Type, gotNeg.Type)
+			}
+
+			sum := gotPos.Num + gotNeg.Num
+			if math.Abs(sum-1.0) > tol {
+				t.Errorf("CDF(%g) + CDF(%g) = %g + %g = %g, want 1.0",
+					tc.x, -tc.x, gotPos.Num, gotNeg.Num, sum)
+			}
+		})
+	}
+}
+
+func TestT_DIST_pdf_symmetry(t *testing.T) {
+	// PDF(-x) should equal PDF(x) for the t-distribution.
+	const tol = 1e-12
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{3, 5},
+		{1, 1},
+		{2, 10},
+		{0.5, 30},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			fPos := fmt.Sprintf("T.DIST(%g,%d,FALSE)", tc.x, tc.df)
+			fNeg := fmt.Sprintf("T.DIST(%g,%d,FALSE)", -tc.x, tc.df)
+
+			cfPos := evalCompile(t, fPos)
+			gotPos, err := Eval(cfPos, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfNeg := evalCompile(t, fNeg)
+			gotNeg, err := Eval(cfNeg, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotPos.Type != ValueNumber || gotNeg.Type != ValueNumber {
+				t.Fatalf("expected numbers, got pos=%d neg=%d", gotPos.Type, gotNeg.Type)
+			}
+
+			if math.Abs(gotPos.Num-gotNeg.Num) > tol {
+				t.Errorf("PDF(%g) = %g != PDF(%g) = %g", tc.x, gotPos.Num, -tc.x, gotNeg.Num)
+			}
+		})
+	}
+}
+
+func TestT_DIST_truncation(t *testing.T) {
+	// T.DIST(1, 5.7, ...) should equal T.DIST(1, 5, ...)
+	const tol = 1e-12
+	resolver := &mockResolver{}
+
+	// CDF
+	cfTrunc := evalCompile(t, "T.DIST(1,5.7,TRUE)")
+	gotTrunc, err := Eval(cfTrunc, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	cfInt := evalCompile(t, "T.DIST(1,5,TRUE)")
+	gotInt, err := Eval(cfInt, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if gotTrunc.Type != ValueNumber || gotInt.Type != ValueNumber {
+		t.Fatalf("expected numbers, got trunc=%d int=%d", gotTrunc.Type, gotInt.Type)
+	}
+	if math.Abs(gotTrunc.Num-gotInt.Num) > tol {
+		t.Errorf("T.DIST(1,5.7,TRUE) = %g, T.DIST(1,5,TRUE) = %g; want equal", gotTrunc.Num, gotInt.Num)
+	}
+
+	// PDF
+	cfTrunc = evalCompile(t, "T.DIST(1,5.7,FALSE)")
+	gotTrunc, err = Eval(cfTrunc, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	cfInt = evalCompile(t, "T.DIST(1,5,FALSE)")
+	gotInt, err = Eval(cfInt, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if gotTrunc.Type != ValueNumber || gotInt.Type != ValueNumber {
+		t.Fatalf("expected numbers, got trunc=%d int=%d", gotTrunc.Type, gotInt.Type)
+	}
+	if math.Abs(gotTrunc.Num-gotInt.Num) > tol {
+		t.Errorf("T.DIST(1,5.7,FALSE) = %g, T.DIST(1,5,FALSE) = %g; want equal", gotTrunc.Num, gotInt.Num)
+	}
+}
+
+func TestT_DIST_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "T.DIST(1,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.DIST(1,5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "T.DIST(1,5,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.DIST(1,5,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(T.DIST(1,5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(T.DIST(1,5),"err") = %v, want string "err"`, got)
+	}
+}
