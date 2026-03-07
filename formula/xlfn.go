@@ -50,6 +50,7 @@ var xlfnPrefix = map[string]string{
 	"GAMMA.INV":       "_xlfn.",
 	"GAMMALN.PRECISE": "_xlfn.",
 	"HSTACK":          "_xlfn.",
+	"HYPGEOM.DIST":    "_xlfn.",
 	"IFNA":            "_xlfn.",
 	"IFS":             "_xlfn.",
 	"ISOWEEKNUM":      "_xlfn.",

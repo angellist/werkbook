@@ -109,6 +109,7 @@ func init() {
 	Register("F.DIST.RT", NoCtx(fnFDistRT))
 	Register("F.INV", NoCtx(fnFInv))
 	Register("F.INV.RT", NoCtx(fnFInvRT))
+	Register("HYPGEOM.DIST", NoCtx(fnHypgeomDist))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -4549,4 +4550,100 @@ func fnBetaInv(args []Value) (Value, error) {
 	}
 
 	return NumberVal(a + (lo+hi)/2*(b-a)), nil
+}
+
+// ---------------------------------------------------------------------------
+// HYPGEOM.DIST — Hypergeometric distribution (PMF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnHypgeomDist(args []Value) (Value, error) {
+	if len(args) != 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	sampleSF, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	numberSampleF, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	populationSF, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	numberPopF, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	cumF, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate all to integers.
+	k := int(sampleSF)       // sample_s
+	n := int(numberSampleF)   // number_sample
+	bigM := int(populationSF) // population_s (M)
+	bigN := int(numberPopF)   // number_pop (N)
+
+	// Validate constraints.
+	if bigN <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if n <= 0 || n > bigN {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if bigM <= 0 || bigM > bigN {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// k must be >= 0 and <= min(n, M)
+	minNM := n
+	if bigM < minNM {
+		minNM = bigM
+	}
+	if k < 0 || k > minNM {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// k must be >= max(0, n + M - N)
+	lowerBound := 0
+	if n+bigM-bigN > 0 {
+		lowerBound = n + bigM - bigN
+	}
+	if k < lowerBound {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cumF != 0 {
+		// CDF: sum PMF from lowerBound to k.
+		sum := 0.0
+		for i := lowerBound; i <= k; i++ {
+			sum += hypgeomPMF(i, n, bigM, bigN)
+		}
+		return NumberVal(sum), nil
+	}
+	return NumberVal(hypgeomPMF(k, n, bigM, bigN)), nil
+}
+
+// hypgeomPMF returns the hypergeometric probability mass function:
+// P(X=k) = C(M,k) * C(N-M, n-k) / C(N, n)
+// Uses log-gamma for numerical stability with large values.
+func hypgeomPMF(k, n, bigM, bigN int) float64 {
+	// log(C(M,k))
+	lgM1, _ := math.Lgamma(float64(bigM + 1))
+	lgK1, _ := math.Lgamma(float64(k + 1))
+	lgMK1, _ := math.Lgamma(float64(bigM - k + 1))
+
+	// log(C(N-M, n-k))
+	lgNM1, _ := math.Lgamma(float64(bigN - bigM + 1))
+	lgNK1, _ := math.Lgamma(float64(n - k + 1))
+	lgNMNK1, _ := math.Lgamma(float64(bigN - bigM - n + k + 1))
+
+	// log(C(N, n))
+	lgN1, _ := math.Lgamma(float64(bigN + 1))
+	lgn1, _ := math.Lgamma(float64(n + 1))
+	lgNn1, _ := math.Lgamma(float64(bigN - n + 1))
+
+	logP := (lgM1 - lgK1 - lgMK1) + (lgNM1 - lgNK1 - lgNMNK1) - (lgN1 - lgn1 - lgNn1)
+	return math.Exp(logP)
 }

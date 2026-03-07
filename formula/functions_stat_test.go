@@ -16440,3 +16440,181 @@ func TestF_INV_RT(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// HYPGEOM.DIST
+// ---------------------------------------------------------------------------
+
+func TestHYPGEOM_DIST(t *testing.T) {
+	const tol = 1e-9
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF — Excel example
+		{"pmf_basic", "HYPGEOM.DIST(1,4,8,20,FALSE)", 0.363261093911, false, 0},
+
+		// Basic CDF — Excel example
+		{"cdf_basic", "HYPGEOM.DIST(1,4,8,20,TRUE)", 0.465428276574, false, 0},
+
+		// All successes in sample PMF
+		{"pmf_all_success", "HYPGEOM.DIST(4,4,8,20,FALSE)", 0.014447884417, false, 0},
+
+		// Zero successes PMF
+		{"pmf_zero_success", "HYPGEOM.DIST(0,4,8,20,FALSE)", 0.102167182663, false, 0},
+
+		// CDF at max should be 1
+		{"cdf_at_max", "HYPGEOM.DIST(4,4,8,20,TRUE)", 1, false, 0},
+
+		// Simple case: 1 success from sample of 1, 1 success in pop of 2
+		{"simple_half", "HYPGEOM.DIST(1,1,1,2,FALSE)", 0.5, false, 0},
+
+		// Simple case: 0 successes
+		{"simple_zero", "HYPGEOM.DIST(0,1,1,2,FALSE)", 0.5, false, 0},
+
+		// Simple CDF at max
+		{"simple_cdf_max", "HYPGEOM.DIST(1,1,1,2,TRUE)", 1, false, 0},
+
+		// Truncation: 1.9 -> 1, 4.7 -> 4, 8.3 -> 8, 20.1 -> 20
+		{"truncation", "HYPGEOM.DIST(1.9,4.7,8.3,20.1,FALSE)", 0.363261093911, false, 0},
+
+		// PMF with larger sample
+		{"pmf_large_sample", "HYPGEOM.DIST(3,10,15,50,FALSE)", 0.297855699521, false, 0},
+
+		// CDF with larger sample
+		{"cdf_large_sample", "HYPGEOM.DIST(3,10,15,50,TRUE)", 0.659406694786, false, 0},
+
+		// Extreme: sample_s equals both number_sample and population_s
+		{"pmf_all_match", "HYPGEOM.DIST(3,3,3,10,FALSE)", 0.008333333333, false, 0},
+
+		// PMF k=2 out of sample=4, pop_s=8, pop=20
+		{"pmf_k2", "HYPGEOM.DIST(2,4,8,20,FALSE)", 0.381424148607, false, 0},
+
+		// PMF k=3
+		{"pmf_k3", "HYPGEOM.DIST(3,4,8,20,FALSE)", 0.138699690402, false, 0},
+
+		// CDF at k=0
+		{"cdf_at_zero", "HYPGEOM.DIST(0,4,8,20,TRUE)", 0.102167182663, false, 0},
+
+		// CDF at k=2
+		{"cdf_at_k2", "HYPGEOM.DIST(2,4,8,20,TRUE)", 0.846852425181, false, 0},
+
+		// CDF at k=3
+		{"cdf_at_k3", "HYPGEOM.DIST(3,4,8,20,TRUE)", 0.985552115583, false, 0},
+
+		// Small population: pop=5, pop_s=2, sample=3, k=1
+		{"small_pop", "HYPGEOM.DIST(1,3,2,5,FALSE)", 0.6, false, 0},
+
+		// Small population CDF
+		{"small_pop_cdf", "HYPGEOM.DIST(1,3,2,5,TRUE)", 0.7, false, 0},
+
+		// Large population
+		{"large_pop_pmf", "HYPGEOM.DIST(5,10,50,200,FALSE)", 0.055830842234, false, 0},
+
+		// sample_s = number_sample (all drawn are successes)
+		{"all_drawn_success", "HYPGEOM.DIST(2,2,5,10,FALSE)", 0.222222222222, false, 0},
+
+		// Error: sample_s < 0
+		{"err_neg_sample_s", "HYPGEOM.DIST(-1,4,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s > number_sample
+		{"err_s_gt_n", "HYPGEOM.DIST(5,4,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s > population_s
+		{"err_s_gt_pop_s", "HYPGEOM.DIST(5,10,4,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_sample <= 0
+		{"err_n_zero", "HYPGEOM.DIST(0,0,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_sample > number_pop
+		{"err_n_gt_pop", "HYPGEOM.DIST(1,25,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: population_s <= 0
+		{"err_pop_s_zero", "HYPGEOM.DIST(0,4,0,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: population_s > number_pop
+		{"err_pop_s_gt_pop", "HYPGEOM.DIST(1,4,25,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_pop <= 0
+		{"err_pop_zero", "HYPGEOM.DIST(0,4,8,0,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s < max(0, n + M - N) — lower bound violation
+		{"err_lower_bound", "HYPGEOM.DIST(0,10,15,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric_1", `HYPGEOM.DIST("abc",4,8,20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric_2", `HYPGEOM.DIST(1,"abc",8,20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric third arg
+		{"err_non_numeric_3", `HYPGEOM.DIST(1,4,"abc",20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fourth arg
+		{"err_non_numeric_4", `HYPGEOM.DIST(1,4,8,"abc",FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fifth arg
+		{"err_non_numeric_5", `HYPGEOM.DIST(1,4,8,20,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestHYPGEOM_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "HYPGEOM.DIST(1,4,8,20)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("HYPGEOM.DIST(1,4,8,20) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "HYPGEOM.DIST(1,4,8,20,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("HYPGEOM.DIST(1,4,8,20,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(HYPGEOM.DIST(1,4,8,20),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(HYPGEOM.DIST(1,4,8,20),"err") = %v, want string "err"`, got)
+	}
+}
