@@ -13060,3 +13060,160 @@ func TestMEDIAN(t *testing.T) {
 	_ = numResolver // suppress unused if only direct-arg tests
 	_ = valResolver
 }
+
+// ---------------------------------------------------------------------------
+// BINOM.DIST
+// ---------------------------------------------------------------------------
+
+func TestBINOM_DIST(t *testing.T) {
+	const tol = 1e-9
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF
+		{"pmf_basic", "BINOM.DIST(6,10,0.5,FALSE)", 0.205078125, false, 0},
+
+		// Basic CDF
+		{"cdf_basic", "BINOM.DIST(6,10,0.5,TRUE)", 0.828125, false, 0},
+
+		// All successes PMF
+		{"pmf_all_success", "BINOM.DIST(10,10,0.5,FALSE)", 0.0009765625, false, 0},
+
+		// Zero successes PMF
+		{"pmf_zero_success", "BINOM.DIST(0,10,0.5,FALSE)", 0.0009765625, false, 0},
+
+		// Probability 0, zero successes
+		{"pmf_p0_k0", "BINOM.DIST(0,10,0,FALSE)", 1, false, 0},
+
+		// Probability 1, all successes
+		{"pmf_p1_kn", "BINOM.DIST(10,10,1,FALSE)", 1, false, 0},
+
+		// Probability 0, nonzero successes
+		{"pmf_p0_k5", "BINOM.DIST(5,10,0,FALSE)", 0, false, 0},
+
+		// Probability 1, partial successes
+		{"pmf_p1_k5", "BINOM.DIST(5,10,1,FALSE)", 0, false, 0},
+
+		// CDF at max
+		{"cdf_at_max", "BINOM.DIST(10,10,0.5,TRUE)", 1, false, 0},
+
+		// CDF at 0
+		{"cdf_at_zero", "BINOM.DIST(0,10,0.5,TRUE)", 0.0009765625, false, 0},
+
+		// Truncation: 6.9 -> 6, 10.7 -> 10
+		{"truncation", "BINOM.DIST(6.9,10.7,0.5,FALSE)", 0.205078125, false, 0},
+
+		// Small probability
+		{"small_prob", "BINOM.DIST(1,100,0.01,FALSE)", 0.369729637650, false, 0},
+
+		// Large trials PMF
+		{"large_trials_pmf", "BINOM.DIST(50,100,0.5,FALSE)", 0.079589237387, false, 0},
+
+		// Single trial PMF
+		{"single_trial_pmf", "BINOM.DIST(1,1,0.5,FALSE)", 0.5, false, 0},
+
+		// Single trial CDF at 0
+		{"single_trial_cdf_0", "BINOM.DIST(0,1,0.5,TRUE)", 0.5, false, 0},
+
+		// CDF with p=0
+		{"cdf_p0_k5", "BINOM.DIST(5,10,0,TRUE)", 1, false, 0},
+
+		// CDF with p=1
+		{"cdf_p1_k5", "BINOM.DIST(5,10,1,TRUE)", 0, false, 0},
+
+		// CDF with p=1, k=n
+		{"cdf_p1_kn", "BINOM.DIST(10,10,1,TRUE)", 1, false, 0},
+
+		// CDF with p=0, k=0
+		{"cdf_p0_k0", "BINOM.DIST(0,10,0,TRUE)", 1, false, 0},
+
+		// Asymmetric probability PMF
+		{"pmf_asym_prob", "BINOM.DIST(3,10,0.25,FALSE)", 0.250282287598, false, 0},
+
+		// Single trial CDF at 1
+		{"single_trial_cdf_1", "BINOM.DIST(1,1,0.5,TRUE)", 1, false, 0},
+
+		// Zero trials
+		{"zero_trials", "BINOM.DIST(0,0,0.5,FALSE)", 1, false, 0},
+
+		// Error: number_s negative
+		{"err_neg_k", "BINOM.DIST(-1,10,0.5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_s > trials
+		{"err_k_gt_n", "BINOM.DIST(11,10,0.5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability < 0
+		{"err_p_neg", "BINOM.DIST(5,10,-0.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability > 1
+		{"err_p_gt1", "BINOM.DIST(5,10,1.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric", `BINOM.DIST("abc",10,0.5,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric2", `BINOM.DIST(5,"abc",0.5,FALSE)`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBINOM_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "BINOM.DIST(5,10,0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST(5,10,0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "BINOM.DIST(5,10,0.5,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST(5,10,0.5,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(BINOM.DIST(5,10,0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(BINOM.DIST(5,10,0.5),"err") = %v, want string "err"`, got)
+	}
+}

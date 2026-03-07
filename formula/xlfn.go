@@ -9,6 +9,7 @@ var xlfnPrefix = map[string]string{
 	"ANCHORARRAY":     "_xlfn.",
 	"ARABIC":          "_xlfn.",
 	"BASE":            "_xlfn.",
+	"BINOM.DIST":      "_xlfn.",
 	"BYCOL":           "_xlfn.",
 	"BYROW":           "_xlfn.",
 	"CEILING.MATH":    "_xlfn.",
