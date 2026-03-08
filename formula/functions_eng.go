@@ -23,6 +23,8 @@ func init() {
 	Register("HEX2OCT", NoCtx(fnHex2Oct))
 	Register("IMABS", NoCtx(fnImabs))
 	Register("IMAGINARY", NoCtx(fnImaginary))
+	Register("IMARGUMENT", NoCtx(fnImargument))
+	Register("IMCONJUGATE", NoCtx(fnImconjugate))
 	Register("IMDIV", NoCtx(fnImdiv))
 	Register("IMPRODUCT", NoCtx(fnImproduct))
 	Register("IMREAL", NoCtx(fnImreal))
@@ -1530,6 +1532,105 @@ func fnImreal(args []Value) (Value, error) {
 	}
 
 	return NumberVal(real), nil
+}
+
+// fnImargument implements the Excel IMARGUMENT function.
+// IMARGUMENT(inumber) — returns the argument (theta/angle in radians) of a complex number.
+// The argument of zero is undefined and returns #DIV/0!.
+func fnImargument(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImargument([]Value{v})
+			return r
+		}), nil
+	}
+
+	// Numeric input: treat as real number with 0 imaginary part.
+	if args[0].Type == ValueNumber {
+		if args[0].Num == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		return NumberVal(math.Atan2(0, args[0].Num)), nil
+	}
+
+	// Boolean: TRUE=1, FALSE=0, both are real numbers.
+	if args[0].Type == ValueBool {
+		if args[0].Bool {
+			return NumberVal(0), nil
+		}
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	if args[0].Type != ValueString {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	real, imag, fail := parseComplex(args[0].Str)
+	if fail {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if real == 0 && imag == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	return NumberVal(math.Atan2(imag, real)), nil
+}
+
+// fnImconjugate implements the Excel IMCONJUGATE function.
+// IMCONJUGATE(inumber) — returns the complex conjugate of a complex number.
+// The conjugate of a+bi is a-bi (the imaginary part is negated).
+func fnImconjugate(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImconjugate([]Value{v})
+			return r
+		}), nil
+	}
+
+	// Numeric input: treat as real number, conjugate is itself.
+	if args[0].Type == ValueNumber {
+		return StringVal(formatComplex(args[0].Num, 0, "i")), nil
+	}
+
+	// Boolean: TRUE=1, FALSE=0, both are real numbers.
+	if args[0].Type == ValueBool {
+		if args[0].Bool {
+			return StringVal("1"), nil
+		}
+		return StringVal("0"), nil
+	}
+
+	if args[0].Type != ValueString {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	real, imag, suffix, fail := parseComplexWithSuffix(args[0].Str)
+	if fail {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return StringVal(formatComplex(real, -imag, suffix)), nil
 }
 
 // parseComplexWithSuffix is like parseComplex but also returns the suffix

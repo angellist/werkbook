@@ -2830,3 +2830,242 @@ func TestIMDIV(t *testing.T) {
 		}
 	})
 }
+
+func TestIMARGUMENT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+		}{
+			// Standard complex numbers
+			{`IMARGUMENT("3+4i")`, math.Atan2(4, 3)},
+			{`IMARGUMENT("1+i")`, math.Pi / 4},
+			{`IMARGUMENT("1-i")`, -math.Pi / 4},
+			{`IMARGUMENT("-1+i")`, 3 * math.Pi / 4},
+			{`IMARGUMENT("-1-i")`, -3 * math.Pi / 4},
+
+			// Pure imaginary
+			{`IMARGUMENT("i")`, math.Pi / 2},
+			{`IMARGUMENT("-i")`, -math.Pi / 2},
+			{`IMARGUMENT("2i")`, math.Pi / 2},
+			{`IMARGUMENT("-3i")`, -math.Pi / 2},
+
+			// Pure real positive → 0
+			{`IMARGUMENT("1")`, 0},
+			{`IMARGUMENT("5")`, 0},
+			{`IMARGUMENT("3.14")`, 0},
+
+			// Pure real negative → π
+			{`IMARGUMENT("-1")`, math.Pi},
+			{`IMARGUMENT("-5")`, math.Pi},
+
+			// Numeric input (not string)
+			{"IMARGUMENT(1)", 0},
+			{"IMARGUMENT(-1)", math.Pi},
+			{"IMARGUMENT(5)", 0},
+			{"IMARGUMENT(-7)", math.Pi},
+
+			// Boolean: TRUE=1 (positive real)
+			{"IMARGUMENT(TRUE)", 0},
+
+			// j suffix
+			{`IMARGUMENT("1+j")`, math.Pi / 4},
+			{`IMARGUMENT("3+4j")`, math.Atan2(4, 3)},
+			{`IMARGUMENT("j")`, math.Pi / 2},
+			{`IMARGUMENT("-j")`, -math.Pi / 2},
+
+			// Decimal coefficients
+			{`IMARGUMENT("1.5+2.5i")`, math.Atan2(2.5, 1.5)},
+			{`IMARGUMENT("-1.5+2.5i")`, math.Atan2(2.5, -1.5)},
+
+			// Combined with COMPLEX
+			{`IMARGUMENT(COMPLEX(3,4))`, math.Atan2(4, 3)},
+			{`IMARGUMENT(COMPLEX(1,1))`, math.Pi / 4},
+			{`IMARGUMENT(COMPLEX(0,1))`, math.Pi / 2},
+			{`IMARGUMENT(COMPLEX(-1,0))`, math.Pi},
+
+			// Explicit zero parts
+			{`IMARGUMENT("0+4i")`, math.Pi / 2},
+			{`IMARGUMENT("0-4i")`, -math.Pi / 2},
+			{`IMARGUMENT("3+0i")`, 0},
+			{`IMARGUMENT("-3+0i")`, math.Pi},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v, want number %v", tt.formula, got, tt.want)
+				}
+				if math.Abs(got.Num-tt.want) > 1e-12 {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Zero: argument is undefined
+			{`IMARGUMENT("0")`, ErrValDIV0},
+			{"IMARGUMENT(0)", ErrValDIV0},
+			{`IMARGUMENT("0+0i")`, ErrValDIV0},
+			{`IMARGUMENT(COMPLEX(0,0))`, ErrValDIV0},
+			{"IMARGUMENT(FALSE)", ErrValDIV0},
+
+			// Invalid complex number strings
+			{`IMARGUMENT("invalid")`, ErrValNUM},
+			{`IMARGUMENT("")`, ErrValNUM},
+			{`IMARGUMENT("abc")`, ErrValNUM},
+			{`IMARGUMENT("3+4")`, ErrValNUM},
+			{`IMARGUMENT("3+4k")`, ErrValNUM},
+			{`IMARGUMENT("+")`, ErrValNUM},
+
+			// Wrong number of arguments
+			{`IMARGUMENT()`, ErrValVALUE},
+			{`IMARGUMENT("1","2")`, ErrValVALUE},
+
+			// Error propagation
+			{`IMARGUMENT(1/0)`, ErrValDIV0},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+}
+
+func TestIMCONJUGATE(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Basic conjugation
+			{`IMCONJUGATE("3+4i")`, "3-4i"},
+			{`IMCONJUGATE("3-4i")`, "3+4i"},
+			{`IMCONJUGATE("-3+4i")`, "-3-4i"},
+			{`IMCONJUGATE("-3-4i")`, "-3+4i"},
+
+			// Pure imaginary
+			{`IMCONJUGATE("i")`, "-i"},
+			{`IMCONJUGATE("-i")`, "i"},
+			{`IMCONJUGATE("4i")`, "-4i"},
+			{`IMCONJUGATE("-4i")`, "4i"},
+			{`IMCONJUGATE("2i")`, "-2i"},
+			{`IMCONJUGATE("-2i")`, "2i"},
+
+			// Pure real (unchanged)
+			{`IMCONJUGATE("5")`, "5"},
+			{`IMCONJUGATE("-5")`, "-5"},
+			{`IMCONJUGATE("3.14")`, "3.14"},
+
+			// Zero
+			{`IMCONJUGATE("0")`, "0"},
+			{`IMCONJUGATE("0+0i")`, "0"},
+
+			// j suffix
+			{`IMCONJUGATE("3+4j")`, "3-4j"},
+			{`IMCONJUGATE("3-4j")`, "3+4j"},
+			{`IMCONJUGATE("j")`, "-j"},
+			{`IMCONJUGATE("-j")`, "j"},
+
+			// Decimal coefficients
+			{`IMCONJUGATE("1.5+2.5i")`, "1.5-2.5i"},
+			{`IMCONJUGATE("1.5-2.5i")`, "1.5+2.5i"},
+
+			// Unit imaginary with real
+			{`IMCONJUGATE("3+i")`, "3-i"},
+			{`IMCONJUGATE("3-i")`, "3+i"},
+
+			// Combined with COMPLEX
+			{`IMCONJUGATE(COMPLEX(3,4))`, "3-4i"},
+			{`IMCONJUGATE(COMPLEX(3,-4))`, "3+4i"},
+			{`IMCONJUGATE(COMPLEX(0,1))`, "-i"},
+			{`IMCONJUGATE(COMPLEX(5,0))`, "5"},
+			{`IMCONJUGATE(COMPLEX(0,0))`, "0"},
+
+			// Explicit zero parts
+			{`IMCONJUGATE("0+4i")`, "-4i"},
+			{`IMCONJUGATE("0-4i")`, "4i"},
+			{`IMCONJUGATE("3+0i")`, "3"},
+
+			// Numeric input (treat as real)
+			{"IMCONJUGATE(5)", "5"},
+			{"IMCONJUGATE(0)", "0"},
+			{"IMCONJUGATE(-7)", "-7"},
+
+			// Boolean: TRUE=1, FALSE=0
+			{"IMCONJUGATE(TRUE)", "1"},
+			{"IMCONJUGATE(FALSE)", "0"},
+
+			// Large numbers
+			{`IMCONJUGATE("100+200i")`, "100-200i"},
+			{`IMCONJUGATE("-100-200i")`, "-100+200i"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMCONJUGATE("invalid")`, ErrValNUM},
+			{`IMCONJUGATE("")`, ErrValNUM},
+			{`IMCONJUGATE("abc")`, ErrValNUM},
+			{`IMCONJUGATE("3+4")`, ErrValNUM},
+			{`IMCONJUGATE("3+4k")`, ErrValNUM},
+			{`IMCONJUGATE("+")`, ErrValNUM},
+
+			// Wrong number of arguments
+			{`IMCONJUGATE()`, ErrValVALUE},
+			{`IMCONJUGATE("1","2")`, ErrValVALUE},
+
+			// Error propagation
+			{`IMCONJUGATE(1/0)`, ErrValDIV0},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+}
