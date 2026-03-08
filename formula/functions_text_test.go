@@ -4024,3 +4024,107 @@ func TestREPLACEWrongArgCount(t *testing.T) {
 		t.Errorf("REPLACE with 5 args: got %v, want error", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// PROPER
+// ---------------------------------------------------------------------------
+
+func TestPROPER(t *testing.T) {
+	resolver := &mockResolver{}
+
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Basic capitalization
+		{"lowercase words", `PROPER("hello world")`, "Hello World"},
+		{"all uppercase", `PROPER("HELLO")`, "Hello"},
+		{"all lowercase", `PROPER("hello")`, "Hello"},
+		{"already proper", `PROPER("Hello World")`, "Hello World"},
+
+		// Non-letter separators trigger capitalization (Excel behavior)
+		{"apostrophe separator", `PROPER("2-cent's worth")`, "2-Cent'S Worth"},
+		{"number prefix", `PROPER("76BudGet")`, "76Budget"},
+		{"hyphen separator", `PROPER("2-way street")`, "2-Way Street"},
+		{"this is a TITLE", `PROPER("this is a TITLE")`, "This Is A Title"},
+
+		// Edge cases with strings
+		{"empty string", `PROPER("")`, ""},
+		{"single lowercase", `PROPER("a")`, "A"},
+		{"single uppercase", `PROPER("A")`, "A"},
+		{"spaces only", `PROPER("   ")`, "   "},
+		{"special characters", `PROPER("!@#$%")`, "!@#$%"},
+		{"digits only", `PROPER("12345")`, "12345"},
+
+		// Multiple non-letter separators
+		{"multiple hyphens", `PROPER("one--two")`, "One--Two"},
+		{"dot separator", `PROPER("john.doe")`, "John.Doe"},
+		{"mixed punctuation", `PROPER("hello,world!foo")`, "Hello,World!Foo"},
+
+		// Unicode / accented characters
+		{"accented lowercase", `PROPER("café résumé")`, "Café Résumé"},
+
+		// Number coercion (ValueToString converts number to string)
+		{"number coerced", `PROPER(100)`, "100"},
+		{"negative number", `PROPER(-42.5)`, "-42.5"},
+
+		// Boolean coercion
+		{"boolean TRUE", `PROPER(TRUE)`, "True"},
+		{"boolean FALSE", `PROPER(FALSE)`, "False"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %v (type %d), want %q", tt.formula, got, got.Type, tt.want)
+			}
+		})
+	}
+
+	// Error: no arguments
+	t.Run("no args", func(t *testing.T) {
+		cf := evalCompile(t, `PROPER()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE! error", got)
+		}
+	})
+
+	// Error: too many arguments
+	t.Run("too many args", func(t *testing.T) {
+		cf := evalCompile(t, `PROPER("a","b")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE! error", got)
+		}
+	})
+
+	// Cell reference
+	t.Run("cell reference", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello world"),
+			},
+		}
+		cf := evalCompile(t, `PROPER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "Hello World" {
+			t.Errorf("got %v, want %q", got, "Hello World")
+		}
+	})
+}
