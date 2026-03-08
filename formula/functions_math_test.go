@@ -7915,3 +7915,102 @@ func TestSEC(t *testing.T) {
 		})
 	}
 }
+
+func TestSECH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Excel doc examples
+		{"doc_example_45", "SECH(45)", 5.725037161098787e-20, 1e-30},
+		{"doc_example_30", "SECH(30)", 1.871524593768035e-13, 1e-23},
+
+		// SECH(0) = 1
+		{"sech_0", "SECH(0)", 1, 0},
+
+		// SECH(1) ≈ 0.6481
+		{"sech_1", "SECH(1)", 0.6480542736638855, 1e-10},
+
+		// SECH(-1) = SECH(1) — even function
+		{"sech_neg1", "SECH(-1)", 0.6480542736638855, 1e-10},
+
+		// Even function: SECH(-x) = SECH(x)
+		{"even_2", "SECH(-2)", 1 / math.Cosh(2), 1e-10},
+		{"even_3", "SECH(-3)", 1 / math.Cosh(3), 1e-10},
+		{"even_5", "SECH(-5)", 1 / math.Cosh(5), 1e-10},
+
+		// Large values approach 0
+		{"sech_5", "SECH(5)", 0.013475282221304556, 1e-10},
+		{"sech_10", "SECH(10)", 9.079985933781724e-05, 1e-10},
+		{"sech_100", "SECH(100)", 7.440151952041671e-44, 1e-54},
+		{"sech_710", "SECH(710)", 0, 1e-300},
+
+		// Small values near 1
+		{"sech_0_1", "SECH(0.1)", 1 / math.Cosh(0.1), 1e-10},
+		{"sech_0_01", "SECH(0.01)", 1 / math.Cosh(0.01), 1e-14},
+		{"sech_0_001", "SECH(0.001)", 1 / math.Cosh(0.001), 1e-14},
+		{"sech_neg_0_5", "SECH(-0.5)", 1 / math.Cosh(0.5), 1e-10},
+
+		// Expression input
+		{"sech_expr", "SECH(2+1)", 1 / math.Cosh(3), 1e-10},
+		{"sech_ln_2", "SECH(LN(2))", 1 / math.Cosh(math.Log(2)), 1e-10},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "SECH(TRUE)", 1 / math.Cosh(1), 1e-10},
+		{"bool_false", "SECH(FALSE)", 1, 0},
+
+		// String coercion
+		{"str_zero", `SECH("0")`, 1, 0},
+		{"str_1", `SECH("1")`, 1 / math.Cosh(1), 1e-10},
+		{"str_neg_1", `SECH("-1")`, 1 / math.Cosh(1), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "SECH()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "SECH(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `SECH("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "SECH(1/0)", ErrValDIV0},
+		{"err_na", "SECH(NA())", ErrValNA},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
