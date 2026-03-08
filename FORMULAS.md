@@ -155,7 +155,7 @@ Werkbook supports **343** Excel formula functions.
 | IPMT | Financial | 4 |
 | IRR | Financial | 19 |
 | ISBLANK | Information | 23 |
-| ISERR | Information | - |
+| ISERR | Information | 21 |
 | ISERROR | Information | 21 |
 | ISEVEN | Information | 4 |
 | ISFORMULA | Information | 7 |
