@@ -6395,3 +6395,104 @@ func TestSIGN(t *testing.T) {
 		})
 	}
 }
+
+func TestCOMBINA(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// Excel doc examples
+		{"doc_ex1", "COMBINA(4,3)", 20},
+		{"doc_ex2", "COMBINA(10,3)", 220},
+
+		// k=0 always returns 1
+		{"n0_k0", "COMBINA(0,0)", 1},
+		{"n5_k0", "COMBINA(5,0)", 1},
+		{"n1_k0", "COMBINA(1,0)", 1},
+		{"n100_k0", "COMBINA(100,0)", 1},
+
+		// k=1 returns n
+		{"n1_k1", "COMBINA(1,1)", 1},
+		{"n5_k1", "COMBINA(5,1)", 5},
+		{"n10_k1", "COMBINA(10,1)", 10},
+
+		// k=2: C(n+1, 2) = n*(n+1)/2
+		{"n3_k2", "COMBINA(3,2)", 6},
+		{"n6_k2", "COMBINA(6,2)", 21},
+
+		// Larger values
+		{"n10_k5", "COMBINA(10,5)", 2002},
+		{"n20_k3", "COMBINA(20,3)", 1540},
+		{"n15_k4", "COMBINA(15,4)", 3060},
+
+		// Decimal truncation: non-integer values are truncated
+		{"dec_n", "COMBINA(4.9,3)", 20},
+		{"dec_k", "COMBINA(4,3.7)", 20},
+		{"dec_both", "COMBINA(10.8,3.2)", 220},
+
+		// Boolean coercion
+		{"bool_true_n", "COMBINA(TRUE,0)", 1},
+		{"bool_true_k", "COMBINA(4,TRUE)", 4},
+		{"bool_false_k", "COMBINA(5,FALSE)", 1},
+
+		// String coercion
+		{"str_n", `COMBINA("4",3)`, 20},
+		{"str_k", `COMBINA(10,"3")`, 220},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// Negative n
+		{"neg_n", "COMBINA(-1,3)", ErrValNUM},
+		// Negative k
+		{"neg_k", "COMBINA(4,-1)", ErrValNUM},
+		// Both negative
+		{"neg_both", "COMBINA(-2,-3)", ErrValNUM},
+		// No args
+		{"no_args", "COMBINA()", ErrValVALUE},
+		// Too few args
+		{"one_arg", "COMBINA(4)", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "COMBINA(4,3,1)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric_n", `COMBINA("abc",3)`, ErrValVALUE},
+		{"non_numeric_k", `COMBINA(4,"xyz")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "COMBINA(1/0,3)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
