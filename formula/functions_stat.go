@@ -67,6 +67,7 @@ func init() {
 	Register("STDEVA", NoCtx(fnSTDEVA))
 	Register("STDEVP", NoCtx(fnSTDEVP))
 	Register("STDEV.P", NoCtx(fnSTDEVP))
+	Register("STDEVPA", NoCtx(fnSTDEVPA))
 	Register("STANDARDIZE", NoCtx(fnSTANDARDIZE))
 	Register("STEYX", NoCtx(fnSTEYX))
 	Register("SUM", NoCtx(fnSUM))
@@ -1929,6 +1930,31 @@ func fnSTDEVA(args []Value) (Value, error) {
 		ssq += d * d
 	}
 	return NumberVal(math.Sqrt(ssq / float64(n-1))), nil
+}
+
+func fnSTDEVPA(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nums, ev := collectNumericA(args)
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(nums)
+	if n < 1 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	sum := 0.0
+	for _, v := range nums {
+		sum += v
+	}
+	mean := sum / float64(n)
+	ssq := 0.0
+	for _, v := range nums {
+		d := v - mean
+		ssq += d * d
+	}
+	return NumberVal(math.Sqrt(ssq / float64(n))), nil
 }
 
 func fnVARPA(args []Value) (Value, error) {
