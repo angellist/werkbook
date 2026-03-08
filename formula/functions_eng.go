@@ -25,6 +25,7 @@ func init() {
 	Register("IMAGINARY", NoCtx(fnImaginary))
 	Register("IMARGUMENT", NoCtx(fnImargument))
 	Register("IMCONJUGATE", NoCtx(fnImconjugate))
+	Register("IMCOS", NoCtx(fnImcos))
 	Register("IMDIV", NoCtx(fnImdiv))
 	Register("IMEXP", NoCtx(fnImexp))
 	Register("IMLN", NoCtx(fnImln))
@@ -33,9 +34,11 @@ func init() {
 	Register("IMPOWER", NoCtx(fnImpower))
 	Register("IMPRODUCT", NoCtx(fnImproduct))
 	Register("IMREAL", NoCtx(fnImreal))
+	Register("IMSIN", NoCtx(fnImsin))
 	Register("IMSQRT", NoCtx(fnImsqrt))
 	Register("IMSUB", NoCtx(fnImsub))
 	Register("IMSUM", NoCtx(fnImsum))
+	Register("IMTAN", NoCtx(fnImtan))
 	Register("OCT2BIN", NoCtx(fnOct2Bin))
 	Register("OCT2DEC", NoCtx(fnOct2Dec))
 	Register("OCT2HEX", NoCtx(fnOct2Hex))
@@ -2342,6 +2345,172 @@ func fnImlog10(args []Value) (Value, error) {
 	ln10 := math.Log(10)
 	realResult := cleanFloat(math.Log(r) / ln10)
 	imagResult := cleanFloat(theta / ln10)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImsin implements the Excel IMSIN function.
+// IMSIN(inumber) — returns the sine of a complex number.
+// sin(x+yi) = sin(x)*cosh(y) + cos(x)*sinh(y)*i.
+func fnImsin(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsin([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	realResult := cleanFloat(math.Sin(x) * math.Cosh(y))
+	imagResult := cleanFloat(math.Cos(x) * math.Sinh(y))
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImcos implements the Excel IMCOS function.
+// IMCOS(inumber) — returns the cosine of a complex number.
+// cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i.
+func fnImcos(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImcos([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	realResult := cleanFloat(math.Cos(x) * math.Cosh(y))
+	imagResult := cleanFloat(-math.Sin(x) * math.Sinh(y))
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImtan implements the Excel IMTAN function.
+// IMTAN(inumber) — returns the tangent of a complex number.
+// tan(z) = sin(z)/cos(z).
+// real part = sin(2x)/(cos(2x)+cosh(2y))
+// imag part = sinh(2y)/(cos(2x)+cosh(2y))
+func fnImtan(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImtan([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	denom := math.Cos(2*x) + math.Cosh(2*y)
+
+	// Check for overflow or zero denominator (practically impossible for finite inputs
+	// since cosh(2y) >= 1, but guard against overflow with very large values).
+	if denom == 0 || math.IsInf(denom, 0) || math.IsNaN(denom) {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(math.Sin(2*x) / denom)
+	imagResult := cleanFloat(math.Sinh(2*y) / denom)
 
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }

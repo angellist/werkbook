@@ -3818,3 +3818,351 @@ func TestIMLOG10(t *testing.T) {
 		}
 	})
 }
+
+func TestIMSIN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Pure real: zero
+			{`IMSIN("0")`, "0"},
+
+			// Pure real: positive
+			{`IMSIN("1")`, "0.8414709848078965"},
+
+			// Pure real: negative
+			{`IMSIN("-1")`, "-0.8414709848078965"},
+
+			// Pure real: pi ≈ 0
+			{`IMSIN("3.14159265358979")`, "0"},
+
+			// Pure imaginary: positive
+			{`IMSIN("i")`, "1.1752011936438014i"},
+
+			// Pure imaginary: negative
+			{`IMSIN("-i")`, "-1.1752011936438014i"},
+
+			// Pure imaginary: 2i
+			{`IMSIN("2i")`, "3.626860407847019i"},
+
+			// Complex: 1+i
+			{`IMSIN("1+i")`, "1.2984575814159773+0.6349639147847361i"},
+
+			// Complex: 1-i
+			{`IMSIN("1-i")`, "1.2984575814159773-0.6349639147847361i"},
+
+			// Complex: -1-i
+			{`IMSIN("-1-i")`, "-1.2984575814159773-0.6349639147847361i"},
+
+			// Complex: 3+4i
+			{`IMSIN("3+4i")`, "3.853738037919377-27.016813258003932i"},
+
+			// Complex: 2+3i
+			{`IMSIN("2+3i")`, "9.154499146911428-4.168906959966565i"},
+
+			// j suffix
+			{`IMSIN("3+4j")`, "3.853738037919377-27.016813258003932j"},
+
+			// Numeric input (not string)
+			{`IMSIN(1)`, "0.8414709848078965"},
+			{`IMSIN(0)`, "0"},
+
+			// COMPLEX composition
+			{`IMSIN(COMPLEX(1,1))`, "1.2984575814159773+0.6349639147847361i"},
+			{`IMSIN(COMPLEX(0,0))`, "0"},
+			{`IMSIN(COMPLEX(3,4))`, "3.853738037919377-27.016813258003932i"},
+			{`IMSIN(COMPLEX(0,1))`, "1.1752011936438014i"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMSIN("invalid")`, ErrValNUM},
+			{`IMSIN("")`, ErrValNUM},
+			{`IMSIN("abc")`, ErrValNUM},
+			{`IMSIN("3+4")`, ErrValNUM},
+			{`IMSIN("3+4k")`, ErrValNUM},
+			{`IMSIN("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMSIN(TRUE)`, ErrValVALUE},
+			{`IMSIN(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMSIN()`, ErrValVALUE},
+			{`IMSIN("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMSIN(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMSIN(1/0) = %v, want error", got)
+		}
+	})
+}
+
+func TestIMCOS(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Pure real: zero → cos(0) = 1
+			{`IMCOS("0")`, "1"},
+
+			// Pure real: positive
+			{`IMCOS("1")`, "0.5403023058681398"},
+
+			// Pure real: negative (cos is even)
+			{`IMCOS("-1")`, "0.5403023058681398"},
+
+			// Pure real: pi → -1
+			{`IMCOS("3.14159265358979")`, "-1"},
+
+			// Pure imaginary: positive → cosh(1)
+			{`IMCOS("i")`, "1.5430806348152437"},
+
+			// Pure imaginary: negative → cosh(1) (cos is even)
+			{`IMCOS("-i")`, "1.5430806348152437"},
+
+			// Pure imaginary: 2i → cosh(2)
+			{`IMCOS("2i")`, "3.7621956910836314"},
+
+			// Complex: 1+i
+			{`IMCOS("1+i")`, "0.8337300251311491-0.9888977057628651i"},
+
+			// Complex: 1-i
+			{`IMCOS("1-i")`, "0.8337300251311491+0.9888977057628651i"},
+
+			// Complex: -1-i (cos(-z)=cos(z))
+			{`IMCOS("-1-i")`, "0.8337300251311491-0.9888977057628651i"},
+
+			// Complex: 3+4i
+			{`IMCOS("3+4i")`, "-27.034945603074224-3.851153334811777i"},
+
+			// Complex: 2+3i
+			{`IMCOS("2+3i")`, "-4.189625690968807-9.109227893755337i"},
+
+			// j suffix
+			{`IMCOS("3+4j")`, "-27.034945603074224-3.851153334811777j"},
+
+			// Numeric input (not string)
+			{`IMCOS(1)`, "0.5403023058681398"},
+			{`IMCOS(0)`, "1"},
+
+			// COMPLEX composition
+			{`IMCOS(COMPLEX(1,1))`, "0.8337300251311491-0.9888977057628651i"},
+			{`IMCOS(COMPLEX(0,0))`, "1"},
+			{`IMCOS(COMPLEX(3,4))`, "-27.034945603074224-3.851153334811777i"},
+			{`IMCOS(COMPLEX(0,1))`, "1.5430806348152437"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMCOS("invalid")`, ErrValNUM},
+			{`IMCOS("")`, ErrValNUM},
+			{`IMCOS("abc")`, ErrValNUM},
+			{`IMCOS("3+4")`, ErrValNUM},
+			{`IMCOS("3+4k")`, ErrValNUM},
+			{`IMCOS("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMCOS(TRUE)`, ErrValVALUE},
+			{`IMCOS(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMCOS()`, ErrValVALUE},
+			{`IMCOS("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMCOS(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMCOS(1/0) = %v, want error", got)
+		}
+	})
+}
+
+func TestIMTAN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Pure real: zero
+			{`IMTAN("0")`, "0"},
+
+			// Pure real: positive
+			{`IMTAN("1")`, "1.557407724654902"},
+
+			// Pure real: negative
+			{`IMTAN("-1")`, "-1.557407724654902"},
+
+			// Pure imaginary: positive → tanh(1)*i
+			{`IMTAN("i")`, "0.761594155955765i"},
+
+			// Pure imaginary: negative → -tanh(1)*i
+			{`IMTAN("-i")`, "-0.761594155955765i"},
+
+			// Pure imaginary: 2i → tanh(2)*i
+			{`IMTAN("2i")`, "0.9640275800758168i"},
+
+			// Complex: 1+i
+			{`IMTAN("1+i")`, "0.2717525853195117+1.0839233273386948i"},
+
+			// Complex: 1-i
+			{`IMTAN("1-i")`, "0.2717525853195117-1.0839233273386948i"},
+
+			// Complex: 3+4i
+			{`IMTAN("3+4i")`, "-0.00018734620462947842+0.9993559873814732i"},
+
+			// Complex: 2+3i
+			{`IMTAN("2+3i")`, "-0.0037640256415042484+1.0032386273536098i"},
+
+			// j suffix
+			{`IMTAN("3+4j")`, "-0.00018734620462947842+0.9993559873814732j"},
+
+			// Numeric input (not string)
+			{`IMTAN(1)`, "1.557407724654902"},
+			{`IMTAN(0)`, "0"},
+
+			// COMPLEX composition
+			{`IMTAN(COMPLEX(1,1))`, "0.2717525853195117+1.0839233273386948i"},
+			{`IMTAN(COMPLEX(0,0))`, "0"},
+			{`IMTAN(COMPLEX(3,4))`, "-0.00018734620462947842+0.9993559873814732i"},
+			{`IMTAN(COMPLEX(0,1))`, "0.761594155955765i"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMTAN("invalid")`, ErrValNUM},
+			{`IMTAN("")`, ErrValNUM},
+			{`IMTAN("abc")`, ErrValNUM},
+			{`IMTAN("3+4")`, ErrValNUM},
+			{`IMTAN("3+4k")`, ErrValNUM},
+			{`IMTAN("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMTAN(TRUE)`, ErrValVALUE},
+			{`IMTAN(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMTAN()`, ErrValVALUE},
+			{`IMTAN("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMTAN(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMTAN(1/0) = %v, want error", got)
+		}
+	})
+}
