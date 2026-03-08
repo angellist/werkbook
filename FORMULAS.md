@@ -113,7 +113,7 @@ Werkbook supports **343** Excel formula functions.
 | F.INV.RT | Statistical | 21 |
 | FACT | Math & Trig | 28 |
 | FACTDOUBLE | Math & Trig | 30 |
-| FALSE | Logical | - |
+| FALSE | Logical | 11 |
 | FILTER | Lookup & Reference | 31 |
 | FIND | Text | 7 |
 | FISHER | Statistical | 15 |
@@ -193,8 +193,8 @@ Werkbook supports **343** Excel formula functions.
 | MIRR | Financial | 24 |
 | MMULT | Math & Trig | 38 |
 | MOD | Math & Trig | 16 |
-| MODE | Statistical | - |
-| MODE.SNGL | Statistical | - |
+| MODE | Statistical | 19 |
+| MODE.SNGL | Statistical | 19 |
 | MONTH | Date & Time | 5 |
 | MROUND | Math & Trig | 38 |
 | MULTINOMIAL | Math & Trig | 36 |
@@ -317,7 +317,7 @@ Werkbook supports **343** Excel formula functions.
 | TRANSPOSE | Lookup & Reference | 35 |
 | TRIM | Text | 18 |
 | TRIMMEAN | Statistical | 23 |
-| TRUE | Logical | - |
+| TRUE | Logical | 10 |
 | TRUNC | Math & Trig | 34 |
 | TYPE | Information | 22 |
 | UNIQUE | Lookup & Reference | 29 |
