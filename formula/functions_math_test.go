@@ -8311,3 +8311,101 @@ func TestPI(t *testing.T) {
 		})
 	}
 }
+
+func TestRADIANS(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Zero
+		{"zero", "RADIANS(0)", 0, 0},
+
+		// Standard degree-to-radian conversions
+		{"30_deg", "RADIANS(30)", math.Pi / 6, 1e-10},
+		{"45_deg", "RADIANS(45)", math.Pi / 4, 1e-10},
+		{"60_deg", "RADIANS(60)", math.Pi / 3, 1e-10},
+		{"90_deg", "RADIANS(90)", math.Pi / 2, 1e-10},
+		{"120_deg", "RADIANS(120)", 2 * math.Pi / 3, 1e-10},
+		{"180_deg", "RADIANS(180)", math.Pi, 1e-10},
+		{"270_deg", "RADIANS(270)", 3 * math.Pi / 2, 1e-10},
+		{"360_deg", "RADIANS(360)", 2 * math.Pi, 1e-10},
+
+		// Negative angles
+		{"neg_90", "RADIANS(-90)", -math.Pi / 2, 1e-10},
+		{"neg_180", "RADIANS(-180)", -math.Pi, 1e-10},
+		{"neg_360", "RADIANS(-360)", -2 * math.Pi, 1e-10},
+
+		// Large values
+		{"720_deg", "RADIANS(720)", 4 * math.Pi, 1e-10},
+		{"large", "RADIANS(36000)", 200 * math.Pi, 1e-8},
+		{"very_large", "RADIANS(1000000)", 1000000 * math.Pi / 180, 1e-6},
+
+		// Decimal degrees
+		{"decimal_45_5", "RADIANS(45.5)", 45.5 * math.Pi / 180, 1e-10},
+		{"decimal_0_1", "RADIANS(0.1)", 0.1 * math.Pi / 180, 1e-15},
+
+		// Boolean coercion
+		{"bool_true", "RADIANS(TRUE)", math.Pi / 180, 1e-15},
+		{"bool_false", "RADIANS(FALSE)", 0, 0},
+
+		// String coercion
+		{"string_90", `RADIANS("90")`, math.Pi / 2, 1e-10},
+		{"string_neg_180", `RADIANS("-180")`, -math.Pi, 1e-10},
+
+		// Expression argument
+		{"expr_mul", "RADIANS(2*90)", math.Pi, 1e-10},
+		{"expr_add", "RADIANS(45+45)", math.Pi / 2, 1e-10},
+
+		// Excel doc example
+		{"doc_ex1", "RADIANS(270)", 3 * math.Pi / 2, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "RADIANS()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "RADIANS(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `RADIANS("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "RADIANS(1/0)", ErrValDIV0},
+		{"err_na", "RADIANS(NA())", ErrValNA},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}

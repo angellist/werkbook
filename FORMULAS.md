@@ -242,7 +242,7 @@ Werkbook supports **343** Excel formula functions.
 | QUARTILE.EXC | Statistical | 27 |
 | QUARTILE.INC | Statistical | 5 |
 | QUOTIENT | Math & Trig | - |
-| RADIANS | Math & Trig | 1 |
+| RADIANS | Math & Trig | 30 |
 | RAND | Math & Trig | 1 |
 | RANDBETWEEN | Math & Trig | 1 |
 | RANK | Statistical | - |
