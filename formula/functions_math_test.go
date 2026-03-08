@@ -5303,14 +5303,39 @@ func TestACOS(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
+		// Key identities
 		{"acos_1", "ACOS(1)", 0, 0},
 		{"acos_0", "ACOS(0)", math.Pi / 2, 1e-10},
 		{"acos_neg1", "ACOS(-1)", math.Pi, 1e-10},
-		{"acos_0.5", "ACOS(0.5)", math.Pi / 3, 1e-10},
-		{"acos_neg0.5", "ACOS(-0.5)", 2 * math.Pi / 3, 1e-10},
+
+		// Well-known angles
+		{"acos_0.5_pi_over_3", "ACOS(0.5)", math.Pi / 3, 1e-10},
+		{"acos_neg0.5_2pi_over_3", "ACOS(-0.5)", 2 * math.Pi / 3, 1e-10},
+		{"acos_sqrt2_over_2_pi_over_4", "ACOS(SQRT(2)/2)", math.Pi / 4, 1e-10},
+		{"acos_sqrt3_over_2_pi_over_6", "ACOS(SQRT(3)/2)", math.Pi / 6, 1e-10},
+		{"acos_neg_sqrt2_over_2_3pi_over_4", "ACOS(-SQRT(2)/2)", 3 * math.Pi / 4, 1e-10},
+		{"acos_neg_sqrt3_over_2_5pi_over_6", "ACOS(-SQRT(3)/2)", 5 * math.Pi / 6, 1e-10},
+
+		// Values between -1 and 1
+		{"acos_0.25", "ACOS(0.25)", math.Acos(0.25), 1e-10},
+		{"acos_0.75", "ACOS(0.75)", math.Acos(0.75), 1e-10},
+		{"acos_neg0.25", "ACOS(-0.25)", math.Acos(-0.25), 1e-10},
+		{"acos_neg0.75", "ACOS(-0.75)", math.Acos(-0.75), 1e-10},
+		{"acos_near_1", "ACOS(0.99)", math.Acos(0.99), 1e-10},
+		{"acos_near_neg1", "ACOS(-0.99)", math.Acos(-0.99), 1e-10},
+
+		// Boolean coercion: TRUE->1 (ACOS=0), FALSE->0 (ACOS=PI/2)
 		{"acos_bool_true", "ACOS(TRUE)", 0, 0},
 		{"acos_bool_false", "ACOS(FALSE)", math.Pi / 2, 1e-10},
+
+		// String coercion
 		{"acos_string_num", `ACOS("0.5")`, math.Pi / 3, 1e-10},
+		{"acos_string_neg", `ACOS("-0.5")`, 2 * math.Pi / 3, 1e-10},
+		{"acos_string_zero", `ACOS("0")`, math.Pi / 2, 1e-10},
+		{"acos_string_one", `ACOS("1")`, 0, 0},
+
+		// Excel doc example: ACOS(-0.5) = 2.094395102
+		{"doc_example_neg0.5", "ACOS(-0.5)", 2.094395102, 1e-6},
 	}
 
 	for _, tt := range numTests {
@@ -5323,8 +5348,14 @@ func TestACOS(t *testing.T) {
 			if got.Type != ValueNumber {
 				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
 			}
-			if math.Abs(got.Num-tt.want) > tt.tol {
-				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			if tt.tol == 0 {
+				if got.Num != tt.want {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+				}
+			} else {
+				if math.Abs(got.Num-tt.want) > tt.tol {
+					t.Errorf("Eval(%q) = %g, want %g (tol %g)", tt.formula, got.Num, tt.want, tt.tol)
+				}
 			}
 		})
 	}
@@ -5334,12 +5365,23 @@ func TestACOS(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
+		// Out of range
 		{"out_of_range_high", "ACOS(1.1)", ErrValNUM},
 		{"out_of_range_low", "ACOS(-1.1)", ErrValNUM},
+		{"out_of_range_2", "ACOS(2)", ErrValNUM},
+		{"out_of_range_neg2", "ACOS(-2)", ErrValNUM},
 		{"out_of_range_large", "ACOS(100)", ErrValNUM},
+		{"out_of_range_large_neg", "ACOS(-100)", ErrValNUM},
+
+		// Wrong number of arguments
 		{"no_args", "ACOS()", ErrValVALUE},
 		{"too_many_args", "ACOS(1,2)", ErrValVALUE},
+
+		// Non-numeric string
 		{"string_non_num", `ACOS("abc")`, ErrValVALUE},
+
+		// Error propagation
+		{"error_propagation_na", "ACOS(#N/A)", ErrValNA},
 	}
 
 	for _, tt := range errTests {
