@@ -5181,6 +5181,86 @@ func TestSQRT(t *testing.T) {
 	}
 }
 
+func TestSQRTPI(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// Excel doc examples
+		{"sqrtpi_1", "SQRTPI(1)", math.Sqrt(math.Pi)},
+		{"sqrtpi_2", "SQRTPI(2)", math.Sqrt(2 * math.Pi)},
+		// Zero
+		{"sqrtpi_0", "SQRTPI(0)", 0},
+		// Small values
+		{"sqrtpi_0.5", "SQRTPI(0.5)", math.Sqrt(0.5 * math.Pi)},
+		{"sqrtpi_0.1", "SQRTPI(0.1)", math.Sqrt(0.1 * math.Pi)},
+		{"sqrtpi_0.01", "SQRTPI(0.01)", math.Sqrt(0.01 * math.Pi)},
+		// Integer values
+		{"sqrtpi_3", "SQRTPI(3)", math.Sqrt(3 * math.Pi)},
+		{"sqrtpi_4", "SQRTPI(4)", math.Sqrt(4 * math.Pi)},
+		{"sqrtpi_10", "SQRTPI(10)", math.Sqrt(10 * math.Pi)},
+		// Large values
+		{"sqrtpi_100", "SQRTPI(100)", math.Sqrt(100 * math.Pi)},
+		{"sqrtpi_1000000", "SQRTPI(1000000)", math.Sqrt(1000000 * math.Pi)},
+		// String coercion
+		{"string_coerce_1", "SQRTPI(\"1\")", math.Sqrt(math.Pi)},
+		{"string_coerce_2", "SQRTPI(\"2\")", math.Sqrt(2 * math.Pi)},
+		{"string_coerce_decimal", "SQRTPI(\"0.5\")", math.Sqrt(0.5 * math.Pi)},
+		// Boolean coercion
+		{"bool_true", "SQRTPI(TRUE)", math.Sqrt(math.Pi)},
+		{"bool_false", "SQRTPI(FALSE)", 0},
+		// Known approximate values
+		{"approx_1", "SQRTPI(1)", 1.7724538509055159},
+		{"approx_2", "SQRTPI(2)", 2.5066282746310002},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q) = type %v, want ValueNumber", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.wantNum) > 1e-10 {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"negative", "SQRTPI(-1)", ErrValNUM},
+		{"negative_large", "SQRTPI(-100)", ErrValNUM},
+		{"negative_small", "SQRTPI(-0.001)", ErrValNUM},
+		{"no_args", "SQRTPI()", ErrValVALUE},
+		{"too_many_args", "SQRTPI(1,2)", ErrValVALUE},
+		{"non_numeric", "SQRTPI(\"abc\")", ErrValVALUE},
+		{"error_propagation", "SQRTPI(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestLOG(t *testing.T) {
 	resolver := &mockResolver{}
 

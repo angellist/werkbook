@@ -276,7 +276,7 @@ Werkbook supports **343** Excel formula functions.
 | SORT | Logical | 25 |
 | SORTBY | Logical | 2 |
 | SQRT | Math & Trig | 29 |
-| SQRTPI | Math & Trig | - |
+| SQRTPI | Math & Trig | 25 |
 | STANDARDIZE | Statistical | 16 |
 | STDEV | Statistical | - |
 | STDEV.P | Statistical | - |
