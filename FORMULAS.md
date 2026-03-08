@@ -102,7 +102,7 @@ Werkbook supports **343** Excel formula functions.
 | ERF.PRECISE | Math & Trig | 18 |
 | ERFC | Math & Trig | 18 |
 | ERFC.PRECISE | Math & Trig | 18 |
-| ERROR.TYPE | Information | - |
+| ERROR.TYPE | Information | 17 |
 | EVEN | Math & Trig | 34 |
 | EXACT | Text | 32 |
 | EXP | Math & Trig | 29 |
@@ -319,7 +319,7 @@ Werkbook supports **343** Excel formula functions.
 | TRIMMEAN | Statistical | 23 |
 | TRUE | Logical | - |
 | TRUNC | Math & Trig | 34 |
-| TYPE | Information | - |
+| TYPE | Information | 22 |
 | UNIQUE | Lookup & Reference | 29 |
 | UPPER | Text | 23 |
 | VALUE | Text | - |

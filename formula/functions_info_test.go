@@ -2403,3 +2403,163 @@ func TestNA(t *testing.T) {
 		}
 	})
 }
+
+func TestERROR_TYPE(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		wantTyp ValueType
+		wantNum float64
+		wantErr ErrorValue
+	}{
+		// Each error type maps to a specific number
+		{"null_error", `ERROR.TYPE(#NULL!)`, ValueNumber, 1, 0},
+		{"div0_error", `ERROR.TYPE(1/0)`, ValueNumber, 2, 0},
+		{"value_error", `ERROR.TYPE(#VALUE!)`, ValueNumber, 3, 0},
+		{"ref_error", `ERROR.TYPE(#REF!)`, ValueNumber, 4, 0},
+		{"name_error", `ERROR.TYPE(#NAME?)`, ValueNumber, 5, 0},
+		{"num_error", `ERROR.TYPE(#NUM!)`, ValueNumber, 6, 0},
+		{"na_error", `ERROR.TYPE(#N/A)`, ValueNumber, 7, 0},
+		{"na_function", `ERROR.TYPE(NA())`, ValueNumber, 7, 0},
+
+		// Division by zero via expression
+		{"div0_expr", `ERROR.TYPE(0/0)`, ValueNumber, 2, 0},
+
+		// Non-error values return #N/A
+		{"number", `ERROR.TYPE(42)`, ValueError, 0, ErrValNA},
+		{"text", `ERROR.TYPE("hello")`, ValueError, 0, ErrValNA},
+		{"bool_true", `ERROR.TYPE(TRUE)`, ValueError, 0, ErrValNA},
+		{"bool_false", `ERROR.TYPE(FALSE)`, ValueError, 0, ErrValNA},
+		{"zero", `ERROR.TYPE(0)`, ValueError, 0, ErrValNA},
+		{"empty_string", `ERROR.TYPE("")`, ValueError, 0, ErrValNA},
+
+		// Wrong argument count returns #VALUE!
+		{"no_args", `ERROR.TYPE()`, ValueError, 0, ErrValVALUE},
+		{"two_args", `ERROR.TYPE(1,2)`, ValueError, 0, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.wantTyp == ValueNumber {
+				if got.Type != ValueNumber || got.Num != tt.wantNum {
+					t.Errorf("%s = %v, want %v", tt.formula, got, tt.wantNum)
+				}
+			} else {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func TestTYPE(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		wantTyp ValueType
+		wantNum float64
+		wantErr ErrorValue
+	}{
+		// Number -> 1
+		{"positive_integer", `TYPE(42)`, ValueNumber, 1, 0},
+		{"zero", `TYPE(0)`, ValueNumber, 1, 0},
+		{"negative", `TYPE(-5)`, ValueNumber, 1, 0},
+		{"decimal", `TYPE(3.14)`, ValueNumber, 1, 0},
+		{"arithmetic_expr", `TYPE(1+2)`, ValueNumber, 1, 0},
+
+		// String -> 2
+		{"text", `TYPE("hello")`, ValueNumber, 2, 0},
+		{"empty_string", `TYPE("")`, ValueNumber, 2, 0},
+		{"numeric_string", `TYPE("123")`, ValueNumber, 2, 0},
+
+		// Boolean -> 4
+		{"true", `TYPE(TRUE)`, ValueNumber, 4, 0},
+		{"false", `TYPE(FALSE)`, ValueNumber, 4, 0},
+		{"comparison", `TYPE(1>0)`, ValueNumber, 4, 0},
+
+		// Error -> 16
+		{"error_div0", `TYPE(1/0)`, ValueNumber, 16, 0},
+		{"error_value", `TYPE(#VALUE!)`, ValueNumber, 16, 0},
+		{"error_na", `TYPE(#N/A)`, ValueNumber, 16, 0},
+		{"error_ref", `TYPE(#REF!)`, ValueNumber, 16, 0},
+		{"error_name", `TYPE(#NAME?)`, ValueNumber, 16, 0},
+		{"error_num", `TYPE(#NUM!)`, ValueNumber, 16, 0},
+		{"error_null", `TYPE(#NULL!)`, ValueNumber, 16, 0},
+
+		// Wrong argument count returns #VALUE!
+		{"no_args", `TYPE()`, ValueError, 0, ErrValVALUE},
+		{"two_args", `TYPE(1,2)`, ValueError, 0, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.wantTyp == ValueNumber {
+				if got.Type != ValueNumber || got.Num != tt.wantNum {
+					t.Errorf("%s = %v, want %v", tt.formula, got, tt.wantNum)
+				}
+			} else {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			}
+		})
+	}
+
+	// TYPE(array) -> 64 -- test with a cell range that produces an array
+	t.Run("array_type", func(t *testing.T) {
+		r := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   3,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     r,
+		}
+		cf := evalCompile(t, `TYPE(A1:A2)`)
+		got, err := Eval(cf, r, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 64 {
+			t.Errorf("TYPE(A1:A2) = %v, want 64", got)
+		}
+	})
+
+	// TYPE on an empty cell reference -> 1 (empty treated as number)
+	t.Run("empty_cell", func(t *testing.T) {
+		r := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     r,
+		}
+		cf := evalCompile(t, `TYPE(A1)`)
+		got, err := Eval(cf, r, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(A1) empty = %v, want 1", got)
+		}
+	})
+}
