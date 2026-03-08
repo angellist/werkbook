@@ -2641,6 +2641,14 @@ func durationCalc(settlement, maturity, coupon, yld float64, freq, basis int) fl
 	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
 	e := coupdaysRaw(settlement, st, mt, freq, basis)
 
+	// For basis 2 (actual/360) and 3 (actual/365), coupdaysncRaw returns
+	// actual days but coupdaysRaw returns a fixed value (360/freq or 365/freq).
+	// The DSC/E fraction must use a consistent convention so the ratio
+	// stays in [0,1]. Use actual period days for E in these cases.
+	if basis == 2 || basis == 3 {
+		e = coupdaysRaw(settlement, st, mt, freq, 1) // actual/actual
+	}
+
 	// Fraction of the first coupon period remaining.
 	accruedFrac := dsc / e
 
