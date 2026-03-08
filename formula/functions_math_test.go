@@ -5890,6 +5890,98 @@ func TestFACT(t *testing.T) {
 	}
 }
 
+func TestFACTDOUBLE(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		// Base cases
+		{"zero", "FACTDOUBLE(0)", 1},
+		{"one", "FACTDOUBLE(1)", 1},
+		// Even numbers: n!! = n*(n-2)*(n-4)...(4)(2)
+		{"two", "FACTDOUBLE(2)", 2},
+		{"four", "FACTDOUBLE(4)", 8},        // 4*2
+		{"six", "FACTDOUBLE(6)", 48},        // 6*4*2
+		{"eight", "FACTDOUBLE(8)", 384},     // 8*6*4*2
+		{"ten", "FACTDOUBLE(10)", 3840},     // 10*8*6*4*2
+		// Odd numbers: n!! = n*(n-2)*(n-4)...(3)(1)
+		{"three", "FACTDOUBLE(3)", 3},       // 3*1
+		{"five", "FACTDOUBLE(5)", 15},       // 5*3*1
+		{"seven", "FACTDOUBLE(7)", 105},     // 7*5*3*1
+		{"nine", "FACTDOUBLE(9)", 945},      // 9*7*5*3*1
+		// Larger values
+		{"fifteen", "FACTDOUBLE(15)", 2027025},     // 15*13*11*9*7*5*3*1
+		{"twenty", "FACTDOUBLE(20)", 3715891200},   // 20*18*16*14*12*10*8*6*4*2
+		// FACTDOUBLE(-1) = 1 by convention
+		{"negative_one", "FACTDOUBLE(-1)", 1},
+		// Decimal inputs — truncated to integer (Excel doc: non-integer is truncated)
+		{"decimal_5.9", "FACTDOUBLE(5.9)", 15},
+		{"decimal_6.1", "FACTDOUBLE(6.1)", 48},
+		{"decimal_0.7", "FACTDOUBLE(0.7)", 1},
+		{"decimal_1.999", "FACTDOUBLE(1.999)", 1},
+		// Negative decimal that truncates to 0 → FACTDOUBLE(0) = 1
+		{"negative_small_decimal", "FACTDOUBLE(-0.5)", 1},
+		// Boolean coercion
+		{"bool_true", "FACTDOUBLE(TRUE)", 1},
+		{"bool_false", "FACTDOUBLE(FALSE)", 1},
+		// String number coercion
+		{"string_7", `FACTDOUBLE("7")`, 105},
+		{"string_0", `FACTDOUBLE("0")`, 1},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.want {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		errVal  ErrorValue
+	}{
+		// Negative numbers < -1 → #NUM!
+		{"negative_two", "FACTDOUBLE(-2)", ErrValNUM},
+		{"negative_five", "FACTDOUBLE(-5)", ErrValNUM},
+		// Negative decimal that truncates to < -1 → #NUM!
+		{"negative_decimal", "FACTDOUBLE(-2.5)", ErrValNUM},
+		// Non-numeric string → #VALUE!
+		{"non_numeric_string", `FACTDOUBLE("hello")`, ErrValVALUE},
+		// No arguments → #VALUE!
+		{"no_args", "FACTDOUBLE()", ErrValVALUE},
+		// Too many arguments → #VALUE!
+		{"too_many_args", "FACTDOUBLE(5,2)", ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "FACTDOUBLE(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.errVal {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.errVal)
+			}
+		})
+	}
+}
+
 func TestEVEN(t *testing.T) {
 	resolver := &mockResolver{}
 

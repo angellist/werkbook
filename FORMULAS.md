@@ -112,7 +112,7 @@ Werkbook supports **343** Excel formula functions.
 | F.INV | Statistical | 36 |
 | F.INV.RT | Statistical | 21 |
 | FACT | Math & Trig | 28 |
-| FACTDOUBLE | Math & Trig | - |
+| FACTDOUBLE | Math & Trig | 30 |
 | FALSE | Logical | - |
 | FILTER | Lookup & Reference | 31 |
 | FIND | Text | 7 |
