@@ -24,7 +24,7 @@ Werkbook supports **343** Excel formula functions.
 | AVERAGEA | Statistical | 24 |
 | AVERAGEIF | Statistical | 42 |
 | AVERAGEIFS | Statistical | - |
-| BASE | Math & Trig | - |
+| BASE | Math & Trig | 31 |
 | BETA.DIST | Statistical | 43 |
 | BETA.INV | Statistical | 42 |
 | BIN2DEC | Engineering | 38 |
@@ -118,7 +118,7 @@ Werkbook supports **343** Excel formula functions.
 | FIND | Text | 7 |
 | FISHER | Statistical | 15 |
 | FISHERINV | Statistical | 15 |
-| FIXED | Text | - |
+| FIXED | Text | 32 |
 | FLOOR | Math & Trig | 50 |
 | FLOOR.MATH | Math & Trig | 37 |
 | FLOOR.PRECISE | Math & Trig | 36 |

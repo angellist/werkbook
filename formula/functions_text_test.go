@@ -4233,3 +4233,109 @@ func TestEXACTErrors(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// FIXED comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestFIXED(t *testing.T) {
+	resolver := &mockResolver{}
+
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Basic with commas (default no_commas=FALSE)
+		{name: "basic_one_decimal", formula: `FIXED(1234.567, 1)`, want: "1,234.6"},
+		{name: "basic_two_decimals", formula: `FIXED(1234.567, 2)`, want: "1,234.57"},
+		{name: "default_decimals", formula: `FIXED(44.332)`, want: "44.33"},
+		{name: "zero_decimals", formula: `FIXED(1234.567, 0)`, want: "1,235"},
+
+		// no_commas = TRUE
+		{name: "no_commas_true", formula: `FIXED(1234.567, 1, TRUE)`, want: "1234.6"},
+		{name: "no_commas_two_dec", formula: `FIXED(1234.567, 2, TRUE)`, want: "1234.57"},
+
+		// no_commas = FALSE (explicit)
+		{name: "no_commas_false", formula: `FIXED(1234.567, 2, FALSE)`, want: "1,234.57"},
+
+		// Negative decimals (rounds to the left of decimal point)
+		{name: "neg_dec_minus1", formula: `FIXED(1234.567, -1)`, want: "1,230"},
+		{name: "neg_dec_minus2", formula: `FIXED(1234.567, -2)`, want: "1,200"},
+		{name: "neg_dec_minus3", formula: `FIXED(1234.567, -3)`, want: "1,000"},
+		{name: "neg_dec_no_commas", formula: `FIXED(-1234.567, -1, TRUE)`, want: "-1230"},
+
+		// Negative numbers
+		{name: "negative_number", formula: `FIXED(-1234.567, 2)`, want: "-1,234.57"},
+		{name: "negative_zero_dec", formula: `FIXED(-1234.567, 0)`, want: "-1,235"},
+		{name: "negative_no_commas", formula: `FIXED(-1234.567, 2, TRUE)`, want: "-1234.57"},
+
+		// Zero
+		{name: "zero_two_dec", formula: `FIXED(0, 2)`, want: "0.00"},
+		{name: "zero_default", formula: `FIXED(0)`, want: "0.00"},
+		{name: "zero_zero_dec", formula: `FIXED(0, 0)`, want: "0"},
+
+		// Small values
+		{name: "small_positive", formula: `FIXED(0.5, 2)`, want: "0.50"},
+		{name: "small_negative", formula: `FIXED(-0.5, 2)`, want: "-0.50"},
+
+		// Large numbers with comma grouping
+		{name: "millions", formula: `FIXED(1234567.89, 2)`, want: "1,234,567.89"},
+		{name: "millions_no_dec", formula: `FIXED(1000000, 0)`, want: "1,000,000"},
+
+		// Many decimal places
+		{name: "many_decimals", formula: `FIXED(1.5, 5)`, want: "1.50000"},
+
+		// Boolean coercion
+		{name: "bool_true", formula: `FIXED(TRUE, 2)`, want: "1.00"},
+		{name: "bool_false", formula: `FIXED(FALSE, 2)`, want: "0.00"},
+
+		// String coercion
+		{name: "string_number", formula: `FIXED("1234.567", 2)`, want: "1,234.57"},
+
+		// Negative zero edge case: -0.001 with 2 decimals produces "-0.00"
+		// (Go's math.Round preserves the sign of -0.0)
+		{name: "neg_zero_round", formula: `FIXED(-0.001, 2)`, want: "-0.00"},
+
+		// Rounding up at boundary
+		{name: "round_up_boundary", formula: `FIXED(1250, -2)`, want: "1,300"},
+		{name: "round_down", formula: `FIXED(1249, -2)`, want: "1,200"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+			}
+		})
+	}
+
+	// Error cases
+	errTests := []struct {
+		name    string
+		formula string
+	}{
+		{name: "no_args", formula: `FIXED()`},
+		{name: "too_many_args", formula: `FIXED(1,2,TRUE,4)`},
+		{name: "non_numeric_string", formula: `FIXED("abc")`},
+		{name: "non_numeric_decimals", formula: `FIXED(1234, "abc")`},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError {
+				t.Errorf("Eval(%q) = %v, want error", tt.formula, got)
+			}
+		})
+	}
+}
