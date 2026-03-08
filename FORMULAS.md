@@ -19,7 +19,7 @@ Werkbook supports **343** Excel formula functions.
 | ATAN | Math & Trig | 25 |
 | ATAN2 | Math & Trig | 30 |
 | ATANH | Math & Trig | 31 |
-| AVEDEV | Statistical | - |
+| AVEDEV | Statistical | 22 |
 | AVERAGE | Statistical | 28 |
 | AVERAGEA | Statistical | 24 |
 | AVERAGEIF | Statistical | 42 |
