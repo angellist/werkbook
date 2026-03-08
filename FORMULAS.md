@@ -159,7 +159,7 @@ Werkbook supports **343** Excel formula functions.
 | ISERROR | Information | 21 |
 | ISEVEN | Information | 4 |
 | ISFORMULA | Information | 7 |
-| ISLOGICAL | Information | - |
+| ISLOGICAL | Information | 27 |
 | ISNA | Information | - |
 | ISNONTEXT | Information | - |
 | ISNUMBER | Information | 23 |

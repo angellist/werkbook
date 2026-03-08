@@ -1665,3 +1665,162 @@ func TestISNUMBER(t *testing.T) {
 		}
 	})
 }
+
+func TestISLOGICAL(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    bool
+	}{
+		// Boolean literals → TRUE
+		{"true_literal", `ISLOGICAL(TRUE)`, true},
+		{"false_literal", `ISLOGICAL(FALSE)`, true},
+
+		// Comparison expressions produce boolean results → TRUE
+		{"greater_than", `ISLOGICAL(1>0)`, true},
+		{"less_than", `ISLOGICAL(0<1)`, true},
+		{"equal_comparison", `ISLOGICAL(1=1)`, true},
+		{"not_equal", `ISLOGICAL(1<>2)`, true},
+		{"greater_equal", `ISLOGICAL(5>=5)`, true},
+		{"less_equal", `ISLOGICAL(3<=4)`, true},
+
+		// Numbers are NOT logical → FALSE
+		{"integer_one", `ISLOGICAL(1)`, false},
+		{"integer_zero", `ISLOGICAL(0)`, false},
+		{"negative_number", `ISLOGICAL(-1)`, false},
+		{"decimal", `ISLOGICAL(3.14)`, false},
+		{"large_number", `ISLOGICAL(1000000)`, false},
+
+		// Strings are NOT logical → FALSE
+		{"string_true", `ISLOGICAL("TRUE")`, false},
+		{"string_false", `ISLOGICAL("FALSE")`, false},
+		{"string_text", `ISLOGICAL("hello")`, false},
+		{"empty_string", `ISLOGICAL("")`, false},
+		{"numeric_string", `ISLOGICAL("1")`, false},
+
+		// Arithmetic expressions produce numbers → FALSE
+		{"addition", `ISLOGICAL(1+1)`, false},
+		{"multiplication", `ISLOGICAL(2*3)`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool {
+				t.Fatalf("%s = %v (type %d), want bool", tt.formula, got, got.Type)
+			}
+			if got.Bool != tt.want {
+				t.Errorf("%s = %v, want %v", tt.formula, got.Bool, tt.want)
+			}
+		})
+	}
+
+	// Error values → FALSE (errors are not logical)
+	t.Run("error_div0", func(t *testing.T) {
+		cf := evalCompile(t, `ISLOGICAL(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool != false {
+			t.Errorf("ISLOGICAL(1/0) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("error_NA", func(t *testing.T) {
+		cf := evalCompile(t, `ISLOGICAL(#N/A)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool != false {
+			t.Errorf("ISLOGICAL(#N/A) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("error_VALUE", func(t *testing.T) {
+		cf := evalCompile(t, `ISLOGICAL(#VALUE!)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool != false {
+			t.Errorf("ISLOGICAL(#VALUE!) = %v, want FALSE", got)
+		}
+	})
+
+	// Cell reference containing a boolean → TRUE
+	t.Run("cell_with_true", func(t *testing.T) {
+		r := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     r,
+		}
+		cf := evalCompile(t, `ISLOGICAL(A1)`)
+		got, err := Eval(cf, r, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISLOGICAL(A1) with TRUE = %v, want TRUE", got)
+		}
+	})
+
+	// Cell reference containing a number → FALSE
+	t.Run("cell_with_number", func(t *testing.T) {
+		r := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     r,
+		}
+		cf := evalCompile(t, `ISLOGICAL(A1)`)
+		got, err := Eval(cf, r, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISLOGICAL(A1) with number = %v, want FALSE", got)
+		}
+	})
+
+	// Wrong argument count → #VALUE!
+	t.Run("no_args_error", func(t *testing.T) {
+		cf := evalCompile(t, `ISLOGICAL()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("ISLOGICAL() = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("too_many_args_error", func(t *testing.T) {
+		cf := evalCompile(t, `ISLOGICAL(TRUE,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("ISLOGICAL(TRUE,FALSE) = %v, want #VALUE!", got)
+		}
+	})
+}
