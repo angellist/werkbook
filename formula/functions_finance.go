@@ -2070,3 +2070,150 @@ func fnYielddisc(args []Value) (Value, error) {
 	yield := (redemption - pr) / pr * (bYear / dsm)
 	return NumberVal(yield), nil
 }
+
+// fnPricemat implements PRICEMAT(settlement, maturity, issue, rate, yld, [basis]).
+// Returns the price per $100 face value of a security that pays interest at maturity.
+// Formula: PRICEMAT = 100*(1 + DIM/B*rate) / (1 + DSM/B*yld) - 100*A/B*rate
+// where DSM = days from settlement to maturity, DIM = days from issue to maturity,
+// A = days from issue to settlement, B = annual basis days.
+func fnPricemat(args []Value) (Value, error) {
+	if len(args) < 5 || len(args) > 6 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	issueRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	rate, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	yld, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 6 {
+		b, e := CoerceNum(args[5])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if rate < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if yld < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	issue := math.Trunc(issueRaw)
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	dim, _ := dayCountBasis(issue, maturity, basis)
+	a, _ := dayCountBasis(issue, settlement, basis)
+
+	if bYear == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	denom := 1 + dsm/bYear*yld
+	if denom == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	price := 100*(1+dim/bYear*rate)/denom - 100*a/bYear*rate
+	return NumberVal(price), nil
+}
+
+// fnYieldmat implements YIELDMAT(settlement, maturity, issue, rate, pr, [basis]).
+// Returns the annual yield of a security that pays interest at maturity.
+// Formula: YIELDMAT = ((1 + DIM/B*rate) / (pr/100 + A/B*rate) - 1) * (B / DSM)
+// where DSM = days from settlement to maturity, DIM = days from issue to maturity,
+// A = days from issue to settlement, B = annual basis days.
+func fnYieldmat(args []Value) (Value, error) {
+	if len(args) < 5 || len(args) > 6 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	issueRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	rate, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	pr, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 6 {
+		b, e := CoerceNum(args[5])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if rate < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if pr <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	issue := math.Trunc(issueRaw)
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	dim, _ := dayCountBasis(issue, maturity, basis)
+	a, _ := dayCountBasis(issue, settlement, basis)
+
+	if bYear == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	if dsm == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	denom := pr/100 + a/bYear*rate
+	if denom == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	yield := ((1+dim/bYear*rate)/denom - 1) * (bYear / dsm)
+	return NumberVal(yield), nil
+}

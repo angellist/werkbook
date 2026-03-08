@@ -7926,3 +7926,522 @@ func TestYIELDDISC_ViaEval(t *testing.T) {
 		t.Errorf("got %f, want 0.052823", v.Num)
 	}
 }
+
+// === PRICEMAT ===
+
+func TestPRICEMAT_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// 2/15/2008 = 39493, 4/13/2008 = 39551, 11/11/2007 = 39397
+	// 3/15/2008 = 39522, 11/3/2008 = 39755, 11/8/2007 = 39394
+	// 1/1/2023 = 44927, 6/30/2023 = 45107, 12/31/2023 = 45291
+	// 1/1/2024 = 45292, 7/1/2024 = 45474
+	// 3/15/2023 = 45000, 6/1/2022 = 44713
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64 // custom tolerance; 0 means use default 0.01
+	}{
+		// --- Doc example ---
+		// PRICEMAT(2/15/2008, 4/13/2008, 11/11/2007, 0.061, 0.061, 0) = 99.98449...
+		{
+			name: "doc example basis 0",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061, 0),
+			want: 99.98449888,
+			tol:  0.0001,
+		},
+		// --- All 5 basis types with doc example dates ---
+		{
+			name: "basis 1 actual/actual",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061, 1),
+			want: 99.98468141,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 2 actual/360",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061, 2),
+			want: 99.98416906,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061, 3),
+			want: 99.98459776,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061, 4),
+			want: 99.98449888,
+			tol:  0.0001,
+		},
+		// --- Default basis (omitted = 0) ---
+		{
+			name: "default basis omitted",
+			args: numArgs(39493, 39551, 39397, 0.061, 0.061),
+			want: 99.98449888,
+			tol:  0.0001,
+		},
+		// --- rate=0 edge case ---
+		// With rate=0: price = 100/(1+DSM/B*yld)
+		{
+			name: "rate zero",
+			args: numArgs(39493, 39551, 39397, 0, 0.05, 0),
+			want: 99.20088179,
+			tol:  0.0001,
+		},
+		// --- yld=0 edge case ---
+		// With yld=0: denom=1, price = 100*(1+DIM/B*rate) - 100*A/B*rate
+		{
+			name: "yld zero",
+			args: numArgs(39493, 39551, 39397, 0.05, 0, 0),
+			want: 100.80555556,
+			tol:  0.0001,
+		},
+		// --- rate=0, yld=0 ---
+		{
+			name: "rate zero yld zero",
+			args: numArgs(39493, 39551, 39397, 0, 0, 0),
+			want: 100.0,
+			tol:  0.0001,
+		},
+		// --- Long range: settle=1/1/2023, mat=12/31/2023, issue=6/1/2022 ---
+		{
+			name: "long range basis 0",
+			args: numArgs(44927, 45291, 44713, 0.05, 0.06, 0),
+			want: 98.89150943,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 1",
+			args: numArgs(44927, 45291, 44713, 0.05, 0.06, 1),
+			want: 98.89353710,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 2",
+			args: numArgs(44927, 45291, 44713, 0.05, 0.06, 2),
+			want: 98.87671974,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 3",
+			args: numArgs(44927, 45291, 44713, 0.05, 0.06, 3),
+			want: 98.89353710,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 4",
+			args: numArgs(44927, 45291, 44713, 0.05, 0.06, 4),
+			want: 98.89441474,
+			tol:  0.0001,
+		},
+		// --- Short range: settle=3/15/2023, mat=6/30/2023, issue=1/1/2023 ---
+		{
+			name: "short range basis 0",
+			args: numArgs(45000, 45107, 44927, 0.04, 0.05, 0),
+			want: 99.70070728,
+			tol:  0.0001,
+		},
+		{
+			name: "short range basis 2",
+			args: numArgs(45000, 45107, 44927, 0.04, 0.05, 2),
+			want: 99.69525265,
+			tol:  0.0001,
+		},
+		// --- High rate/yield ---
+		{
+			name: "high rate and yield",
+			args: numArgs(39493, 39551, 39397, 0.20, 0.15, 0),
+			want: 100.66332158,
+			tol:  0.0001,
+		},
+		// --- Fractional dates get truncated ---
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39493.7, 39551.9, 39397.3, 0.061, 0.061, 0),
+			want: 99.98449888,
+			tol:  0.0001,
+		},
+		// --- Error cases ---
+		{
+			name:    "rate negative",
+			args:    numArgs(39493, 39551, 39397, -0.01, 0.061, 0),
+			wantErr: true,
+		},
+		{
+			name:    "yld negative",
+			args:    numArgs(39493, 39551, 39397, 0.061, -0.01, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39493, 39493, 39397, 0.061, 0.061, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39551, 39493, 39397, 0.061, 0.061, 0),
+			wantErr: true,
+		},
+		{
+			name:    "basis negative",
+			args:    numArgs(39493, 39551, 39397, 0.061, 0.061, -1),
+			wantErr: true,
+		},
+		{
+			name:    "basis 5",
+			args:    numArgs(39493, 39551, 39397, 0.061, 0.061, 5),
+			wantErr: true,
+		},
+		{
+			name:    "basis 99",
+			args:    numArgs(39493, 39551, 39397, 0.061, 0.061, 99),
+			wantErr: true,
+		},
+		{
+			name:    "too few args",
+			args:    numArgs(39493, 39551, 39397, 0.061),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39493, 39551, 39397, 0.061, 0.061, 0, 1),
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39551), NumberVal(39397), NumberVal(0.061), NumberVal(0.061), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39493), StringVal("xyz"), NumberVal(39397), NumberVal(0.061), NumberVal(0.061), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric issue",
+			args:    []Value{NumberVal(39493), NumberVal(39551), StringVal("abc"), NumberVal(0.061), NumberVal(0.061), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric rate",
+			args:    []Value{NumberVal(39493), NumberVal(39551), NumberVal(39397), StringVal("abc"), NumberVal(0.061), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric yld",
+			args:    []Value{NumberVal(39493), NumberVal(39551), NumberVal(39397), NumberVal(0.061), StringVal("abc"), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric basis",
+			args:    []Value{NumberVal(39493), NumberVal(39551), NumberVal(39397), NumberVal(0.061), NumberVal(0.061), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnPricemat(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestPRICEMAT_ViaEval(t *testing.T) {
+	// PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 0) = 99.98449...
+	cf := evalCompile(t, "PRICEMAT(DATE(2008,2,15), DATE(2008,4,13), DATE(2007,11,11), 0.061, 0.061, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-99.98449888) > 0.001 {
+		t.Errorf("got %f, want 99.98449888", v.Num)
+	}
+}
+
+// === YIELDMAT ===
+
+func TestYIELDMAT_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// 3/15/2008 = 39522, 11/3/2008 = 39755, 11/8/2007 = 39394
+	// 2/15/2008 = 39493, 4/13/2008 = 39551, 11/11/2007 = 39397
+	// 1/1/2023 = 44927, 6/30/2023 = 45107, 12/31/2023 = 45291
+	// 3/15/2023 = 45000, 6/1/2022 = 44713
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64 // custom tolerance; 0 means use default 0.01
+	}{
+		// --- Doc example ---
+		// YIELDMAT(3/15/2008, 11/3/2008, 11/8/2007, 0.0625, 100.0123, 0) = 0.060954
+		{
+			name: "doc example basis 0",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123, 0),
+			want: 0.06095433,
+			tol:  0.0001,
+		},
+		// --- All 5 basis types ---
+		{
+			name: "basis 1 actual/actual",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123, 1),
+			want: 0.06096363,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 2 actual/360",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123, 2),
+			want: 0.06094806,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123, 3),
+			want: 0.06096363,
+			tol:  0.0001,
+		},
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123, 4),
+			want: 0.06095433,
+			tol:  0.0001,
+		},
+		// --- Default basis (omitted = 0) ---
+		{
+			name: "default basis omitted",
+			args: numArgs(39522, 39755, 39394, 0.0625, 100.0123),
+			want: 0.06095433,
+			tol:  0.0001,
+		},
+		// --- rate=0 edge case ---
+		{
+			name: "rate zero",
+			args: numArgs(39522, 39755, 39394, 0, 100.0123, 0),
+			want: -0.00019419,
+			tol:  0.0001,
+		},
+		// --- pr small (well below par) ---
+		{
+			name: "pr equals 50",
+			args: numArgs(39522, 39755, 39394, 0.0625, 50, 0),
+			want: 1.63198152,
+			tol:  0.0001,
+		},
+		// --- pr large (above par) ---
+		{
+			name: "pr equals 150",
+			args: numArgs(39522, 39755, 39394, 0.0625, 150, 0),
+			want: -0.47762843,
+			tol:  0.0001,
+		},
+		// --- Long range: settle=1/1/2023, mat=12/31/2023, issue=6/1/2022 ---
+		{
+			name: "long range basis 0",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 0),
+			want: 0.04858300,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 1",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 1),
+			want: 0.04857599,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 2",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 2),
+			want: 0.04855678,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 3",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 3),
+			want: 0.04857599,
+			tol:  0.0001,
+		},
+		{
+			name: "long range basis 4",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 4),
+			want: 0.04858300,
+			tol:  0.0001,
+		},
+		// --- Short range: settle=3/15/2023, mat=6/30/2023, issue=1/1/2023 ---
+		{
+			name: "short range basis 0",
+			args: numArgs(45000, 45107, 44927, 0.04, 99.95, 0),
+			want: 0.04139463,
+			tol:  0.0001,
+		},
+		{
+			name: "short range basis 3",
+			args: numArgs(45000, 45107, 44927, 0.04, 99.95, 3),
+			want: 0.04139514,
+			tol:  0.0001,
+		},
+		// --- High rate ---
+		{
+			name: "high rate pr 105",
+			args: numArgs(39522, 39755, 39394, 0.20, 105, 0),
+			want: 0.10802912,
+			tol:  0.0001,
+		},
+		// --- Fractional dates get truncated ---
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39522.7, 39755.9, 39394.3, 0.0625, 100.0123, 0),
+			want: 0.06095433,
+			tol:  0.0001,
+		},
+		// --- pr exactly at par ---
+		{
+			name: "pr exactly 100 rate 0.05",
+			args: numArgs(44927, 45291, 44713, 0.05, 100, 0),
+			want: 0.04858300,
+			tol:  0.0001,
+		},
+		// --- Error cases ---
+		{
+			name:    "rate negative",
+			args:    numArgs(39522, 39755, 39394, -0.01, 100.0123, 0),
+			wantErr: true,
+		},
+		{
+			name:    "pr zero",
+			args:    numArgs(39522, 39755, 39394, 0.0625, 0, 0),
+			wantErr: true,
+		},
+		{
+			name:    "pr negative",
+			args:    numArgs(39522, 39755, 39394, 0.0625, -10, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39522, 39522, 39394, 0.0625, 100.0123, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39755, 39522, 39394, 0.0625, 100.0123, 0),
+			wantErr: true,
+		},
+		{
+			name:    "basis negative",
+			args:    numArgs(39522, 39755, 39394, 0.0625, 100.0123, -1),
+			wantErr: true,
+		},
+		{
+			name:    "basis 5",
+			args:    numArgs(39522, 39755, 39394, 0.0625, 100.0123, 5),
+			wantErr: true,
+		},
+		{
+			name:    "basis 99",
+			args:    numArgs(39522, 39755, 39394, 0.0625, 100.0123, 99),
+			wantErr: true,
+		},
+		{
+			name:    "too few args",
+			args:    numArgs(39522, 39755, 39394, 0.0625),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39522, 39755, 39394, 0.0625, 100.0123, 0, 1),
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39755), NumberVal(39394), NumberVal(0.0625), NumberVal(100.0123), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39522), StringVal("xyz"), NumberVal(39394), NumberVal(0.0625), NumberVal(100.0123), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric issue",
+			args:    []Value{NumberVal(39522), NumberVal(39755), StringVal("abc"), NumberVal(0.0625), NumberVal(100.0123), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric rate",
+			args:    []Value{NumberVal(39522), NumberVal(39755), NumberVal(39394), StringVal("abc"), NumberVal(100.0123), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric pr",
+			args:    []Value{NumberVal(39522), NumberVal(39755), NumberVal(39394), NumberVal(0.0625), StringVal("abc"), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric basis",
+			args:    []Value{NumberVal(39522), NumberVal(39755), NumberVal(39394), NumberVal(0.0625), NumberVal(100.0123), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnYieldmat(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestYIELDMAT_ViaEval(t *testing.T) {
+	// YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0) = 0.060954
+	cf := evalCompile(t, "YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 100.0123, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.060954) > 0.001 {
+		t.Errorf("got %f, want 0.060954", v.Num)
+	}
+}

@@ -265,7 +265,7 @@ Werkbook supports **384** Excel formula functions.
 | POWER | Math & Trig | 49 |
 | PPMT | Financial | 2 |
 | PRICEDISC | Financial | 3 |
-| PRICEMAT | Financial | - |
+| PRICEMAT | Financial | 3 |
 | PROB | Statistical | 27 |
 | PRODUCT | Math & Trig | 36 |
 | PROPER | Text | 25 |
@@ -387,7 +387,7 @@ Werkbook supports **384** Excel formula functions.
 | YEAR | Date & Time | 26 |
 | YEARFRAC | Date & Time | 38 |
 | YIELDDISC | Financial | 3 |
-| YIELDMAT | Financial | - |
+| YIELDMAT | Financial | 3 |
 
 # Unsupported Formulas
 
