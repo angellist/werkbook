@@ -324,11 +324,11 @@ Werkbook supports **343** Excel formula functions.
 | UPPER | Text | 23 |
 | VALUE | Text | - |
 | VALUETOTEXT | Text | 26 |
-| VAR | Statistical | 23 |
-| VAR.P | Statistical | - |
+| VAR | Statistical | 24 |
+| VAR.P | Statistical | 22 |
 | VAR.S | Statistical | 4 |
 | VARA | Statistical | 22 |
-| VARP | Statistical | - |
+| VARP | Statistical | 4 |
 | VARPA | Statistical | 22 |
 | VDB | Financial | 33 |
 | VLOOKUP | Lookup & Reference | 15 |
