@@ -268,7 +268,7 @@ Werkbook supports **343** Excel formula functions.
 | SERIESSUM | Math & Trig | 27 |
 | SIGN | Math & Trig | 30 |
 | SIN | Math & Trig | 31 |
-| SINH | Math & Trig | - |
+| SINH | Math & Trig | 23 |
 | SKEW | Statistical | 23 |
 | SLN | Financial | 6 |
 | SLOPE | Statistical | 16 |

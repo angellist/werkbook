@@ -7194,3 +7194,97 @@ func TestTANH(t *testing.T) {
 		})
 	}
 }
+
+func TestSINH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Basic: SINH(0) = 0
+		{"sinh_0", "SINH(0)", 0, 0},
+
+		// Standard values
+		{"sinh_1", "SINH(1)", math.Sinh(1), 1e-10},       // ~1.1752
+		{"sinh_neg1", "SINH(-1)", math.Sinh(-1), 1e-10},   // ~-1.1752
+		{"sinh_0_5", "SINH(0.5)", math.Sinh(0.5), 1e-10},  // ~0.5211
+		{"sinh_neg0_5", "SINH(-0.5)", math.Sinh(-0.5), 1e-10},
+
+		// Odd function: SINH(-x) = -SINH(x)
+		{"odd_2", "SINH(-2)", -math.Sinh(2), 1e-10},
+		{"odd_3", "SINH(-3)", -math.Sinh(3), 1e-10},
+
+		// Larger values
+		{"sinh_5", "SINH(5)", math.Sinh(5), 1e-10},    // ~74.2032
+		{"sinh_10", "SINH(10)", math.Sinh(10), 1e-4},   // ~11013.2329
+
+		// Small values (near-linear region: SINH(x) ~ x for small x)
+		{"sinh_small", "SINH(0.001)", math.Sinh(0.001), 1e-14},
+		{"sinh_tiny", "SINH(0.0001)", math.Sinh(0.0001), 1e-15},
+
+		// Excel doc example: 2.868*SINH(0.0342*1.03)
+		{"doc_example", "2.868*SINH(0.0342*1.03)", 2.868 * math.Sinh(0.0342*1.03), 1e-7},
+
+		// Boolean coercion
+		{"bool_true", "SINH(TRUE)", math.Sinh(1), 1e-10},
+		{"bool_false", "SINH(FALSE)", 0, 0},
+
+		// String coercion
+		{"string_0", `SINH("0")`, 0, 0},
+		{"string_1", `SINH("1")`, math.Sinh(1), 1e-10},
+		{"string_neg1", `SINH("-1")`, math.Sinh(-1), 1e-10},
+
+		// Expression argument
+		{"expr_add", "SINH(1+1)", math.Sinh(2), 1e-10},
+		{"expr_mul", "SINH(2*3)", math.Sinh(6), 1e-8},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "SINH()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "SINH(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `SINH("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "SINH(1/0)", ErrValDIV0},
+		// Overflow to infinity returns #NUM!
+		{"overflow", "SINH(1000)", ErrValNUM},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
