@@ -7029,3 +7029,106 @@ func TestXMATCH(t *testing.T) {
 		}
 	})
 }
+
+func TestADDRESS(t *testing.T) {
+	resolver := &mockResolver{}
+
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// A1 style, absolute (default abs_num=1)
+		{"abs_A1", "ADDRESS(1,1)", "$A$1"},
+		{"abs_A1_row2_col3", "ADDRESS(2,3)", "$C$2"},
+		{"abs_A1_explicit", "ADDRESS(1,1,1)", "$A$1"},
+		// A1 style, abs_num=2 (absolute row, relative col)
+		{"abs_row_rel_col", "ADDRESS(1,1,2)", "A$1"},
+		{"abs_row_rel_col_C2", "ADDRESS(2,3,2)", "C$2"},
+		// A1 style, abs_num=3 (relative row, absolute col)
+		{"rel_row_abs_col", "ADDRESS(1,1,3)", "$A1"},
+		{"rel_row_abs_col_C2", "ADDRESS(2,3,3)", "$C2"},
+		// A1 style, abs_num=4 (fully relative)
+		{"rel_A1", "ADDRESS(1,1,4)", "A1"},
+		{"rel_A1_C2", "ADDRESS(2,3,4)", "C2"},
+		// R1C1 style (a1_style=FALSE)
+		{"abs_R1C1", "ADDRESS(1,1,1,FALSE)", "R1C1"},
+		{"rel_col_R1C1", "ADDRESS(1,1,2,FALSE)", "R1C[1]"},
+		{"rel_row_R1C1", "ADDRESS(1,1,3,FALSE)", "R[1]C1"},
+		{"rel_R1C1", "ADDRESS(1,1,4,FALSE)", "R[1]C[1]"},
+		{"abs_R1C1_row2_col3", "ADDRESS(2,3,1,FALSE)", "R2C3"},
+		{"rel_col_R1C1_row2_col3", "ADDRESS(2,3,2,FALSE)", "R2C[3]"},
+		{"rel_row_R1C1_row2_col3", "ADDRESS(2,3,3,FALSE)", "R[2]C3"},
+		{"rel_R1C1_row2_col3", "ADDRESS(2,3,4,FALSE)", "R[2]C[3]"},
+		// Explicit TRUE for A1 style
+		{"explicit_true_A1", "ADDRESS(2,3,1,TRUE)", "$C$2"},
+		// Large column numbers
+		{"col_26_Z", "ADDRESS(1,26)", "$Z$1"},
+		{"col_27_AA", "ADDRESS(1,27)", "$AA$1"},
+		{"col_256_IV", "ADDRESS(1,256)", "$IV$1"},
+		{"col_702_ZZ", "ADDRESS(1,702)", "$ZZ$1"},
+		{"col_16384_XFD", "ADDRESS(1,16384)", "$XFD$1"},
+		// Large row number
+		{"large_row", "ADDRESS(1048576,1)", "$A$1048576"},
+		// Sheet name
+		{"with_sheet", `ADDRESS(1,1,1,TRUE,"Sheet1")`, "Sheet1!$A$1"},
+		{"with_sheet_spaces", `ADDRESS(1,1,1,TRUE,"My Sheet")`, "'My Sheet'!$A$1"},
+		{"with_sheet_quote", `ADDRESS(1,1,1,TRUE,"Sheet'1")`, "'Sheet'1'!$A$1"},
+		{"with_sheet_R1C1", `ADDRESS(1,1,1,FALSE,"Sheet1")`, "Sheet1!R1C1"},
+		// Sheet with bracket needs quoting
+		{"with_sheet_bracket", `ADDRESS(1,1,1,TRUE,"Sheet[1]")`, "'Sheet[1]'!$A$1"},
+		// Sheet with relative addressing
+		{"with_sheet_relative", `ADDRESS(2,3,4,TRUE,"Data")`, "Data!C2"},
+		// Sheet with R1C1 relative addressing
+		{"with_sheet_R1C1_relative", `ADDRESS(2,3,4,FALSE,"Data")`, "Data!R[2]C[3]"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString {
+				t.Fatalf("Eval(%q): got type %v, want string", tt.formula, got.Type)
+			}
+			if got.Str != tt.want {
+				t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "ADDRESS()", ErrValVALUE},
+		{"one_arg", "ADDRESS(1)", ErrValVALUE},
+		{"too_many_args", `ADDRESS(1,1,1,TRUE,"Sheet1","extra")`, ErrValVALUE},
+		{"row_zero", "ADDRESS(0,1)", ErrValVALUE},
+		{"col_zero", "ADDRESS(1,0)", ErrValVALUE},
+		{"negative_row", "ADDRESS(-1,1)", ErrValVALUE},
+		{"negative_col", "ADDRESS(1,-1)", ErrValVALUE},
+		{"invalid_abs_num", "ADDRESS(1,1,5)", ErrValVALUE},
+		{"invalid_abs_num_zero", "ADDRESS(1,1,0)", ErrValVALUE},
+		{"string_row", `ADDRESS("abc",1)`, ErrValVALUE},
+		{"string_col", `ADDRESS(1,"abc")`, ErrValVALUE},
+		{"invalid_abs_num_negative", "ADDRESS(1,1,-1)", ErrValVALUE},
+		{"string_abs_num", `ADDRESS(1,1,"abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}

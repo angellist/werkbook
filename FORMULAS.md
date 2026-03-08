@@ -9,7 +9,7 @@ Werkbook supports **343** Excel formula functions.
 | ACOSH | Math & Trig | 32 |
 | ACOT | Math & Trig | 25 |
 | ACOTH | Math & Trig | 31 |
-| ADDRESS | Lookup & Reference | 33 |
+| ADDRESS | Lookup & Reference | 44 |
 | ANCHORARRAY | Lookup & Reference | 6 |
 | AND | Logical | 29 |
 | ARABIC | Math & Trig | 38 |
