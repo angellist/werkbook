@@ -5,7 +5,7 @@ Werkbook supports **395** Excel formula functions.
 | Function | Category | Tests |
 |----------|----------|------:|
 | ABS | Math & Trig | 26 |
-| ACCRINT | Financial | - |
+| ACCRINT | Financial | 3 |
 | ACCRINTM | Financial | 3 |
 | ACOS | Math & Trig | 32 |
 | ACOSH | Math & Trig | 32 |

@@ -7134,6 +7134,327 @@ func TestRECEIVED_ViaEval(t *testing.T) {
 	}
 }
 
+// === ACCRINT ===
+
+func TestACCRINT_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// DATE(2008,3,1) = 39508, DATE(2008,8,31) = 39691, DATE(2008,5,1) = 39569
+	// DATE(2008,3,5) = 39512, DATE(2008,4,5) = 39543
+	// DATE(2008,1,15) = 39462, DATE(2008,7,15) = 39644, DATE(2008,4,15) = 39553
+	// DATE(2009,1,15) = 39828, DATE(2008,3,15) = 39522
+	// DATE(2007,1,1) = 39083, DATE(2007,7,1) = 39264, DATE(2007,4,1) = 39173
+	// DATE(2008,4,1) = 39539, DATE(2008,1,1) = 39448, DATE(2008,7,1) = 39630
+	// DATE(2008,6,15) = 39614
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64 // custom tolerance; 0 means use default 0.01
+	}{
+		// --- Doc examples ---
+		// ACCRINT(39508,39691,39569,0.1,1000,2,0) = 16.666667
+		// issue=2008-03-01, first_interest=2008-08-31, settlement=2008-05-01
+		{
+			name: "doc example 1",
+			args: numArgs(39508, 39691, 39569, 0.1, 1000, 2, 0),
+			want: 16.666667,
+			tol:  0.000001,
+		},
+		// ACCRINT(DATE(2008,3,5),39691,39569,0.1,1000,2,0,FALSE) = 15.555556
+		{
+			name: "doc example 2 calc_method FALSE",
+			args: numArgs(39512, 39691, 39569, 0.1, 1000, 2, 0, 0),
+			want: 15.555556,
+			tol:  0.000001,
+		},
+		// ACCRINT(DATE(2008,4,5),39691,39569,0.1,1000,2,0,TRUE) = 7.222222
+		{
+			name: "doc example 3 calc_method TRUE",
+			args: numArgs(39543, 39691, 39569, 0.1, 1000, 2, 0, 1),
+			want: 7.222222,
+			tol:  0.000001,
+		},
+
+		// --- All 5 basis types ---
+		// issue=2008-01-15, first_interest=2008-07-15, settlement=2008-04-15
+		// rate=0.08, par=1000, freq=2
+		// basis 0: 30/360 US, 90 days / 180 = 0.5, 1000*0.08/2*0.5 = 20.0
+		{
+			name: "basis 0 US 30/360",
+			args: numArgs(39462, 39644, 39553, 0.08, 1000, 2, 0),
+			want: 20.0,
+			tol:  0.0001,
+		},
+		// basis 1: actual/actual, 91 actual days / 182 period days = 20.0
+		{
+			name: "basis 1 actual/actual",
+			args: numArgs(39462, 39644, 39553, 0.08, 1000, 2, 1),
+			want: 20.0,
+			tol:  0.0001,
+		},
+		// basis 2: actual/360, 91 actual days / 180 = 20.2222
+		{
+			name: "basis 2 actual/360",
+			args: numArgs(39462, 39644, 39553, 0.08, 1000, 2, 2),
+			want: 20.2222,
+			tol:  0.001,
+		},
+		// basis 3: actual/365, 91 actual days / 182.5 = 19.9452
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(39462, 39644, 39553, 0.08, 1000, 2, 3),
+			want: 19.9452,
+			tol:  0.001,
+		},
+		// basis 4: European 30/360, 90 days / 180 = 20.0
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(39462, 39644, 39553, 0.08, 1000, 2, 4),
+			want: 20.0,
+			tol:  0.0001,
+		},
+
+		// --- All 3 frequencies ---
+		// issue=2008-01-15, settlement=2008-03-15, rate=0.12, par=1000, basis=0
+
+		// freq=1 (annual), fi=2009-01-15
+		// 30/360 from 1/15 to 3/15 = 60 days, NL=360. 1000*0.12/1*60/360 = 20.0
+		{
+			name: "freq 1 annual",
+			args: numArgs(39462, 39828, 39522, 0.12, 1000, 1, 0),
+			want: 20.0,
+			tol:  0.0001,
+		},
+		// freq=2 (semiannual), fi=2008-07-15
+		// 30/360 from 1/15 to 3/15 = 60 days, NL=180. 1000*0.12/2*60/180 = 20.0
+		{
+			name: "freq 2 semiannual",
+			args: numArgs(39462, 39644, 39522, 0.12, 1000, 2, 0),
+			want: 20.0,
+			tol:  0.0001,
+		},
+		// freq=4 (quarterly), fi=2008-04-15
+		// 30/360 from 1/15 to 3/15 = 60 days, NL=90. 1000*0.12/4*60/90 = 20.0
+		{
+			name: "freq 4 quarterly",
+			args: numArgs(39462, 39553, 39522, 0.12, 1000, 4, 0),
+			want: 20.0,
+			tol:  0.0001,
+		},
+
+		// --- calc_method TRUE vs FALSE ---
+		// issue=2007-01-01, fi=2007-07-01, settlement=2008-04-01
+		// rate=0.1, par=1000, freq=2, basis=0
+
+		// TRUE: accrual from issue (2007-01-01) spanning multiple periods
+		// 3 full periods (150) - partial leftover gives 125.0
+		{
+			name: "calc_method TRUE multi-period",
+			args: numArgs(39083, 39264, 39539, 0.1, 1000, 2, 0, 1),
+			want: 125.0,
+			tol:  0.0001,
+		},
+		// FALSE: accrual only from PCD before settlement
+		// PCD=2008-01-01, 30/360 from 1/1 to 4/1 = 90 days. 50*90/180=25.0
+		{
+			name: "calc_method FALSE multi-period",
+			args: numArgs(39083, 39264, 39539, 0.1, 1000, 2, 0, 0),
+			want: 25.0,
+			tol:  0.0001,
+		},
+
+		// --- Default calc_method (should be TRUE) ---
+		{
+			name: "default calc_method equals TRUE",
+			args: numArgs(39083, 39264, 39539, 0.1, 1000, 2, 0),
+			want: 125.0,
+			tol:  0.0001,
+		},
+
+		// --- Settlement == first_interest ---
+		// issue=2007-01-01, fi=2007-07-01, settlement=2007-07-01
+		// Full half-year period: 1000*0.1/2*180/180 = 50.0
+		{
+			name: "settlement equals first_interest",
+			args: numArgs(39083, 39264, 39264, 0.1, 1000, 2, 0),
+			want: 50.0,
+			tol:  0.0001,
+		},
+
+		// --- Settlement before first_interest ---
+		// issue=2007-01-01, fi=2007-07-01, settlement=2007-04-01
+		// 30/360 from 1/1 to 4/1 = 90 days, NL=180. 50*90/180=25.0
+		{
+			name: "settlement before first_interest",
+			args: numArgs(39083, 39264, 39173, 0.1, 1000, 2, 0),
+			want: 25.0,
+			tol:  0.0001,
+		},
+
+		// --- Settlement after first_interest (multiple periods) ---
+		// issue=2007-01-01, fi=2007-07-01, settlement=2008-06-15
+		// 30/360: issue to fi (180 days, full period=50) + fi to 2008-01-01 (180 days=50)
+		//   + 2008-01-01 to 2008-06-15: (6-1)*30+(15-1)=164 days. 50*164/180=45.5556
+		// Total: 50+50+45.5556 = 145.5556
+		{
+			name: "settlement after first_interest multiple periods",
+			args: numArgs(39083, 39264, 39614, 0.1, 1000, 2, 0),
+			want: 145.5556,
+			tol:  0.001,
+		},
+
+		// --- Very small rate ---
+		// issue=2008-01-01, fi=2008-07-01, settlement=2008-04-01
+		// 30/360 from 1/1 to 4/1 = 90 days. 1000*0.001/2*90/180=0.25
+		{
+			name: "very small rate",
+			args: numArgs(39448, 39630, 39539, 0.001, 1000, 2, 0),
+			want: 0.25,
+			tol:  0.0001,
+		},
+
+		// --- Large par value ---
+		// issue=2008-01-01, fi=2008-07-01, settlement=2008-04-01
+		// 30/360 from 1/1 to 4/1 = 90 days. 1000000*0.05/2*90/180=12500.0
+		{
+			name: "large par value",
+			args: numArgs(39448, 39630, 39539, 0.05, 1000000, 2, 0),
+			want: 12500.0,
+			tol:  0.01,
+		},
+
+		// --- Fractional dates get truncated ---
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39508.7, 39691.3, 39569.9, 0.1, 1000, 2, 0),
+			want: 16.666667,
+			tol:  0.000001,
+		},
+
+		// --- Error cases ---
+		{
+			name:    "rate zero",
+			args:    numArgs(39462, 39644, 39553, 0, 1000, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "rate negative",
+			args:    numArgs(39462, 39644, 39553, -0.05, 1000, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "par zero",
+			args:    numArgs(39462, 39644, 39553, 0.05, 0, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "par negative",
+			args:    numArgs(39462, 39644, 39553, 0.05, -1000, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "bad frequency 3",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 3, 0),
+			wantErr: true,
+		},
+		{
+			name:    "bad frequency 0",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 0, 0),
+			wantErr: true,
+		},
+		{
+			name:    "bad frequency 6",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 6, 0),
+			wantErr: true,
+		},
+		{
+			name:    "basis negative",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 2, -1),
+			wantErr: true,
+		},
+		{
+			name:    "basis 5",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 2, 5),
+			wantErr: true,
+		},
+		{
+			name:    "issue equals settlement",
+			args:    numArgs(39553, 39644, 39553, 0.05, 1000, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "issue after settlement",
+			args:    numArgs(39644, 39644, 39553, 0.05, 1000, 2, 0),
+			wantErr: true,
+		},
+		{
+			name:    "too few args 5",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000),
+			wantErr: true,
+		},
+		{
+			name:    "too many args 9",
+			args:    numArgs(39462, 39644, 39553, 0.05, 1000, 2, 0, 1, 99),
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric issue",
+			args:    []Value{StringVal("abc"), NumberVal(39644), NumberVal(39553), NumberVal(0.05), NumberVal(1000), NumberVal(2), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{NumberVal(39462), NumberVal(39644), StringVal("xyz"), NumberVal(0.05), NumberVal(1000), NumberVal(2), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric rate",
+			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), StringVal("abc"), NumberVal(1000), NumberVal(2), NumberVal(0)},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnAccrint(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestACCRINT_ViaEval(t *testing.T) {
+	// ACCRINT(39508,39691,39569,0.1,1000,2,0) = 16.666667
+	cf := evalCompile(t, "ACCRINT(39508,39691,39569,0.1,1000,2,0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-16.666667) > 0.000001 {
+		t.Errorf("got %f, want 16.666667", v.Num)
+	}
+}
+
 // === ACCRINTM ===
 
 func TestACCRINTM_Comprehensive(t *testing.T) {
