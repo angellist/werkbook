@@ -4363,6 +4363,134 @@ func TestIMCOSH(t *testing.T) {
 	})
 }
 
+func TestIMSEC(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Known Excel result: IMSEC("4+3i")
+			{`IMSEC("4+3i")`, "-0.0652940278579471-0.0752249603027732i"},
+
+			// Pure real: zero → sec(0) = 1/cos(0) = 1
+			{`IMSEC("0")`, "1"},
+
+			// Pure real: positive
+			{`IMSEC("1")`, "1.8508157176809252"},
+
+			// Pure real: negative (sec is even)
+			{`IMSEC("-1")`, "1.8508157176809252"},
+
+			// Pure imaginary: positive
+			{`IMSEC("i")`, "0.6480542736638853"},
+
+			// Pure imaginary: negative (sech is even)
+			{`IMSEC("-i")`, "0.6480542736638853"},
+
+			// Complex: 1+i
+			{`IMSEC("1+i")`, "0.4983370305551868+0.591083841721045i"},
+
+			// Complex: 1-i
+			{`IMSEC("1-i")`, "0.4983370305551868-0.591083841721045i"},
+
+			// Complex: 2+3i
+			{`IMSEC("2+3i")`, "-0.041674964411144266+0.0906111371962376i"},
+
+			// j suffix
+			{`IMSEC("3+4j")`, "-0.03625349691586887+0.00516434460775318j"},
+
+			// Numeric input
+			{`IMSEC(1)`, "1.8508157176809252"},
+			{`IMSEC(0)`, "1"},
+
+			// Negative numeric input
+			{`IMSEC(-1)`, "1.8508157176809252"},
+
+			// COMPLEX composition
+			{`IMSEC(COMPLEX(1,1))`, "0.4983370305551868+0.591083841721045i"},
+			{`IMSEC(COMPLEX(0,0))`, "1"},
+
+			// Large imaginary part
+			{`IMSEC("0+10i")`, "0.00009079985933781"},
+
+			// Pure imaginary with j suffix
+			{`IMSEC("2j")`, "0.2658022288340797"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				assertComplexStringClose(t, tt.formula, got, tt.want)
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMSEC("invalid")`, ErrValNUM},
+			{`IMSEC("")`, ErrValNUM},
+			{`IMSEC("abc")`, ErrValNUM},
+			{`IMSEC("3+4")`, ErrValNUM},
+			{`IMSEC("3+4k")`, ErrValNUM},
+			{`IMSEC("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMSEC(TRUE)`, ErrValVALUE},
+			{`IMSEC(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMSEC()`, ErrValVALUE},
+			{`IMSEC("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMSEC(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMSEC(1/0) = %v, want error", got)
+		}
+	})
+
+	t.Run("array input", func(t *testing.T) {
+		cf := evalCompile(t, `IMSEC({"1","i"})`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+	})
+}
+
 func TestIMSECH(t *testing.T) {
 	resolver := &mockResolver{}
 

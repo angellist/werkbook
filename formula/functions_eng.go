@@ -38,6 +38,7 @@ func init() {
 	Register("IMCOT", NoCtx(fnImcot))
 	Register("IMCSC", NoCtx(fnImcsc))
 	Register("IMCSCH", NoCtx(fnImcsch))
+	Register("IMSEC", NoCtx(fnImsec))
 	Register("IMSECH", NoCtx(fnImsech))
 	Register("IMSIN", NoCtx(fnImsin))
 	Register("IMSINH", NoCtx(fnImsinh))
@@ -2628,6 +2629,65 @@ func fnImcosh(args []Value) (Value, error) {
 // fnImsech implements the IMSECH function.
 // IMSECH(inumber) — returns the hyperbolic secant of a complex number.
 // sech(z) = 1/cosh(z).
+func fnImsec(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsec([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i
+	cr := math.Cos(x) * math.Cosh(y)
+	ci := -math.Sin(x) * math.Sinh(y)
+
+	// 1/(cr+ci*i): multiply by conjugate → (cr-ci*i)/(cr²+ci²)
+	denom := cr*cr + ci*ci
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(cr / denom)
+	imagResult := cleanFloat(-ci / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
 func fnImsech(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
