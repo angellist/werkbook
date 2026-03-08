@@ -11,7 +11,7 @@ Werkbook supports **343** Excel formula functions.
 | ACOTH | Math & Trig | 31 |
 | ADDRESS | Lookup & Reference | 33 |
 | ANCHORARRAY | Lookup & Reference | 6 |
-| AND | Logical | 27 |
+| AND | Logical | 29 |
 | ARABIC | Math & Trig | 28 |
 | ARRAYTOTEXT | Text | 24 |
 | ASIN | Math & Trig | 30 |
@@ -209,7 +209,7 @@ Werkbook supports **343** Excel formula functions.
 | NORM.INV | Statistical | 28 |
 | NORM.S.DIST | Statistical | 27 |
 | NORM.S.INV | Statistical | 27 |
-| NOT | Logical | 8 |
+| NOT | Logical | 10 |
 | NOW | Date & Time | 2 |
 | NPER | Financial | 3 |
 | NPV | Financial | 25 |
@@ -218,7 +218,7 @@ Werkbook supports **343** Excel formula functions.
 | OCT2DEC | Engineering | 43 |
 | OCT2HEX | Engineering | 36 |
 | ODD | Math & Trig | 40 |
-| OR | Logical | 48 |
+| OR | Logical | 50 |
 | PDURATION | Financial | 21 |
 | PEARSON | Statistical | 23 |
 | PERCENTILE | Statistical | 32 |
@@ -249,7 +249,7 @@ Werkbook supports **343** Excel formula functions.
 | RANK.AVG | Statistical | 21 |
 | RANK.EQ | Statistical | 7 |
 | RATE | Financial | 6 |
-| REPLACE | Text | - |
+| REPLACE | Text | 38 |
 | REPT | Text | - |
 | RIGHT | Text | 41 |
 | ROMAN | Text | 38 |
@@ -344,7 +344,7 @@ Werkbook supports **343** Excel formula functions.
 | XLOOKUP | Lookup & Reference | 22 |
 | XMATCH | Lookup & Reference | 35 |
 | XNPV | Financial | 18 |
-| XOR | Logical | 32 |
+| XOR | Logical | 34 |
 | YEAR | Date & Time | 26 |
 | YEARFRAC | Date & Time | - |
 
