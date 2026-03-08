@@ -2272,3 +2272,134 @@ func TestISLOGICAL(t *testing.T) {
 		}
 	})
 }
+
+func TestN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		wantTyp ValueType
+		wantNum float64
+		wantErr ErrorValue
+	}{
+		// Numbers: N returns the number itself
+		{"positive_integer", `N(42)`, ValueNumber, 42, 0},
+		{"zero", `N(0)`, ValueNumber, 0, 0},
+		{"negative_integer", `N(-7)`, ValueNumber, -7, 0},
+		{"decimal", `N(3.14)`, ValueNumber, 3.14, 0},
+		{"large_number", `N(1000000)`, ValueNumber, 1000000, 0},
+
+		// Booleans: TRUE=1, FALSE=0
+		{"true", `N(TRUE)`, ValueNumber, 1, 0},
+		{"false", `N(FALSE)`, ValueNumber, 0, 0},
+
+		// Strings: any string returns 0
+		{"text_string", `N("hello")`, ValueNumber, 0, 0},
+		{"empty_string", `N("")`, ValueNumber, 0, 0},
+		{"numeric_string", `N("123")`, ValueNumber, 0, 0},
+
+		// Errors: N returns the error value unchanged
+		{"error_na", `N(#N/A)`, ValueError, 0, ErrValNA},
+		{"error_value", `N(#VALUE!)`, ValueError, 0, ErrValVALUE},
+		{"error_div0", `N(1/0)`, ValueError, 0, ErrValDIV0},
+		{"error_ref", `N(#REF!)`, ValueError, 0, ErrValREF},
+
+		// Expressions that produce numbers
+		{"arithmetic_expr", `N(2+3)`, ValueNumber, 5, 0},
+
+		// Wrong number of arguments
+		{"no_args", `N()`, ValueError, 0, ErrValVALUE},
+		{"two_args", `N(1,2)`, ValueError, 0, ErrValVALUE},
+		{"three_args", `N(1,2,3)`, ValueError, 0, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.wantTyp == ValueError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			} else {
+				if got.Type != ValueNumber || got.Num != tt.wantNum {
+					t.Errorf("%s = %v, want number %v", tt.formula, got, tt.wantNum)
+				}
+			}
+		})
+	}
+}
+
+func TestNA(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns_na_error", func(t *testing.T) {
+		cf := evalCompile(t, `NA()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("NA() = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("with_one_arg_returns_value_error", func(t *testing.T) {
+		cf := evalCompile(t, `NA(1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("NA(1) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("with_two_args_returns_value_error", func(t *testing.T) {
+		cf := evalCompile(t, `NA(1,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("NA(1,2) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("with_string_arg_returns_value_error", func(t *testing.T) {
+		cf := evalCompile(t, `NA("test")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`NA("test") = %v, want #VALUE!`, got)
+		}
+	})
+
+	t.Run("nested_in_isna", func(t *testing.T) {
+		cf := evalCompile(t, `ISNA(NA())`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNA(NA()) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("nested_in_iserror", func(t *testing.T) {
+		cf := evalCompile(t, `ISERROR(NA())`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISERROR(NA()) = %v, want TRUE", got)
+		}
+	})
+}

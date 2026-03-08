@@ -156,11 +156,11 @@ Werkbook supports **343** Excel formula functions.
 | IRR | Financial | 19 |
 | ISBLANK | Information | 23 |
 | ISERR | Information | 21 |
-| ISERROR | Information | 21 |
+| ISERROR | Information | 22 |
 | ISEVEN | Information | 4 |
 | ISFORMULA | Information | 7 |
 | ISLOGICAL | Information | 27 |
-| ISNA | Information | 21 |
+| ISNA | Information | 22 |
 | ISNONTEXT | Information | 26 |
 | ISNUMBER | Information | 23 |
 | ISODD | Information | 4 |
@@ -199,8 +199,8 @@ Werkbook supports **343** Excel formula functions.
 | MROUND | Math & Trig | 38 |
 | MULTINOMIAL | Math & Trig | - |
 | MUNIT | Math & Trig | 38 |
-| N | Information | - |
-| NA | Information | - |
+| N | Information | 18 |
+| NA | Information | 4 |
 | NEGBINOM.DIST | Statistical | 30 |
 | NETWORKDAYS | Date & Time | 26 |
 | NETWORKDAYS.INTL | Date & Time | 44 |
