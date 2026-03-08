@@ -3222,13 +3222,9 @@ func fnFVSchedule(args []Value) (Value, error) {
 			continue
 		case ValueNumber:
 			principal *= 1 + v.Num
-		case ValueBool:
-			// Booleans coerce: TRUE=1, FALSE=0.
-			if v.Bool {
-				principal *= 2 // 1 + 1
-			}
-			// FALSE: multiply by 1+0 = 1, no change.
 		default:
+			// Excel treats booleans, strings, and any other non-numeric type
+			// in the schedule as #VALUE! errors.
 			return ErrorVal(ErrValVALUE), nil
 		}
 	}

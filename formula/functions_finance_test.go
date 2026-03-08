@@ -9859,17 +9859,17 @@ func TestFVSchedule_Comprehensive(t *testing.T) {
 			args: []Value{NumberVal(1000), mkArr(NumberVal(-1.0))},
 			want: 0.0,
 		},
-		// Boolean FALSE in schedule treated as 0
+		// Boolean FALSE in schedule → #VALUE! (Excel rejects booleans)
 		{
-			name: "boolean FALSE in schedule treated as 0",
-			args: []Value{NumberVal(1000), mkArr(BoolVal(false), NumberVal(0.10))},
-			want: 1000 * 1.0 * 1.10,
+			name:    "boolean FALSE in schedule is #VALUE!",
+			args:    []Value{NumberVal(1000), mkArr(BoolVal(false), NumberVal(0.10))},
+			wantErr: true,
 		},
-		// Boolean TRUE in schedule treated as 1
+		// Boolean TRUE in schedule → #VALUE! (Excel rejects booleans)
 		{
-			name: "boolean TRUE in schedule treated as 1",
-			args: []Value{NumberVal(1000), mkArr(BoolVal(true))},
-			want: 2000.0,
+			name:    "boolean TRUE in schedule is #VALUE!",
+			args:    []Value{NumberVal(1000), mkArr(BoolVal(true))},
+			wantErr: true,
 		},
 		// Fractional principal
 		{
