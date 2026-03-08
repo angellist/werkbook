@@ -235,7 +235,7 @@ Werkbook supports **343** Excel formula functions.
 | POISSON.DIST | Statistical | 26 |
 | POWER | Math & Trig | 49 |
 | PPMT | Financial | 2 |
-| PRODUCT | Math & Trig | - |
+| PRODUCT | Math & Trig | 36 |
 | PROPER | Text | 25 |
 | PV | Financial | 3 |
 | QUARTILE | Statistical | 36 |

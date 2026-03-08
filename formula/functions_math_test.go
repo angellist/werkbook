@@ -9235,3 +9235,194 @@ func TestGCD(t *testing.T) {
 		})
 	}
 }
+
+// --------------- PRODUCT tests ---------------
+
+func TestPRODUCT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// Basic multiplication
+		{"two_args", "PRODUCT(2,3)", 6},
+		{"five_args", "PRODUCT(1,2,3,4,5)", 120},
+
+		// Excel doc examples
+		{"doc_ex1", "PRODUCT(5,15,30)", 2250},
+		{"doc_ex1_with_multiplier", "PRODUCT(5,15,30,2)", 4500},
+
+		// Single value
+		{"single_value", "PRODUCT(5)", 5},
+		{"single_one", "PRODUCT(1)", 1},
+
+		// Product with zero
+		{"zero_factor", "PRODUCT(5,0)", 0},
+		{"zero_first", "PRODUCT(0,3)", 0},
+		{"zero_middle", "PRODUCT(2,0,5)", 0},
+
+		// Negative numbers
+		{"neg_times_pos", "PRODUCT(-3,4)", -12},
+		{"neg_times_neg", "PRODUCT(-3,-4)", 12},
+		{"two_neg_one_pos", "PRODUCT(-2,-3,5)", 30},
+		{"odd_negatives", "PRODUCT(-1,-2,-3)", -6},
+
+		// Decimal numbers
+		{"decimals", "PRODUCT(2.5,4)", 10},
+		{"two_decimals", "PRODUCT(0.5,0.5)", 0.25},
+		{"neg_decimal", "PRODUCT(-1.5,2)", -3},
+
+		// Boolean coercion (direct args are coerced)
+		{"bool_true", "PRODUCT(TRUE,5)", 5},
+		{"bool_false", "PRODUCT(FALSE,5)", 0},
+		{"bool_true_true", "PRODUCT(TRUE,TRUE)", 1},
+
+		// String coercion (direct numeric string args are coerced)
+		{"string_num", `PRODUCT("3",4)`, 12},
+		{"string_neg", `PRODUCT("-2",5)`, -10},
+
+		// Large numbers
+		{"large", "PRODUCT(1000,1000,1000)", 1e9},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// Non-numeric string (direct arg)
+		{"non_numeric_string", `PRODUCT("abc",5)`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "PRODUCT(1/0,5)", ErrValDIV0},
+		{"err_na", "PRODUCT(NA(),5)", ErrValNA},
+		{"err_in_second_arg", "PRODUCT(5,1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPRODUCT_RangeIgnoresTextAndBool(t *testing.T) {
+	// In ranges, text and logical values are ignored (only numbers are used)
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: StringVal("hello"),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: BoolVal(true),
+			{Col: 1, Row: 5}: NumberVal(5),
+		},
+	}
+	cf := evalCompile(t, "PRODUCT(A1:A5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only 2*3*5 = 30; text "hello" and TRUE are ignored in ranges
+	if got.Type != ValueNumber || got.Num != 30 {
+		t.Errorf("got %v (%g), want 30", got.Type, got.Num)
+	}
+}
+
+func TestPRODUCT_RangeWithEmptyCells(t *testing.T) {
+	// Empty cells in ranges are ignored (not treated as zero)
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(4),
+			// Row 2 is empty
+			{Col: 1, Row: 3}: NumberVal(5),
+		},
+	}
+	cf := evalCompile(t, "PRODUCT(A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 4*5 = 20; empty cell is ignored
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("got %v (%g), want 20", got.Type, got.Num)
+	}
+}
+
+func TestPRODUCT_RangeErrorPropagation(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 3}: NumberVal(3),
+		},
+	}
+	cf := evalCompile(t, "PRODUCT(A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("got type=%v err=%v, want #DIV/0!", got.Type, got.Err)
+	}
+}
+
+func TestPRODUCT_RangeAndDirectArg(t *testing.T) {
+	// Mix of range and direct argument: PRODUCT(A1:A3, 2) = 5*15*30*2 = 4500
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(15),
+			{Col: 1, Row: 3}: NumberVal(30),
+		},
+	}
+	cf := evalCompile(t, "PRODUCT(A1:A3,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 4500 {
+		t.Errorf("got %v (%g), want 4500", got.Type, got.Num)
+	}
+}
+
+func TestPRODUCT_AllEmptyRange(t *testing.T) {
+	// Range with no numeric values returns 0 (count == 0)
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("a"),
+			{Col: 1, Row: 2}: StringVal("b"),
+		},
+	}
+	cf := evalCompile(t, "PRODUCT(A1:A2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("got %v (%g), want 0", got.Type, got.Num)
+	}
+}
