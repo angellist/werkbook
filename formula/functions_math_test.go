@@ -5293,3 +5293,599 @@ func TestGAMMA(t *testing.T) {
 		})
 	}
 }
+
+func TestACOS(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"acos_1", "ACOS(1)", 0, 0},
+		{"acos_0", "ACOS(0)", math.Pi / 2, 1e-10},
+		{"acos_neg1", "ACOS(-1)", math.Pi, 1e-10},
+		{"acos_0.5", "ACOS(0.5)", math.Pi / 3, 1e-10},
+		{"acos_neg0.5", "ACOS(-0.5)", 2 * math.Pi / 3, 1e-10},
+		{"acos_bool_true", "ACOS(TRUE)", 0, 0},
+		{"acos_bool_false", "ACOS(FALSE)", math.Pi / 2, 1e-10},
+		{"acos_string_num", `ACOS("0.5")`, math.Pi / 3, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"out_of_range_high", "ACOS(1.1)", ErrValNUM},
+		{"out_of_range_low", "ACOS(-1.1)", ErrValNUM},
+		{"out_of_range_large", "ACOS(100)", ErrValNUM},
+		{"no_args", "ACOS()", ErrValVALUE},
+		{"too_many_args", "ACOS(1,2)", ErrValVALUE},
+		{"string_non_num", `ACOS("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestACOSH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"acosh_1", "ACOSH(1)", 0, 0},
+		{"acosh_2", "ACOSH(2)", math.Acosh(2), 1e-10},
+		{"acosh_10", "ACOSH(10)", math.Acosh(10), 1e-10},
+		{"acosh_100", "ACOSH(100)", math.Acosh(100), 1e-10},
+		{"acosh_1.5", "ACOSH(1.5)", math.Acosh(1.5), 1e-10},
+		{"acosh_bool_true", "ACOSH(TRUE)", 0, 0},
+		{"acosh_string_num", `ACOSH("2")`, math.Acosh(2), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"below_domain", "ACOSH(0)", ErrValNUM},
+		{"below_domain_neg", "ACOSH(-1)", ErrValNUM},
+		{"below_domain_0.5", "ACOSH(0.5)", ErrValNUM},
+		{"bool_false", "ACOSH(FALSE)", ErrValNUM},
+		{"no_args", "ACOSH()", ErrValVALUE},
+		{"too_many_args", "ACOSH(1,2)", ErrValVALUE},
+		{"string_non_num", `ACOSH("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestARABIC(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		{"I", `ARABIC("I")`, 1},
+		{"V", `ARABIC("V")`, 5},
+		{"X", `ARABIC("X")`, 10},
+		{"L", `ARABIC("L")`, 50},
+		{"C", `ARABIC("C")`, 100},
+		{"D", `ARABIC("D")`, 500},
+		{"M", `ARABIC("M")`, 1000},
+		{"IV", `ARABIC("IV")`, 4},
+		{"IX", `ARABIC("IX")`, 9},
+		{"XL", `ARABIC("XL")`, 40},
+		{"XC", `ARABIC("XC")`, 90},
+		{"CD", `ARABIC("CD")`, 400},
+		{"CM", `ARABIC("CM")`, 900},
+		{"MCMXCIX", `ARABIC("MCMXCIX")`, 1999},
+		{"MMXXVI", `ARABIC("MMXXVI")`, 2026},
+		{"MMMDCCCLXXXVIII", `ARABIC("MMMDCCCLXXXVIII")`, 3888},
+		{"lowercase", `ARABIC("mcmxcix")`, 1999},
+		{"mixed_case", `ARABIC("McmXcIx")`, 1999},
+		{"negative", `ARABIC("-IV")`, -4},
+		{"negative_large", `ARABIC("-MCMXCIX")`, -1999},
+		{"empty_string", `ARABIC("")`, 0},
+		{"empty_cell", "ARABIC(B1)", 0},
+		{"whitespace", `ARABIC("  X  ")`, 10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.want {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"invalid_char", `ARABIC("ABC")`, ErrValVALUE},
+		{"number_input", "ARABIC(123)", ErrValVALUE},
+		{"no_args", "ARABIC()", ErrValVALUE},
+		{"too_many_args", `ARABIC("I","V")`, ErrValVALUE},
+		{"bool_input", "ARABIC(TRUE)", ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestASIN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"asin_0", "ASIN(0)", 0, 0},
+		{"asin_1", "ASIN(1)", math.Pi / 2, 1e-10},
+		{"asin_neg1", "ASIN(-1)", -math.Pi / 2, 1e-10},
+		{"asin_0.5", "ASIN(0.5)", math.Pi / 6, 1e-10},
+		{"asin_neg0.5", "ASIN(-0.5)", -math.Pi / 6, 1e-10},
+		{"asin_bool_true", "ASIN(TRUE)", math.Pi / 2, 1e-10},
+		{"asin_bool_false", "ASIN(FALSE)", 0, 0},
+		{"asin_string_num", `ASIN("0.5")`, math.Pi / 6, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"out_of_range_high", "ASIN(1.1)", ErrValNUM},
+		{"out_of_range_low", "ASIN(-1.1)", ErrValNUM},
+		{"out_of_range_large", "ASIN(100)", ErrValNUM},
+		{"no_args", "ASIN()", ErrValVALUE},
+		{"too_many_args", "ASIN(1,2)", ErrValVALUE},
+		{"string_non_num", `ASIN("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestASINH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"asinh_0", "ASINH(0)", 0, 0},
+		{"asinh_1", "ASINH(1)", math.Asinh(1), 1e-10},
+		{"asinh_neg1", "ASINH(-1)", math.Asinh(-1), 1e-10},
+		{"asinh_large", "ASINH(100)", math.Asinh(100), 1e-10},
+		{"asinh_neg_large", "ASINH(-100)", math.Asinh(-100), 1e-10},
+		{"asinh_0.5", "ASINH(0.5)", math.Asinh(0.5), 1e-10},
+		{"asinh_bool_true", "ASINH(TRUE)", math.Asinh(1), 1e-10},
+		{"asinh_bool_false", "ASINH(FALSE)", 0, 0},
+		{"asinh_string_num", `ASINH("2")`, math.Asinh(2), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "ASINH()", ErrValVALUE},
+		{"too_many_args", "ASINH(1,2)", ErrValVALUE},
+		{"string_non_num", `ASINH("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestATAN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"atan_0", "ATAN(0)", 0, 0},
+		{"atan_1", "ATAN(1)", math.Pi / 4, 1e-10},
+		{"atan_neg1", "ATAN(-1)", -math.Pi / 4, 1e-10},
+		{"atan_large", "ATAN(1000)", math.Atan(1000), 1e-10},
+		{"atan_neg_large", "ATAN(-1000)", math.Atan(-1000), 1e-10},
+		{"atan_0.5", "ATAN(0.5)", math.Atan(0.5), 1e-10},
+		{"atan_bool_true", "ATAN(TRUE)", math.Pi / 4, 1e-10},
+		{"atan_bool_false", "ATAN(FALSE)", 0, 0},
+		{"atan_string_num", `ATAN("1")`, math.Pi / 4, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "ATAN()", ErrValVALUE},
+		{"too_many_args", "ATAN(1,2)", ErrValVALUE},
+		{"string_non_num", `ATAN("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestATAN2(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"atan2_1_1", "ATAN2(1,1)", math.Pi / 4, 1e-10},
+		{"atan2_1_0", "ATAN2(1,0)", 0, 0},
+		{"atan2_0_1", "ATAN2(0,1)", math.Pi / 2, 1e-10},
+		{"atan2_neg1_1", "ATAN2(-1,1)", math.Atan2(1, -1), 1e-10},
+		{"atan2_1_neg1", "ATAN2(1,-1)", math.Atan2(-1, 1), 1e-10},
+		{"atan2_neg1_neg1", "ATAN2(-1,-1)", math.Atan2(-1, -1), 1e-10},
+		{"atan2_3_4", "ATAN2(3,4)", math.Atan2(4, 3), 1e-10},
+		{"atan2_bool_true", "ATAN2(TRUE,TRUE)", math.Pi / 4, 1e-10},
+		{"atan2_string_num", `ATAN2("1","1")`, math.Pi / 4, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"both_zero", "ATAN2(0,0)", ErrValDIV0},
+		{"no_args", "ATAN2()", ErrValVALUE},
+		{"one_arg", "ATAN2(1)", ErrValVALUE},
+		{"too_many_args", "ATAN2(1,2,3)", ErrValVALUE},
+		{"string_non_num_x", `ATAN2("abc",1)`, ErrValVALUE},
+		{"string_non_num_y", `ATAN2(1,"abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestATANH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{"atanh_0", "ATANH(0)", 0, 0},
+		{"atanh_0.5", "ATANH(0.5)", math.Atanh(0.5), 1e-10},
+		{"atanh_neg0.5", "ATANH(-0.5)", math.Atanh(-0.5), 1e-10},
+		{"atanh_0.99", "ATANH(0.99)", math.Atanh(0.99), 1e-10},
+		{"atanh_neg0.99", "ATANH(-0.99)", math.Atanh(-0.99), 1e-10},
+		{"atanh_small", "ATANH(0.001)", math.Atanh(0.001), 1e-10},
+		{"atanh_bool_false", "ATANH(FALSE)", 0, 0},
+		{"atanh_string_num", `ATANH("0.5")`, math.Atanh(0.5), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"at_1", "ATANH(1)", ErrValNUM},
+		{"at_neg1", "ATANH(-1)", ErrValNUM},
+		{"above_1", "ATANH(1.5)", ErrValNUM},
+		{"below_neg1", "ATANH(-1.5)", ErrValNUM},
+		{"bool_true", "ATANH(TRUE)", ErrValNUM},
+		{"no_args", "ATANH()", ErrValVALUE},
+		{"too_many_args", "ATANH(1,2)", ErrValVALUE},
+		{"string_non_num", `ATANH("abc")`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFACT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		// Basic factorials
+		{"zero", "FACT(0)", 1},
+		{"one", "FACT(1)", 1},
+		{"two", "FACT(2)", 2},
+		{"three", "FACT(3)", 6},
+		{"four", "FACT(4)", 24},
+		{"five", "FACT(5)", 120},
+		{"six", "FACT(6)", 720},
+		{"seven", "FACT(7)", 5040},
+		{"ten", "FACT(10)", 3628800},
+		{"twelve", "FACT(12)", 479001600},
+		// Decimal inputs — truncated to integer (Excel doc: FACT(1.9) = 1)
+		{"decimal_1.9", "FACT(1.9)", 1},
+		{"decimal_5.9", "FACT(5.9)", 120},
+		{"decimal_0.5", "FACT(0.5)", 1},
+		{"decimal_3.1", "FACT(3.1)", 6},
+		{"decimal_0.999", "FACT(0.999)", 1},
+		// Large factorials
+		{"twenty", "FACT(20)", 2432902008176640000},
+		{"fact_170", "FACT(170)", 7.257415615307994e+306},
+		// Boolean coercion
+		{"bool_true", "FACT(TRUE)", 1},
+		{"bool_false", "FACT(FALSE)", 1},
+		// Negative decimal that truncates to zero — FACT(0) = 1
+		{"negative_small_decimal", "FACT(-0.1)", 1},
+		// String number coercion
+		{"string_5", `FACT("5")`, 120},
+		{"string_0", `FACT("0")`, 1},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.want {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		errVal  ErrorValue
+	}{
+		// Negative numbers → #NUM! (Excel doc: FACT(-1) = #NUM!)
+		{"negative_one", "FACT(-1)", ErrValNUM},
+		{"negative_five", "FACT(-5)", ErrValNUM},
+		// FACT(-0.1): math.Trunc(-0.1) = -0, which is not < 0, so returns FACT(0) = 1
+		// Tested in numTests as negative_small_decimal
+		// Non-numeric string → #VALUE!
+		{"non_numeric_string", `FACT("hello")`, ErrValVALUE},
+		// No arguments → #VALUE!
+		{"no_args", "FACT()", ErrValVALUE},
+		// Too many arguments → #VALUE!
+		{"too_many_args", "FACT(5,2)", ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "FACT(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.errVal {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.errVal)
+			}
+		})
+	}
+}
