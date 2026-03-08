@@ -187,7 +187,7 @@ Werkbook supports **343** Excel formula functions.
 | MID | Text | 50 |
 | MIN | Statistical | 30 |
 | MINA | Statistical | 16 |
-| MINIFS | Statistical | - |
+| MINIFS | Statistical | 49 |
 | MINUTE | Date & Time | 16 |
 | MINVERSE | Math & Trig | 33 |
 | MIRR | Financial | 24 |
