@@ -60,7 +60,7 @@ Werkbook supports **343** Excel formula functions.
 | CONFIDENCE.T | Statistical | 29 |
 | CONVERT | Engineering | 57 |
 | CORREL | Statistical | 20 |
-| COS | Math & Trig | - |
+| COS | Math & Trig | 26 |
 | COSH | Math & Trig | - |
 | COT | Math & Trig | - |
 | COTH | Math & Trig | - |

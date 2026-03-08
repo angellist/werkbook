@@ -6744,6 +6744,99 @@ func TestCOMBIN(t *testing.T) {
 	}
 }
 
+func TestCOS(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Excel doc example
+		{"doc_example", "COS(1.047)", 0.5001710745970701, 1e-10},
+
+		// Key angles
+		{"cos_0", "COS(0)", 1, 0},
+		{"cos_pi_6", "COS(PI()/6)", math.Sqrt(3) / 2, 1e-10},
+		{"cos_pi_4", "COS(PI()/4)", math.Sqrt(2) / 2, 1e-10},
+		{"cos_pi_3", "COS(PI()/3)", 0.5, 1e-10},
+		{"cos_pi_2", "COS(PI()/2)", 0, 1e-10},
+		{"cos_pi", "COS(PI())", -1, 1e-10},
+
+		// Negative angles: COS(-x) = COS(x) (even function)
+		{"cos_neg_pi_6", "COS(-PI()/6)", math.Sqrt(3) / 2, 1e-10},
+		{"cos_neg_pi_4", "COS(-PI()/4)", math.Sqrt(2) / 2, 1e-10},
+		{"cos_neg_pi_3", "COS(-PI()/3)", 0.5, 1e-10},
+		{"cos_neg_pi", "COS(-PI())", -1, 1e-10},
+		{"cos_neg_1", "COS(-1)", math.Cos(-1), 1e-10},
+
+		// Multiples of PI
+		{"cos_2pi", "COS(2*PI())", 1, 1e-10},
+		{"cos_3pi_2", "COS(3*PI()/2)", 0, 1e-10},
+		{"cos_4pi", "COS(4*PI())", 1, 1e-10},
+
+		// Large angles
+		{"cos_100", "COS(100)", math.Cos(100), 1e-10},
+		{"cos_1000", "COS(1000)", math.Cos(1000), 1e-10},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "COS(TRUE)", math.Cos(1), 1e-10},
+		{"bool_false", "COS(FALSE)", 1, 0},
+
+		// String coercion
+		{"str_zero", `COS("0")`, 1, 0},
+		{"str_1_047", `COS("1.047")`, 0.5001710745970701, 1e-10},
+
+		// Degree conversion via expression (60 degrees)
+		{"degrees_60", "COS(60*PI()/180)", 0.5, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "COS()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "COS(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `COS("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "COS(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTAN(t *testing.T) {
 	resolver := &mockResolver{}
 
