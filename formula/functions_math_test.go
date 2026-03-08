@@ -5818,6 +5818,7 @@ func TestARABIC(t *testing.T) {
 		formula string
 		want    float64
 	}{
+		// Single roman numerals
 		{"I", `ARABIC("I")`, 1},
 		{"V", `ARABIC("V")`, 5},
 		{"X", `ARABIC("X")`, 10},
@@ -5825,22 +5826,44 @@ func TestARABIC(t *testing.T) {
 		{"C", `ARABIC("C")`, 100},
 		{"D", `ARABIC("D")`, 500},
 		{"M", `ARABIC("M")`, 1000},
+
+		// Subtractive combinations
 		{"IV", `ARABIC("IV")`, 4},
 		{"IX", `ARABIC("IX")`, 9},
 		{"XL", `ARABIC("XL")`, 40},
 		{"XC", `ARABIC("XC")`, 90},
 		{"CD", `ARABIC("CD")`, 400},
 		{"CM", `ARABIC("CM")`, 900},
+
+		// Multi-character compound numerals
 		{"MCMXCIX", `ARABIC("MCMXCIX")`, 1999},
 		{"MMXXVI", `ARABIC("MMXXVI")`, 2026},
 		{"MMMDCCCLXXXVIII", `ARABIC("MMMDCCCLXXXVIII")`, 3888},
-		{"lowercase", `ARABIC("mcmxcix")`, 1999},
-		{"mixed_case", `ARABIC("McmXcIx")`, 1999},
-		{"negative", `ARABIC("-IV")`, -4},
-		{"negative_large", `ARABIC("-MCMXCIX")`, -1999},
+		{"XLII", `ARABIC("XLII")`, 42},
+		{"CDXLIV", `ARABIC("CDXLIV")`, 444},
+		{"DCCCXC", `ARABIC("DCCCXC")`, 890},
+		{"XIV", `ARABIC("XIV")`, 14},
+
+		// Empty string and empty cell
 		{"empty_string", `ARABIC("")`, 0},
 		{"empty_cell", "ARABIC(B1)", 0},
-		{"whitespace", `ARABIC("  X  ")`, 10},
+
+		// Negative roman numerals
+		{"negative_IV", `ARABIC("-IV")`, -4},
+		{"negative_X", `ARABIC("-X")`, -10},
+		{"negative_MCMXCIX", `ARABIC("-MCMXCIX")`, -1999},
+
+		// Case insensitive: lowercase
+		{"lowercase_iv", `ARABIC("iv")`, 4},
+		{"lowercase_mcmxcix", `ARABIC("mcmxcix")`, 1999},
+
+		// Case insensitive: mixed case
+		{"mixed_case", `ARABIC("McmXcIx")`, 1999},
+
+		// Whitespace trimming
+		{"whitespace_both", `ARABIC("  X  ")`, 10},
+		{"leading_space", `ARABIC(" IV")`, 4},
+		{"trailing_space", `ARABIC("IV ")`, 4},
 	}
 
 	for _, tt := range numTests {
@@ -5864,10 +5887,15 @@ func TestARABIC(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
-		{"invalid_char", `ARABIC("ABC")`, ErrValVALUE},
-		{"number_input", "ARABIC(123)", ErrValVALUE},
+		// Wrong argument count
 		{"no_args", "ARABIC()", ErrValVALUE},
 		{"too_many_args", `ARABIC("I","V")`, ErrValVALUE},
+		// Invalid roman numeral characters
+		{"invalid_char_A", `ARABIC("ABC")`, ErrValVALUE},
+		{"invalid_char_Z", `ARABIC("Z")`, ErrValVALUE},
+		{"invalid_mixed", `ARABIC("XIZ")`, ErrValVALUE},
+		// Non-string argument types
+		{"number_input", "ARABIC(123)", ErrValVALUE},
 		{"bool_input", "ARABIC(TRUE)", ErrValVALUE},
 	}
 

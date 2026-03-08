@@ -12,7 +12,7 @@ Werkbook supports **343** Excel formula functions.
 | ADDRESS | Lookup & Reference | 33 |
 | ANCHORARRAY | Lookup & Reference | 6 |
 | AND | Logical | 29 |
-| ARABIC | Math & Trig | 28 |
+| ARABIC | Math & Trig | 38 |
 | ARRAYTOTEXT | Text | 24 |
 | ASIN | Math & Trig | 30 |
 | ASINH | Math & Trig | 26 |
