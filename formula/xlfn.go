@@ -113,6 +113,7 @@ var xlfnPrefix = map[string]string{
 	"TEXTSPLIT":       "_xlfn.",
 	"TOCOL":           "_xlfn.",
 	"TOROW":           "_xlfn.",
+	"UNICHAR":         "_xlfn.",
 	"UNIQUE":          "_xlfn.",
 	"VAR.P":           "_xlfn.",
 	"VAR.S":           "_xlfn.",

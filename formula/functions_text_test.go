@@ -2167,6 +2167,110 @@ func TestCODE_Windows1252(t *testing.T) {
 	}
 }
 
+func TestUNICHAR(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// String result tests
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Basic ASCII characters
+		{"space", `UNICHAR(32)`, " "},
+		{"exclamation", `UNICHAR(33)`, "!"},
+		{"digit_0", `UNICHAR(48)`, "0"},
+		{"uppercase_A", `UNICHAR(65)`, "A"},
+		{"uppercase_B", `UNICHAR(66)`, "B"},
+		{"uppercase_Z", `UNICHAR(90)`, "Z"},
+		{"lowercase_a", `UNICHAR(97)`, "a"},
+		{"lowercase_z", `UNICHAR(122)`, "z"},
+		{"tilde", `UNICHAR(126)`, "~"},
+
+		// Smallest valid code point
+		{"code_1", `UNICHAR(1)`, "\x01"},
+
+		// Unicode characters beyond ASCII
+		{"copyright", `UNICHAR(169)`, "\u00A9"},        // ©
+		{"euro_sign", `UNICHAR(8364)`, "\u20AC"},        // €
+		{"snowman", `UNICHAR(9731)`, "\u2603"},          // ☃
+		{"greek_alpha", `UNICHAR(945)`, "\u03B1"},       // α
+		{"cjk_char", `UNICHAR(20013)`, "\u4E2D"},       // 中
+		{"musical_note", `UNICHAR(9834)`, "\u266A"},     // ♪
+		{"infinity", `UNICHAR(8734)`, "\u221E"},         // ∞
+		{"check_mark", `UNICHAR(10003)`, "\u2713"},      // ✓
+
+		// Emoji (supplementary plane)
+		{"grinning_face", `UNICHAR(128512)`, "\U0001F600"}, // 😀
+
+		// Max valid Unicode code point
+		{"max_unicode", `UNICHAR(1114111)`, "\U0010FFFF"},
+
+		// Non-integer inputs should truncate (like Excel does)
+		{"truncate_65.1", `UNICHAR(65.1)`, "A"},
+		{"truncate_65.9", `UNICHAR(65.9)`, "A"},
+		{"truncate_66.5", `UNICHAR(66.5)`, "B"},
+
+		// String coercion
+		{"string_65", `UNICHAR("65")`, "A"},
+		{"string_66", `UNICHAR("66")`, "B"},
+
+		// Boolean TRUE = 1
+		{"bool_true", `UNICHAR(TRUE)`, "\x01"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %v (type %d), want %q", tt.formula, got, got.Type, tt.want)
+			}
+		})
+	}
+
+	// Error result tests
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// Zero is invalid
+		{"zero", `UNICHAR(0)`, ErrValVALUE},
+		// Negative values
+		{"negative_1", `UNICHAR(-1)`, ErrValVALUE},
+		{"negative_100", `UNICHAR(-100)`, ErrValVALUE},
+		// Above max Unicode code point
+		{"too_large", `UNICHAR(1114112)`, ErrValVALUE},
+		{"very_large", `UNICHAR(9999999)`, ErrValVALUE},
+		// Surrogate code points → #N/A
+		{"surrogate_start", `UNICHAR(55296)`, ErrValNA},  // 0xD800
+		{"surrogate_mid", `UNICHAR(56000)`, ErrValNA},    // 0xDAC0
+		{"surrogate_end", `UNICHAR(57343)`, ErrValNA},    // 0xDFFF
+		// Non-numeric string → #VALUE!
+		{"non_numeric_string", `UNICHAR("hello")`, ErrValVALUE},
+		// Wrong number of args
+		{"no_args", `UNICHAR()`, ErrValVALUE},
+		{"two_args", `UNICHAR(65,66)`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = %v (type %d, err %d), want error %d", tt.formula, got, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCHAR_Windows1252(t *testing.T) {
 	resolver := &mockResolver{}
 
