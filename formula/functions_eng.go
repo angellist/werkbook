@@ -26,8 +26,10 @@ func init() {
 	Register("IMARGUMENT", NoCtx(fnImargument))
 	Register("IMCONJUGATE", NoCtx(fnImconjugate))
 	Register("IMDIV", NoCtx(fnImdiv))
+	Register("IMPOWER", NoCtx(fnImpower))
 	Register("IMPRODUCT", NoCtx(fnImproduct))
 	Register("IMREAL", NoCtx(fnImreal))
+	Register("IMSQRT", NoCtx(fnImsqrt))
 	Register("IMSUB", NoCtx(fnImsub))
 	Register("IMSUM", NoCtx(fnImsum))
 	Register("OCT2BIN", NoCtx(fnOct2Bin))
@@ -1951,6 +1953,158 @@ func fnImsub(args []Value) (Value, error) {
 
 	realResult := parts[0].real - parts[1].real
 	imagResult := parts[0].imag - parts[1].imag
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// cleanFloat rounds a floating-point value to the nearest integer when it is
+// extremely close (within 1e-12), eliminating polar-form round-trip noise.
+// Values that are not near an integer are returned unchanged.
+func cleanFloat(v float64) float64 {
+	rounded := math.Round(v)
+	if math.Abs(v-rounded) < 1e-12 {
+		return rounded
+	}
+	return v
+}
+
+// fnImsqrt implements the Excel IMSQRT function.
+// IMSQRT(inumber) — returns the square root of a complex number.
+// Uses polar form: r=sqrt(x²+y²), θ=atan2(y,x), result=sqrt(r)*(cos(θ/2)+sin(θ/2)*i).
+func fnImsqrt(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsqrt([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// Special case: zero.
+	if x == 0 && y == 0 {
+		return StringVal("0"), nil
+	}
+
+	// Convert to polar form and compute square root.
+	r := math.Hypot(x, y)
+	theta := math.Atan2(y, x)
+	newR := math.Sqrt(r)
+	newTheta := theta / 2
+
+	realResult := cleanFloat(newR * math.Cos(newTheta))
+	imagResult := cleanFloat(newR * math.Sin(newTheta))
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImpower implements the Excel IMPOWER function.
+// IMPOWER(inumber, number) — returns a complex number raised to a power.
+// Uses polar form: r^n * (cos(nθ) + sin(nθ)*i).
+func fnImpower(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+	if args[1].Type == ValueError {
+		return args[1], nil
+	}
+
+	// Second arg must be numeric (not a complex string).
+	n, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	r := math.Hypot(x, y)
+
+	// Special cases involving zero base.
+	if r == 0 {
+		if n < 0 {
+			// Division by zero.
+			return ErrorVal(ErrValNUM), nil
+		}
+		if n == 0 {
+			// 0^0 = 1 by convention.
+			return StringVal("1"), nil
+		}
+		// 0^positive = 0.
+		return StringVal("0"), nil
+	}
+
+	// Special case: n=0, any non-zero base → 1.
+	if n == 0 {
+		return StringVal("1"), nil
+	}
+
+	theta := math.Atan2(y, x)
+	newR := math.Pow(r, n)
+	newTheta := n * theta
+
+	realResult := cleanFloat(newR * math.Cos(newTheta))
+	imagResult := cleanFloat(newR * math.Sin(newTheta))
 
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }

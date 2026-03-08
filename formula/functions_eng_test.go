@@ -3069,3 +3069,256 @@ func TestIMCONJUGATE(t *testing.T) {
 		}
 	})
 }
+
+func TestIMSQRT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// Pure real: positive
+			{`IMSQRT("4")`, "2"},
+			{`IMSQRT("9")`, "3"},
+			{`IMSQRT("1")`, "1"},
+			{`IMSQRT("0.25")`, "0.5"},
+
+			// Pure real: zero
+			{`IMSQRT("0")`, "0"},
+
+			// Pure real: negative → purely imaginary
+			{`IMSQRT("-1")`, "i"},
+			{`IMSQRT("-4")`, "2i"},
+			{`IMSQRT("-9")`, "3i"},
+
+			// Complex: sqrt(3+4i) = 2+i (since (2+i)² = 3+4i)
+			{`IMSQRT("3+4i")`, "2+i"},
+
+			// Complex: sqrt(5+12i) = 3+2i (since (3+2i)² = 5+12i)
+			{`IMSQRT("5+12i")`, "3+2i"},
+
+			// Complex: sqrt(8+6i) = 3+i (since (3+i)² = 8+6i)
+			{`IMSQRT("8+6i")`, "3+i"},
+
+			// Complex: sqrt(-3+4i) = 1+2i (since (1+2i)² = -3+4i)
+			{`IMSQRT("-3+4i")`, "1+2i"},
+
+			// Complex: sqrt(-3-4i) = 1-2i (since (1-2i)² = -3-4i)
+			{`IMSQRT("-3-4i")`, "1-2i"},
+
+			// j suffix
+			{`IMSQRT("3+4j")`, "2+j"},
+
+			// Decimal result: sqrt(2i) = 1+i (since (1+i)² = 2i)
+			{`IMSQRT("2i")`, "1+i"},
+
+			// Numeric input (not string)
+			{`IMSQRT(4)`, "2"},
+			{`IMSQRT(0)`, "0"},
+
+			// COMPLEX composition
+			{`IMSQRT(COMPLEX(3,4))`, "2+i"},
+			{`IMSQRT(COMPLEX(0,0))`, "0"},
+			{`IMSQRT(COMPLEX(5,12))`, "3+2i"},
+			{`IMSQRT(COMPLEX(-1,0))`, "i"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMSQRT("invalid")`, ErrValNUM},
+			{`IMSQRT("")`, ErrValNUM},
+			{`IMSQRT("abc")`, ErrValNUM},
+			{`IMSQRT("3+4")`, ErrValNUM},
+			{`IMSQRT("3+4k")`, ErrValNUM},
+			{`IMSQRT("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMSQRT(TRUE)`, ErrValVALUE},
+			{`IMSQRT(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMSQRT()`, ErrValVALUE},
+			{`IMSQRT("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMSQRT(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMSQRT(1/0) = %v, want error", got)
+		}
+	})
+}
+
+func TestIMPOWER(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// i^2 = -1
+			{`IMPOWER("i",2)`, "-1"},
+
+			// i^4 = 1
+			{`IMPOWER("i",4)`, "1"},
+
+			// Pure real: 2^3 = 8
+			{`IMPOWER("2",3)`, "8"},
+
+			// Pure real: 3^2 = 9
+			{`IMPOWER("3",2)`, "9"},
+
+			// (1+i)^2 = 2i
+			{`IMPOWER("1+i",2)`, "2i"},
+
+			// Power 0: anything^0 = 1
+			{`IMPOWER("3+4i",0)`, "1"},
+			{`IMPOWER("i",0)`, "1"},
+			{`IMPOWER("5",0)`, "1"},
+			{`IMPOWER("0",0)`, "1"},
+
+			// Power 1: returns same
+			{`IMPOWER("3+4i",1)`, "3+4i"},
+			{`IMPOWER("i",1)`, "i"},
+			{`IMPOWER("5",1)`, "5"},
+
+			// 0^positive = 0
+			{`IMPOWER("0",2)`, "0"},
+			{`IMPOWER("0",5)`, "0"},
+
+			// Negative power: 2^-1 = 0.5
+			{`IMPOWER("2",-1)`, "0.5"},
+
+			// Decimal power: 4^0.5 = 2
+			{`IMPOWER("4",0.5)`, "2"},
+
+			// j suffix
+			{`IMPOWER("j",2)`, "-1"},
+			{`IMPOWER("1+j",2)`, "2j"},
+
+			// Numeric first arg
+			{`IMPOWER(2,3)`, "8"},
+			{`IMPOWER(4,0.5)`, "2"},
+
+			// (1+i)^4 = -4
+			{`IMPOWER("1+i",4)`, "-4"},
+
+			// Complex power: (2+3i)^2 = 4+12i-9 = -5+12i
+			{`IMPOWER("2+3i",2)`, "-5+12i"},
+
+			// COMPLEX composition
+			{`IMPOWER(COMPLEX(1,1),2)`, "2i"},
+			{`IMPOWER(COMPLEX(0,1),2)`, "-1"},
+			{`IMPOWER(COMPLEX(2,0),3)`, "8"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %v, want %q", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number string
+			{`IMPOWER("invalid",2)`, ErrValNUM},
+			{`IMPOWER("",2)`, ErrValNUM},
+			{`IMPOWER("abc",2)`, ErrValNUM},
+			{`IMPOWER("3+4",2)`, ErrValNUM},
+			{`IMPOWER("3+4k",2)`, ErrValNUM},
+
+			// 0^negative → #NUM! (division by zero)
+			{`IMPOWER("0",-1)`, ErrValNUM},
+			{`IMPOWER("0",-2)`, ErrValNUM},
+
+			// Boolean first arg → #VALUE!
+			{`IMPOWER(TRUE,2)`, ErrValVALUE},
+			{`IMPOWER(FALSE,2)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMPOWER("1")`, ErrValVALUE},
+			{`IMPOWER()`, ErrValVALUE},
+			{`IMPOWER("1",2,3)`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMPOWER(1/0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMPOWER(1/0,2) = %v, want error", got)
+		}
+	})
+
+	t.Run("error propagation second arg", func(t *testing.T) {
+		cf := evalCompile(t, `IMPOWER("1+i",1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMPOWER(\"1+i\",1/0) = %v, want error", got)
+		}
+	})
+}
