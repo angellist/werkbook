@@ -5,20 +5,20 @@ Werkbook supports **343** Excel formula functions.
 | Function | Category | Tests |
 |----------|----------|------:|
 | ABS | Math & Trig | 26 |
-| ACOS | Math & Trig | - |
-| ACOSH | Math & Trig | - |
+| ACOS | Math & Trig | 14 |
+| ACOSH | Math & Trig | 14 |
 | ACOT | Math & Trig | 25 |
 | ACOTH | Math & Trig | 31 |
-| ADDRESS | Lookup & Reference | - |
+| ADDRESS | Lookup & Reference | 33 |
 | ANCHORARRAY | Lookup & Reference | 6 |
 | AND | Logical | 27 |
-| ARABIC | Math & Trig | - |
+| ARABIC | Math & Trig | 28 |
 | ARRAYTOTEXT | Text | 24 |
-| ASIN | Math & Trig | - |
-| ASINH | Math & Trig | - |
-| ATAN | Math & Trig | - |
-| ATAN2 | Math & Trig | - |
-| ATANH | Math & Trig | - |
+| ASIN | Math & Trig | 14 |
+| ASINH | Math & Trig | 12 |
+| ATAN | Math & Trig | 12 |
+| ATAN2 | Math & Trig | 15 |
+| ATANH | Math & Trig | 16 |
 | AVEDEV | Statistical | - |
 | AVERAGE | Statistical | 28 |
 | AVERAGEA | Statistical | 24 |
@@ -48,7 +48,7 @@ Werkbook supports **343** Excel formula functions.
 | CHOOSE | Text | 24 |
 | CHOOSECOLS | Lookup & Reference | 7 |
 | CHOOSEROWS | Lookup & Reference | 7 |
-| CLEAN | Text | - |
+| CLEAN | Text | 25 |
 | CODE | Text | 12 |
 | COLUMN | Information | - |
 | COLUMNS | Information | - |
@@ -111,7 +111,7 @@ Werkbook supports **343** Excel formula functions.
 | F.DIST.RT | Statistical | 19 |
 | F.INV | Statistical | 36 |
 | F.INV.RT | Statistical | 21 |
-| FACT | Math & Trig | - |
+| FACT | Math & Trig | 28 |
 | FACTDOUBLE | Math & Trig | - |
 | FALSE | Logical | - |
 | FILTER | Lookup & Reference | 31 |

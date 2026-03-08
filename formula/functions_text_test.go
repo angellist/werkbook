@@ -3699,3 +3699,105 @@ func TestUPPER(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// CLEAN
+// ---------------------------------------------------------------------------
+
+func TestCLEAN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Basic: remove tab (CHAR 9) and newline (CHAR 10)
+		{name: "tab_and_newline", formula: `CLEAN(CHAR(9)&"Monthly report"&CHAR(10))`, want: "Monthly report"},
+		// Empty string input
+		{name: "empty_string", formula: `CLEAN("")`, want: ""},
+		// String with no non-printable characters (unchanged)
+		{name: "no_control_chars", formula: `CLEAN("hello world")`, want: "hello world"},
+		// Printable string with punctuation and digits
+		{name: "printable_mixed", formula: `CLEAN("abc 123 !@#")`, want: "abc 123 !@#"},
+		// Only non-printable characters → empty string
+		{name: "only_control_chars", formula: `CLEAN(CHAR(1)&CHAR(2)&CHAR(3))`, want: ""},
+		// SOH character (CHAR 1)
+		{name: "soh_char", formula: `CLEAN(CHAR(1)&"test")`, want: "test"},
+		// Bell character (CHAR 7)
+		{name: "bell_char", formula: `CLEAN("before"&CHAR(7)&"after")`, want: "beforeafter"},
+		// Backspace character (CHAR 8)
+		{name: "backspace_char", formula: `CLEAN("data"&CHAR(8))`, want: "data"},
+		// Horizontal tab (CHAR 9)
+		{name: "tab_only", formula: `CLEAN(CHAR(9))`, want: ""},
+		// Line feed (CHAR 10)
+		{name: "linefeed", formula: `CLEAN("line1"&CHAR(10)&"line2")`, want: "line1line2"},
+		// Carriage return (CHAR 13)
+		{name: "carriage_return", formula: `CLEAN("line1"&CHAR(13)&"line2")`, want: "line1line2"},
+		// CRLF combination (CHAR 13 + CHAR 10)
+		{name: "crlf", formula: `CLEAN("line1"&CHAR(13)&CHAR(10)&"line2")`, want: "line1line2"},
+		// Escape character (CHAR 27)
+		{name: "escape_char", formula: `CLEAN(CHAR(27)&"text")`, want: "text"},
+		// Character 31 (last non-printable, unit separator)
+		{name: "char_31", formula: `CLEAN("a"&CHAR(31)&"b")`, want: "ab"},
+		// Character 32 (space) should NOT be removed
+		{name: "space_preserved", formula: `CLEAN("a"&CHAR(32)&"b")`, want: "a b"},
+		// Multiple control chars interspersed
+		{name: "multiple_control_mixed", formula: `CLEAN(CHAR(1)&"a"&CHAR(2)&"b"&CHAR(3)&"c")`, want: "abc"},
+		// Multiple low control chars surrounding text
+		{name: "all_low_controls_prefix", formula: `CLEAN(CHAR(1)&CHAR(5)&CHAR(15)&CHAR(31)&"keep")`, want: "keep"},
+		// Number coercion (42 → "42", no control chars)
+		{name: "number_coercion", formula: `CLEAN(42)`, want: "42"},
+		// Boolean coercion (TRUE → "TRUE")
+		{name: "bool_true_coercion", formula: `CLEAN(TRUE)`, want: "TRUE"},
+		// Boolean coercion (FALSE → "FALSE")
+		{name: "bool_false_coercion", formula: `CLEAN(FALSE)`, want: "FALSE"},
+		// Error value coerced to string (ValueToString converts error)
+		{name: "error_coerced", formula: `CLEAN(1/0)`, want: "#DIV/0!"},
+		// High ASCII characters (>= 32) preserved
+		{name: "high_ascii_preserved", formula: `CLEAN(CHAR(65)&CHAR(90)&CHAR(126))`, want: "AZ~"},
+		// Printable special characters preserved
+		{name: "special_chars_preserved", formula: `CLEAN("$100.00 (USD)")`, want: "$100.00 (USD)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+			}
+		})
+	}
+}
+
+func TestCLEANErrors(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// No arguments → #VALUE!
+	t.Run("no_args", func(t *testing.T) {
+		cf := evalCompile(t, `CLEAN()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval(CLEAN()): unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("CLEAN() = %v, want #VALUE!", got)
+		}
+	})
+
+	// Too many arguments → #VALUE!
+	t.Run("too_many_args", func(t *testing.T) {
+		cf := evalCompile(t, `CLEAN("a","b")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval(CLEAN(a,b)): unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("CLEAN(a,b) = %v, want #VALUE!", got)
+		}
+	})
+}
