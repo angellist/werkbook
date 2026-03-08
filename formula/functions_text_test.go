@@ -3801,3 +3801,127 @@ func TestCLEANErrors(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// REPLACE comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestREPLACEComprehensive(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    string
+		isErr   bool
+	}{
+		// Excel documentation examples
+		{name: "excel_example_1", formula: `REPLACE("abcdefghijk",6,5,"*")`, want: "abcde*k"},
+		{name: "excel_example_2", formula: `REPLACE("2009",3,2,"10")`, want: "2010"},
+
+		// Replace at beginning of string
+		{name: "replace_at_start", formula: `REPLACE("123456",1,3,"A")`, want: "A456"},
+		{name: "replace_first_char", formula: `REPLACE("hello",1,1,"H")`, want: "Hello"},
+		{name: "replace_all_from_start", formula: `REPLACE("abc",1,3,"XYZ")`, want: "XYZ"},
+
+		// Replace at end of string
+		{name: "replace_at_end", formula: `REPLACE("hello",5,1,"!")`, want: "hell!"},
+		{name: "replace_last_two", formula: `REPLACE("hello",4,2,"p!")`, want: "help!"},
+		{name: "replace_entire_end", formula: `REPLACE("abcdef",4,3,"XY")`, want: "abcXY"},
+
+		// Replace in middle
+		{name: "replace_middle", formula: `REPLACE("abcdef",3,2,"XX")`, want: "abXXef"},
+		{name: "replace_single_middle", formula: `REPLACE("abcdef",3,1,"X")`, want: "abXdef"},
+
+		// num_chars=0 (insert without removing)
+		{name: "insert_at_start", formula: `REPLACE("abc",1,0,"X")`, want: "Xabc"},
+		{name: "insert_at_middle", formula: `REPLACE("abc",2,0,"X")`, want: "aXbc"},
+		{name: "insert_at_end", formula: `REPLACE("abc",4,0,"X")`, want: "abcX"},
+		{name: "insert_empty", formula: `REPLACE("abc",2,0,"")`, want: "abc"},
+
+		// Replace with longer/shorter new_text
+		{name: "longer_replacement", formula: `REPLACE("abc",2,1,"XXXX")`, want: "aXXXXc"},
+		{name: "shorter_replacement", formula: `REPLACE("abcdef",2,4,"X")`, want: "aXf"},
+
+		// Empty old_text
+		{name: "empty_old_text", formula: `REPLACE("",1,0,"hello")`, want: "hello"},
+		{name: "empty_old_text_replace", formula: `REPLACE("",1,0,"")`, want: ""},
+
+		// Empty new_text (deletion)
+		{name: "delete_chars", formula: `REPLACE("hello",2,3,"")`, want: "ho"},
+		{name: "delete_first", formula: `REPLACE("hello",1,1,"")`, want: "ello"},
+		{name: "delete_all", formula: `REPLACE("hello",1,5,"")`, want: ""},
+
+		// num_chars exceeds remaining string length (clamps to end)
+		{name: "num_chars_exceeds", formula: `REPLACE("abc",2,100,"X")`, want: "aX"},
+		{name: "num_chars_exceeds_from_start", formula: `REPLACE("hi",1,50,"bye")`, want: "bye"},
+
+		// start_num beyond string length (appends)
+		{name: "start_beyond_length", formula: `REPLACE("abc",10,1,"X")`, want: "abcX"},
+		{name: "start_just_beyond", formula: `REPLACE("abc",4,0,"X")`, want: "abcX"},
+
+		// Numeric coercion for old_text
+		{name: "numeric_old_text", formula: `REPLACE(12345,2,3,"X")`, want: "1X5"},
+		{name: "numeric_zero", formula: `REPLACE(0,1,1,"X")`, want: "X"},
+
+		// Boolean coercion for old_text
+		{name: "bool_true", formula: `REPLACE(TRUE,1,2,"X")`, want: "XUE"},
+		{name: "bool_false", formula: `REPLACE(FALSE,3,3,"X")`, want: "FAX"},
+
+		// Float args for start_num and num_chars (truncated to int)
+		{name: "float_start_num", formula: `REPLACE("hello",2.9,3,"X")`, want: "hXo"},
+		{name: "float_num_chars", formula: `REPLACE("hello",1,2.7,"X")`, want: "Xllo"},
+
+		// Negative start_num or num_chars (should error)
+		{name: "negative_start", formula: `REPLACE("hello",-1,3,"X")`, isErr: true},
+		{name: "zero_start", formula: `REPLACE("hello",0,3,"X")`, isErr: true},
+		{name: "negative_num_chars", formula: `REPLACE("hello",1,-1,"X")`, isErr: true},
+
+		// Non-numeric start_num or num_chars (should error)
+		{name: "non_numeric_start", formula: `REPLACE("hello","abc",3,"X")`, isErr: true},
+		{name: "non_numeric_num_chars", formula: `REPLACE("hello",1,"abc","X")`, isErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", tt.formula, got)
+				}
+			} else {
+				if got.Type != ValueString || got.Str != tt.want {
+					t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestREPLACEWrongArgCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, `REPLACE("hello",2,3)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("REPLACE with 3 args: got %v, want error", got)
+	}
+
+	// Too many args
+	cf = evalCompile(t, `REPLACE("hello",2,3,"X","extra")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("REPLACE with 5 args: got %v, want error", got)
+	}
+}
