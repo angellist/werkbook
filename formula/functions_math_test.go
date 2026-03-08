@@ -7605,3 +7605,102 @@ func TestCOTH(t *testing.T) {
 		})
 	}
 }
+
+func TestCSC(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Key angles: CSC(x) = 1/SIN(x)
+		{"csc_pi_2", "CSC(PI()/2)", 1, 1e-10},
+		{"csc_pi_6", "CSC(PI()/6)", 2, 1e-10},
+		{"csc_pi_4", "CSC(PI()/4)", math.Sqrt(2), 1e-10},
+		{"csc_pi_3", "CSC(PI()/3)", 2 / math.Sqrt(3), 1e-10},
+
+		// Generic values
+		{"csc_1", "CSC(1)", 1 / math.Sin(1), 1e-10},
+		{"csc_2", "CSC(2)", 1 / math.Sin(2), 1e-10},
+		{"csc_0_5", "CSC(0.5)", 1 / math.Sin(0.5), 1e-10},
+
+		// Negative angles: CSC(-x) = -CSC(x) (odd function)
+		{"csc_neg_pi_2", "CSC(-PI()/2)", -1, 1e-10},
+		{"csc_neg_pi_6", "CSC(-PI()/6)", -2, 1e-10},
+		{"csc_neg_1", "CSC(-1)", 1 / math.Sin(-1), 1e-10},
+		{"csc_neg_2", "CSC(-2)", 1 / math.Sin(-2), 1e-10},
+
+		// Large angles
+		{"csc_100", "CSC(100)", 1 / math.Sin(100), 1e-10},
+		{"csc_1000", "CSC(1000)", 1 / math.Sin(1000), 1e-10},
+
+		// Small angle close to zero (large magnitude result)
+		{"csc_0_01", "CSC(0.01)", 1 / math.Sin(0.01), 1e-6},
+
+		// Boolean coercion: TRUE=1
+		{"bool_true", "CSC(TRUE)", 1 / math.Sin(1), 1e-10},
+
+		// String coercion
+		{"str_1", `CSC("1")`, 1 / math.Sin(1), 1e-10},
+		{"str_0_5", `CSC("0.5")`, 1 / math.Sin(0.5), 1e-10},
+
+		// Degree conversion via expression (30 degrees = PI/6)
+		{"degrees_30", "CSC(30*PI()/180)", 2, 1e-10},
+
+		// Excel example: CSC(15) ≈ 1.5377...
+		{"excel_example", "CSC(15)", 1 / math.Sin(15), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "CSC()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "CSC(1,2)", ErrValVALUE},
+		// CSC(0) = 1/sin(0) => division by zero
+		{"zero_div0", "CSC(0)", ErrValDIV0},
+		// FALSE coerces to 0 => DIV/0!
+		{"bool_false_div0", "CSC(FALSE)", ErrValDIV0},
+		// String "0" coerces to 0 => DIV/0!
+		{"str_zero_div0", `CSC("0")`, ErrValDIV0},
+		// Non-numeric string
+		{"non_numeric", `CSC("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "CSC(1/0)", ErrValDIV0},
+		{"err_na", "CSC(NA())", ErrValNA},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
