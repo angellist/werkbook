@@ -5190,6 +5190,119 @@ func TestLOG(t *testing.T) {
 	}
 }
 
+func TestLOG10(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Powers of 10 — exact integer results
+		{"log10_1", "LOG10(1)", 0, 0},
+		{"log10_10", "LOG10(10)", 1, 0},
+		{"log10_100", "LOG10(100)", 2, 0},
+		{"log10_1000", "LOG10(1000)", 3, 1e-10},
+		{"log10_10000", "LOG10(10000)", 4, 1e-10},
+
+		// Negative powers of 10
+		{"log10_0_1", "LOG10(0.1)", -1, 1e-10},
+		{"log10_0_01", "LOG10(0.01)", -2, 1e-10},
+		{"log10_0_001", "LOG10(0.001)", -3, 1e-10},
+
+		// Non-power-of-10 values
+		{"log10_2", "LOG10(2)", 0.30102999566398120, 1e-10},
+		{"log10_5", "LOG10(5)", 0.69897000433601880, 1e-10},
+		{"log10_50", "LOG10(50)", 1.69897000433601880, 1e-10},
+
+		// Large values
+		{"log10_1e6", "LOG10(1000000)", 6, 1e-10},
+		{"log10_1e10", "LOG10(10000000000)", 10, 1e-10},
+		{"log10_1e15", "LOG10(1E15)", 15, 1e-6},
+
+		// Small positive values
+		{"log10_1e-5", "LOG10(0.00001)", -5, 1e-10},
+		{"log10_1e-10", "LOG10(1E-10)", -10, 1e-6},
+
+		// Excel documentation example
+		{"excel_example_86", "LOG10(86)", 1.93449845124357, 1e-10},
+		{"excel_example_10", "LOG10(10)", 1, 0},
+		{"excel_example_1e5", "LOG10(1E5)", 5, 1e-10},
+
+		// Boolean coercion: TRUE=1 -> LOG10(1)=0
+		{"log10_true", "LOG10(TRUE)", 0, 0},
+
+		// String coercion
+		{"log10_string_10", `LOG10("10")`, 1, 0},
+		{"log10_string_100", `LOG10("100")`, 2, 0},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if tt.tol == 0 {
+				if got.Num != tt.want {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+				}
+			} else {
+				if math.Abs(got.Num-tt.want) > tt.tol {
+					t.Errorf("Eval(%q) = %g, want %g (tol %g)", tt.formula, got.Num, tt.want, tt.tol)
+				}
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// LOG10(0) -> #NUM!
+		{"log10_zero", "LOG10(0)", ErrValNUM},
+
+		// Negative values -> #NUM!
+		{"negative_1", "LOG10(-1)", ErrValNUM},
+		{"negative_10", "LOG10(-10)", ErrValNUM},
+		{"negative_small", "LOG10(-0.001)", ErrValNUM},
+
+		// Boolean coercion: FALSE=0 -> #NUM!
+		{"bool_false", "LOG10(FALSE)", ErrValNUM},
+
+		// No args -> #VALUE!
+		{"no_args", "LOG10()", ErrValVALUE},
+
+		// Too many args -> #VALUE!
+		{"too_many_args", "LOG10(10,2)", ErrValVALUE},
+
+		// Non-numeric string -> #VALUE!
+		{"non_numeric_string", `LOG10("abc")`, ErrValVALUE},
+
+		// Error propagation
+		{"error_prop_div0", "LOG10(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestGAMMA(t *testing.T) {
 	resolver := &mockResolver{}
 
