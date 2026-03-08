@@ -334,7 +334,7 @@ Werkbook supports **343** Excel formula functions.
 | VLOOKUP | Lookup & Reference | 15 |
 | VSTACK | Lookup & Reference | 18 |
 | WEEKDAY | Date & Time | 1 |
-| WEEKNUM | Date & Time | 36 |
+| WEEKNUM | Date & Time | 39 |
 | WEIBULL.DIST | Statistical | 33 |
 | WORKDAY | Date & Time | 23 |
 | WORKDAY.INTL | Date & Time | 34 |
