@@ -8014,3 +8014,99 @@ func TestSECH(t *testing.T) {
 		})
 	}
 }
+
+func TestCSCH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Standard values: CSCH(x) = 1/SINH(x)
+		{"csch_1", "CSCH(1)", 0.8509181282393216, 1e-10},
+		{"csch_2", "CSCH(2)", 0.2757205647717832, 1e-10},
+		{"csch_3", "CSCH(3)", 0.09982156966382391, 1e-10},
+		{"csch_0_5", "CSCH(0.5)", 1.9190347513349437, 1e-10},
+		{"csch_1_5", "CSCH(1.5)", 0.46964244059522464, 1e-10},
+
+		// Odd function: CSCH(-x) = -CSCH(x)
+		{"odd_neg1", "CSCH(-1)", -0.8509181282393216, 1e-10},
+		{"odd_neg2", "CSCH(-2)", -0.2757205647717832, 1e-10},
+		{"odd_neg0_5", "CSCH(-0.5)", -1.9190347513349437, 1e-10},
+		{"odd_neg3", "CSCH(-3)", -0.09982156966382391, 1e-10},
+
+		// Large values approach 0
+		{"large_10", "CSCH(10)", 1 / math.Sinh(10), 1e-12},
+		{"large_20", "CSCH(20)", 1 / math.Sinh(20), 1e-12},
+		{"large_neg10", "CSCH(-10)", 1 / math.Sinh(-10), 1e-12},
+		{"large_neg20", "CSCH(-20)", 1 / math.Sinh(-20), 1e-12},
+
+		// Small values (large magnitude result)
+		{"small_0_1", "CSCH(0.1)", 1 / math.Sinh(0.1), 1e-10},
+		{"small_0_01", "CSCH(0.01)", 1 / math.Sinh(0.01), 1e-8},
+
+		// Boolean coercion: TRUE=1, FALSE handled in error tests (=0 -> DIV/0)
+		{"bool_true", "CSCH(TRUE)", 0.8509181282393216, 1e-10},
+
+		// String coercion
+		{"str_1", `CSCH("1")`, 0.8509181282393216, 1e-10},
+		{"str_neg1", `CSCH("-1")`, -0.8509181282393216, 1e-10},
+		{"str_2", `CSCH("2")`, 0.2757205647717832, 1e-10},
+
+		// Expression input
+		{"expr_add", "CSCH(1+1)", 1 / math.Sinh(2), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "CSCH()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "CSCH(1,2)", ErrValVALUE},
+		// CSCH(0) is undefined (division by zero)
+		{"zero", "CSCH(0)", ErrValDIV0},
+		// Boolean FALSE coerces to 0 -> DIV/0
+		{"bool_false", "CSCH(FALSE)", ErrValDIV0},
+		// String "0" coerces to 0 -> DIV/0
+		{"str_zero", `CSCH("0")`, ErrValDIV0},
+		// Non-numeric string
+		{"non_numeric", `CSCH("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "CSCH(1/0)", ErrValDIV0},
+		{"err_na", "CSCH(NA())", ErrValNA},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
