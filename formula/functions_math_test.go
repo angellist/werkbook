@@ -5784,15 +5784,37 @@ func TestATAN2(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		{"atan2_1_1", "ATAN2(1,1)", math.Pi / 4, 1e-10},
-		{"atan2_1_0", "ATAN2(1,0)", 0, 0},
-		{"atan2_0_1", "ATAN2(0,1)", math.Pi / 2, 1e-10},
-		{"atan2_neg1_1", "ATAN2(-1,1)", math.Atan2(1, -1), 1e-10},
-		{"atan2_1_neg1", "ATAN2(1,-1)", math.Atan2(-1, 1), 1e-10},
-		{"atan2_neg1_neg1", "ATAN2(-1,-1)", math.Atan2(-1, -1), 1e-10},
-		{"atan2_3_4", "ATAN2(3,4)", math.Atan2(4, 3), 1e-10},
-		{"atan2_bool_true", "ATAN2(TRUE,TRUE)", math.Pi / 4, 1e-10},
-		{"atan2_string_num", `ATAN2("1","1")`, math.Pi / 4, 1e-10},
+		// Quadrant I: x>0, y>0 => result in (0, PI/2)
+		{"q1_1_1", "ATAN2(1,1)", math.Pi / 4, 1e-10},
+		{"q1_3_4", "ATAN2(3,4)", math.Atan2(4, 3), 1e-10},
+		{"q1_large", "ATAN2(1000,2000)", math.Atan2(2000, 1000), 1e-10},
+		// Quadrant II: x<0, y>0 => result in (PI/2, PI)
+		{"q2_neg1_1", "ATAN2(-1,1)", math.Atan2(1, -1), 1e-10},
+		{"q2_neg3_4", "ATAN2(-3,4)", math.Atan2(4, -3), 1e-10},
+		// Quadrant III: x<0, y<0 => result in (-PI, -PI/2)
+		{"q3_neg1_neg1", "ATAN2(-1,-1)", math.Atan2(-1, -1), 1e-10},
+		{"q3_neg3_neg4", "ATAN2(-3,-4)", math.Atan2(-4, -3), 1e-10},
+		// Quadrant IV: x>0, y<0 => result in (-PI/2, 0)
+		{"q4_1_neg1", "ATAN2(1,-1)", math.Atan2(-1, 1), 1e-10},
+		{"q4_3_neg4", "ATAN2(3,-4)", math.Atan2(-4, 3), 1e-10},
+		// Axis-aligned: positive x-axis (y=0, x>0) => 0
+		{"pos_x_axis", "ATAN2(1,0)", 0, 0},
+		// Axis-aligned: negative x-axis (y=0, x<0) => PI
+		{"neg_x_axis", "ATAN2(-1,0)", math.Pi, 1e-10},
+		// Axis-aligned: positive y-axis (x=0, y>0) => PI/2
+		{"pos_y_axis", "ATAN2(0,1)", math.Pi / 2, 1e-10},
+		// Axis-aligned: negative y-axis (x=0, y<0) => -PI/2
+		{"neg_y_axis", "ATAN2(0,-1)", -math.Pi / 2, 1e-10},
+		// Very small values
+		{"small_values", "ATAN2(0.0001,0.0001)", math.Pi / 4, 1e-10},
+		// Boolean coercion
+		{"bool_true_true", "ATAN2(TRUE,TRUE)", math.Pi / 4, 1e-10},
+		{"bool_false_pos", "ATAN2(FALSE,1)", math.Pi / 2, 1e-10},
+		{"bool_pos_false", "ATAN2(1,FALSE)", 0, 0},
+		// String numeric coercion
+		{"string_num_both", `ATAN2("1","1")`, math.Pi / 4, 1e-10},
+		{"string_num_x", `ATAN2("3",4)`, math.Atan2(4, 3), 1e-10},
+		{"string_num_y", `ATAN2(3,"4")`, math.Atan2(4, 3), 1e-10},
 	}
 
 	for _, tt := range numTests {
@@ -5816,12 +5838,20 @@ func TestATAN2(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
+		// Both zero => #DIV/0!
 		{"both_zero", "ATAN2(0,0)", ErrValDIV0},
+		{"both_zero_float", "ATAN2(0.0,0.0)", ErrValDIV0},
+		{"both_false", "ATAN2(FALSE,FALSE)", ErrValDIV0},
+		// Wrong argument count
 		{"no_args", "ATAN2()", ErrValVALUE},
 		{"one_arg", "ATAN2(1)", ErrValVALUE},
 		{"too_many_args", "ATAN2(1,2,3)", ErrValVALUE},
+		// Non-numeric strings
 		{"string_non_num_x", `ATAN2("abc",1)`, ErrValVALUE},
 		{"string_non_num_y", `ATAN2(1,"abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_propagate_x", "ATAN2(1/0,1)", ErrValDIV0},
+		{"err_propagate_y", "ATAN2(1,1/0)", ErrValDIV0},
 	}
 
 	for _, tt := range errTests {
