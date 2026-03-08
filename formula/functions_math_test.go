@@ -5690,15 +5690,44 @@ func TestATAN(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
+		// Identity: ATAN(0) = 0
 		{"atan_0", "ATAN(0)", 0, 0},
+
+		// Fundamental values: ATAN(1) = PI/4, ATAN(-1) = -PI/4
 		{"atan_1", "ATAN(1)", math.Pi / 4, 1e-10},
 		{"atan_neg1", "ATAN(-1)", -math.Pi / 4, 1e-10},
-		{"atan_large", "ATAN(1000)", math.Atan(1000), 1e-10},
-		{"atan_neg_large", "ATAN(-1000)", math.Atan(-1000), 1e-10},
+
+		// Excel doc example: ATAN(1) = 0.785398163...
+		{"doc_ex1", "ATAN(1)", 0.785398163, 1e-9},
+
+		// Fractional inputs
 		{"atan_0.5", "ATAN(0.5)", math.Atan(0.5), 1e-10},
-		{"atan_bool_true", "ATAN(TRUE)", math.Pi / 4, 1e-10},
-		{"atan_bool_false", "ATAN(FALSE)", 0, 0},
-		{"atan_string_num", `ATAN("1")`, math.Pi / 4, 1e-10},
+		{"atan_neg0.5", "ATAN(-0.5)", math.Atan(-0.5), 1e-10},
+		{"atan_2", "ATAN(2)", math.Atan(2), 1e-10},
+		{"atan_neg2", "ATAN(-2)", math.Atan(-2), 1e-10},
+
+		// Large values approaching PI/2
+		{"atan_1000", "ATAN(1000)", math.Atan(1000), 1e-10},
+		{"atan_neg1000", "ATAN(-1000)", math.Atan(-1000), 1e-10},
+		{"atan_1e10", "ATAN(10000000000)", math.Atan(1e10), 1e-10},
+		{"atan_neg1e10", "ATAN(-10000000000)", math.Atan(-1e10), 1e-10},
+
+		// Small values near zero (ATAN(x) ~ x for small x)
+		{"atan_small", "ATAN(0.001)", math.Atan(0.001), 1e-10},
+		{"atan_tiny", "ATAN(0.0000001)", math.Atan(0.0000001), 1e-15},
+		{"atan_neg_small", "ATAN(-0.001)", math.Atan(-0.001), 1e-10},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "ATAN(TRUE)", math.Pi / 4, 1e-10},
+		{"bool_false", "ATAN(FALSE)", 0, 0},
+
+		// String coercion
+		{"string_1", `ATAN("1")`, math.Pi / 4, 1e-10},
+		{"string_0", `ATAN("0")`, 0, 0},
+		{"string_neg1", `ATAN("-1")`, -math.Pi / 4, 1e-10},
+
+		// Expression argument
+		{"expr_add", "ATAN(0.5+0.5)", math.Pi / 4, 1e-10},
 	}
 
 	for _, tt := range numTests {
@@ -5722,9 +5751,14 @@ func TestATAN(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
+		// No arguments
 		{"no_args", "ATAN()", ErrValVALUE},
+		// Too many arguments
 		{"too_many_args", "ATAN(1,2)", ErrValVALUE},
+		// Non-numeric string
 		{"string_non_num", `ATAN("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "ATAN(1/0)", ErrValDIV0},
 	}
 
 	for _, tt := range errTests {
