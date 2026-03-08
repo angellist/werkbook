@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **380** Excel formula functions.
+Werkbook supports **382** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -264,6 +264,7 @@ Werkbook supports **380** Excel formula functions.
 | POISSON.DIST | Statistical | 26 |
 | POWER | Math & Trig | 49 |
 | PPMT | Financial | 2 |
+| PRICEDISC | Financial | 3 |
 | PROB | Statistical | 27 |
 | PRODUCT | Math & Trig | 36 |
 | PROPER | Text | 25 |
@@ -384,10 +385,11 @@ Werkbook supports **380** Excel formula functions.
 | XOR | Logical | 34 |
 | YEAR | Date & Time | 26 |
 | YEARFRAC | Date & Time | 38 |
+| YIELDDISC | Financial | 3 |
 
 # Unsupported Formulas
 
-The following **90** Excel functions are not yet supported.
+The following **88** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -462,7 +464,6 @@ The following **90** Excel functions are not yet supported.
 | OFFSET | Lookup & Reference |
 | PHONETIC | Text |
 | PRICE | Financial |
-| PRICEDISC | Financial |
 | PRICEMAT | Financial |
 | RANDARRAY | Math & Trig |
 | REDUCE | Logical |
@@ -478,6 +479,5 @@ The following **90** Excel functions are not yet supported.
 | TREND | Statistical |
 | WEBSERVICE | Web |
 | YIELD | Financial |
-| YIELDDISC | Financial |
 | YIELDMAT | Financial |
 | Z.TEST | Statistical |

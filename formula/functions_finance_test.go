@@ -7395,3 +7395,534 @@ func TestACCRINTM_ViaEval(t *testing.T) {
 		t.Errorf("got %f, want 20.54794521", v.Num)
 	}
 }
+
+// === PRICEDISC ===
+
+func TestPRICEDISC_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// 2/16/2008 = 39494, 3/1/2008 = 39508
+	// 2/15/2008 = 39493, 5/15/2008 = 39583
+	// 1/1/2023 = 44927, 12/31/2023 = 45291
+	// 1/1/2024 = 45292, 7/1/2024 = 45474
+	// 1/31/2023 = 44957
+	// 7/1/2018 = 43282, 1/1/2038 = 50406
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64 // custom tolerance; 0 means use default 0.01
+	}{
+		// --- Doc example ---
+		// PRICEDISC(2/16/2008, 3/1/2008, 0.0525, 100, 2) = 99.79583333
+		// basis 2: DSM=14, B=360 => price = 100 - 0.0525*(14/360)*100 = 99.79583333
+		{
+			name: "doc example basis 2",
+			args: numArgs(39494, 39508, 0.0525, 100, 2),
+			want: 99.79583333,
+			tol:  0.00001,
+		},
+		// --- All 5 basis types with same dates (2/15/2008 to 5/15/2008, discount=0.05, redemption=100) ---
+		// basis 0: DSM=days360(US)=90, B=360 => price = 100 - 0.05*(90/360)*100 = 98.75
+		{
+			name: "basis 0 US 30/360",
+			args: numArgs(39493, 39583, 0.05, 100, 0),
+			want: 98.75,
+			tol:  0.001,
+		},
+		// basis 1: DSM=90 actual, B=366 (2008 is leap) => price = 100 - 0.05*(90/366)*100 = 98.77049
+		{
+			name: "basis 1 actual/actual",
+			args: numArgs(39493, 39583, 0.05, 100, 1),
+			want: 98.77049,
+			tol:  0.001,
+		},
+		// basis 2: DSM=90 actual, B=360 => price = 100 - 0.05*(90/360)*100 = 98.75
+		{
+			name: "basis 2 actual/360",
+			args: numArgs(39493, 39583, 0.05, 100, 2),
+			want: 98.75,
+			tol:  0.001,
+		},
+		// basis 3: DSM=90 actual, B=365 => price = 100 - 0.05*(90/365)*100 = 98.76712
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(39493, 39583, 0.05, 100, 3),
+			want: 98.76712,
+			tol:  0.001,
+		},
+		// basis 4: European 30/360: DSM=days360(EU)=90, B=360 => price = 100 - 0.05*(90/360)*100 = 98.75
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(39493, 39583, 0.05, 100, 4),
+			want: 98.75,
+			tol:  0.001,
+		},
+		// --- Default basis (omitted = 0) ---
+		{
+			name: "default basis omitted",
+			args: numArgs(39493, 39583, 0.05, 100),
+			want: 98.75,
+			tol:  0.001,
+		},
+		// --- Various date ranges ---
+		// Short range: 30 days, basis 0
+		// 1/1/2023 to 1/31/2023, discount=0.10, redemption=100
+		// DSM=30, B=360 => price = 100 - 0.10*(30/360)*100 = 99.16667
+		{
+			name: "short 30 day range",
+			args: numArgs(44927, 44957, 0.10, 100, 0),
+			want: 99.16667,
+			tol:  0.001,
+		},
+		// Full year, basis 0
+		// 1/1/2023 to 12/31/2023, discount=0.05, redemption=100
+		// DSM=360 (US 30/360), B=360 => price = 100 - 0.05*(360/360)*100 = 95.0
+		{
+			name: "full year range",
+			args: numArgs(44927, 45291, 0.05, 100, 0),
+			want: 95.0,
+			tol:  0.001,
+		},
+		// Half year, basis 2 (actual/360)
+		// 1/1/2024 to 7/1/2024, discount=0.04, redemption=100
+		// DSM=182 actual, B=360 => price = 100 - 0.04*(182/360)*100 = 97.97778
+		{
+			name: "half year basis 2",
+			args: numArgs(45292, 45474, 0.04, 100, 2),
+			want: 97.97778,
+			tol:  0.001,
+		},
+		// Long range: 20 years, basis 1
+		// 7/1/2018 to 1/1/2038, discount=0.03, redemption=100
+		{
+			name: "long range 20 years basis 1",
+			args: numArgs(43282, 50406, 0.03, 100, 1),
+			want: 41.4847,
+			tol:  0.01,
+		},
+		// --- Non-100 redemption ---
+		// Redemption=1000, discount=0.05, basis 0
+		// DSM=90, B=360 => price = 1000 - 0.05*(90/360)*1000 = 987.5
+		{
+			name: "redemption 1000",
+			args: numArgs(39493, 39583, 0.05, 1000, 0),
+			want: 987.5,
+			tol:  0.001,
+		},
+		// --- Small discount ---
+		{
+			name: "very small discount",
+			args: numArgs(39493, 39583, 0.001, 100, 0),
+			want: 99.975,
+			tol:  0.001,
+		},
+		// --- Large discount ---
+		// discount=0.50, redemption=100, basis 0
+		// price = 100 - 0.50*(90/360)*100 = 87.5
+		{
+			name: "large discount",
+			args: numArgs(39493, 39583, 0.50, 100, 0),
+			want: 87.5,
+			tol:  0.001,
+		},
+		// Fractional dates get truncated
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39494.7, 39508.9, 0.0525, 100, 2),
+			want: 99.79583333,
+			tol:  0.00001,
+		},
+		// --- Error cases ---
+		{
+			name:    "discount zero",
+			args:    numArgs(39493, 39583, 0, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "discount negative",
+			args:    numArgs(39493, 39583, -0.05, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "redemption zero",
+			args:    numArgs(39493, 39583, 0.05, 0, 0),
+			wantErr: true,
+		},
+		{
+			name:    "redemption negative",
+			args:    numArgs(39493, 39583, 0.05, -100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39493, 39493, 0.05, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39583, 39493, 0.05, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "basis negative",
+			args:    numArgs(39493, 39583, 0.05, 100, -1),
+			wantErr: true,
+		},
+		{
+			name:    "basis 5",
+			args:    numArgs(39493, 39583, 0.05, 100, 5),
+			wantErr: true,
+		},
+		{
+			name:    "basis 99",
+			args:    numArgs(39493, 39583, 0.05, 100, 99),
+			wantErr: true,
+		},
+		{
+			name:    "too few args",
+			args:    numArgs(39493, 39583, 0.05),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39493, 39583, 0.05, 100, 0, 1),
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39583), NumberVal(0.05), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39493), StringVal("xyz"), NumberVal(0.05), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric discount",
+			args:    []Value{NumberVal(39493), NumberVal(39583), StringVal("abc"), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric redemption",
+			args:    []Value{NumberVal(39493), NumberVal(39583), NumberVal(0.05), StringVal("abc"), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric basis",
+			args:    []Value{NumberVal(39493), NumberVal(39583), NumberVal(0.05), NumberVal(100), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnPricedisc(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestPRICEDISC_ViaEval(t *testing.T) {
+	// PRICEDISC(DATE(2008,2,16), DATE(2008,3,1), 0.0525, 100, 2) = 99.79583333
+	cf := evalCompile(t, "PRICEDISC(DATE(2008,2,16), DATE(2008,3,1), 0.0525, 100, 2)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-99.79583333) > 0.00001 {
+		t.Errorf("got %f, want 99.79583333", v.Num)
+	}
+}
+
+// === YIELDDISC ===
+
+func TestYIELDDISC_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// 2/16/2008 = 39494, 3/1/2008 = 39508
+	// 2/15/2008 = 39493, 5/15/2008 = 39583
+	// 1/1/2023 = 44927, 12/31/2023 = 45291
+	// 1/1/2024 = 45292, 7/1/2024 = 45474
+	// 1/31/2023 = 44957
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64 // custom tolerance; 0 means use default 0.01
+	}{
+		// --- Doc example ---
+		// YIELDDISC(2/16/2008, 3/1/2008, 99.795, 100, 2) = 0.052823
+		// basis 2: DSM=14, B=360 => yield = (100-99.795)/99.795 * (360/14) = 0.052823
+		{
+			name: "doc example basis 2",
+			args: numArgs(39494, 39508, 99.795, 100, 2),
+			want: 0.052823,
+			tol:  0.0001,
+		},
+		// --- All 5 basis types with same dates (2/15/2008 to 5/15/2008, pr=98, redemption=100) ---
+		// basis 0: DSM=days360(US)=90, B=360 => yield = (2/98)*(360/90) = 0.08163
+		{
+			name: "basis 0 US 30/360",
+			args: numArgs(39493, 39583, 98, 100, 0),
+			want: 0.08163,
+			tol:  0.001,
+		},
+		// basis 1: DSM=90 actual, B=366 (2008 is leap) => yield = (2/98)*(366/90) = 0.08299
+		{
+			name: "basis 1 actual/actual",
+			args: numArgs(39493, 39583, 98, 100, 1),
+			want: 0.08299,
+			tol:  0.001,
+		},
+		// basis 2: DSM=90 actual, B=360 => yield = (2/98)*(360/90) = 0.08163
+		{
+			name: "basis 2 actual/360",
+			args: numArgs(39493, 39583, 98, 100, 2),
+			want: 0.08163,
+			tol:  0.001,
+		},
+		// basis 3: DSM=90 actual, B=365 => yield = (2/98)*(365/90) = 0.08277
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(39493, 39583, 98, 100, 3),
+			want: 0.08277,
+			tol:  0.001,
+		},
+		// basis 4: European 30/360: DSM=days360(EU)=90, B=360 => yield = (2/98)*(360/90) = 0.08163
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(39493, 39583, 98, 100, 4),
+			want: 0.08163,
+			tol:  0.001,
+		},
+		// --- Default basis (omitted = 0) ---
+		{
+			name: "default basis omitted",
+			args: numArgs(39493, 39583, 98, 100),
+			want: 0.08163,
+			tol:  0.001,
+		},
+		// --- Various date ranges ---
+		// Short range: 30 days, basis 0
+		// 1/1/2023 to 1/31/2023, pr=99, redemption=100
+		// DSM=30, B=360 => yield = (1/99)*(360/30) = 0.12121
+		{
+			name: "short 30 day range",
+			args: numArgs(44927, 44957, 99, 100, 0),
+			want: 0.12121,
+			tol:  0.001,
+		},
+		// Full year, basis 0
+		// 1/1/2023 to 12/31/2023, pr=95, redemption=100
+		// DSM=360 (US 30/360), B=360 => yield = (5/95)*(360/360) = 0.05263
+		{
+			name: "full year range",
+			args: numArgs(44927, 45291, 95, 100, 0),
+			want: 0.05263,
+			tol:  0.001,
+		},
+		// Half year, basis 2 (actual/360)
+		// 1/1/2024 to 7/1/2024, pr=98, redemption=100
+		// DSM=182 actual, B=360 => yield = (2/98)*(360/182) = 0.04039
+		{
+			name: "half year basis 2",
+			args: numArgs(45292, 45474, 98, 100, 2),
+			want: 0.04039,
+			tol:  0.001,
+		},
+		// --- Larger spread ---
+		// pr=90, redemption=100
+		// DSM=90, B=360 => yield = (10/90)*(360/90) = 0.44444
+		{
+			name: "large spread",
+			args: numArgs(39493, 39583, 90, 100, 0),
+			want: 0.44444,
+			tol:  0.001,
+		},
+		// --- Very small spread ---
+		// pr=99.999, redemption=100
+		// DSM=90, B=360 => yield = (0.001/99.999)*(360/90) = 0.00004
+		{
+			name: "very small spread",
+			args: numArgs(39493, 39583, 99.999, 100, 0),
+			want: 0.00004,
+			tol:  0.00001,
+		},
+		// pr > redemption (negative yield)
+		// pr=105, redemption=100
+		// DSM=90, B=360 => yield = (100-105)/105 * (360/90) = -0.19048
+		{
+			name: "pr exceeds redemption negative yield",
+			args: numArgs(39493, 39583, 105, 100, 0),
+			want: -0.19048,
+			tol:  0.001,
+		},
+		// Non-100 redemption
+		// pr=980, redemption=1000, DSM=90, B=360
+		// yield = (20/980)*(360/90) = 0.08163
+		{
+			name: "non-100 redemption",
+			args: numArgs(39493, 39583, 980, 1000, 0),
+			want: 0.08163,
+			tol:  0.001,
+		},
+		// Fractional dates get truncated
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39494.7, 39508.9, 99.795, 100, 2),
+			want: 0.052823,
+			tol:  0.0001,
+		},
+		// Long range: basis 3
+		// 1/1/2023 to 12/31/2023, pr=95, redemption=100
+		// DSM=364 actual, B=365 => yield = (5/95)*(365/364) = 0.05277
+		{
+			name: "full year basis 3",
+			args: numArgs(44927, 45291, 95, 100, 3),
+			want: 0.05277,
+			tol:  0.001,
+		},
+		// --- Error cases ---
+		{
+			name:    "pr zero",
+			args:    numArgs(39493, 39583, 0, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "pr negative",
+			args:    numArgs(39493, 39583, -10, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "redemption zero",
+			args:    numArgs(39493, 39583, 98, 0, 0),
+			wantErr: true,
+		},
+		{
+			name:    "redemption negative",
+			args:    numArgs(39493, 39583, 98, -100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39493, 39493, 98, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39583, 39493, 98, 100, 0),
+			wantErr: true,
+		},
+		{
+			name:    "basis negative",
+			args:    numArgs(39493, 39583, 98, 100, -1),
+			wantErr: true,
+		},
+		{
+			name:    "basis 5",
+			args:    numArgs(39493, 39583, 98, 100, 5),
+			wantErr: true,
+		},
+		{
+			name:    "basis 99",
+			args:    numArgs(39493, 39583, 98, 100, 99),
+			wantErr: true,
+		},
+		{
+			name:    "too few args",
+			args:    numArgs(39493, 39583, 98),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39493, 39583, 98, 100, 0, 1),
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39583), NumberVal(98), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39493), StringVal("xyz"), NumberVal(98), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric pr",
+			args:    []Value{NumberVal(39493), NumberVal(39583), StringVal("abc"), NumberVal(100), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric redemption",
+			args:    []Value{NumberVal(39493), NumberVal(39583), NumberVal(98), StringVal("abc"), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric basis",
+			args:    []Value{NumberVal(39493), NumberVal(39583), NumberVal(98), NumberVal(100), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnYielddisc(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestYIELDDISC_ViaEval(t *testing.T) {
+	// YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2) = 0.052823
+	cf := evalCompile(t, "YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.052823) > 0.0001 {
+		t.Errorf("got %f, want 0.052823", v.Num)
+	}
+}

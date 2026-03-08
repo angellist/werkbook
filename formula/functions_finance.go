@@ -41,6 +41,8 @@ func init() {
 	Register("INTRATE", NoCtx(fnIntrate))
 	Register("RECEIVED", NoCtx(fnReceived))
 	Register("ACCRINTM", NoCtx(fnAccrintm))
+	Register("PRICEDISC", NoCtx(fnPricedisc))
+	Register("YIELDDISC", NoCtx(fnYielddisc))
 }
 
 // flattenValues extracts all numeric values from an arg that may be a scalar or array (range).
@@ -1943,4 +1945,118 @@ func fnAccrintm(args []Value) (Value, error) {
 
 	result := par * rate * a / d
 	return NumberVal(result), nil
+}
+
+// fnPricedisc implements PRICEDISC(settlement, maturity, discount, redemption, [basis]).
+// Returns the price per $100 face value of a discounted security.
+// Formula: PRICEDISC = redemption - discount * (DSM / B) * redemption
+func fnPricedisc(args []Value) (Value, error) {
+	if len(args) < 4 || len(args) > 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	discount, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	redemption, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 5 {
+		b, e := CoerceNum(args[4])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if discount <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if redemption <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	if bYear == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	price := redemption - discount*(dsm/bYear)*redemption
+	return NumberVal(price), nil
+}
+
+// fnYielddisc implements YIELDDISC(settlement, maturity, pr, redemption, [basis]).
+// Returns the annual yield for a discounted security.
+// Formula: YIELDDISC = (redemption - pr) / pr * (B / DSM)
+func fnYielddisc(args []Value) (Value, error) {
+	if len(args) < 4 || len(args) > 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	pr, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	redemption, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 5 {
+		b, e := CoerceNum(args[4])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if pr <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if redemption <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	if dsm == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	yield := (redemption - pr) / pr * (bYear / dsm)
+	return NumberVal(yield), nil
 }
