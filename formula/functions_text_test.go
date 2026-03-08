@@ -3803,6 +3803,105 @@ func TestCLEANErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// REPT
+// ---------------------------------------------------------------------------
+
+func TestREPT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Basic usage (Excel docs examples)
+		{name: "doc_example_star_dash", formula: `REPT("*-",3)`, want: "*-*-*-"},
+		{name: "doc_example_dash_10", formula: `REPT("-",10)`, want: "----------"},
+
+		// Simple repetition
+		{name: "single_char_repeat", formula: `REPT("a",5)`, want: "aaaaa"},
+		{name: "multi_char_repeat", formula: `REPT("hello",2)`, want: "hellohello"},
+		{name: "single_repetition", formula: `REPT("abc",1)`, want: "abc"},
+
+		// Zero repeats returns empty string
+		{name: "zero_repeats", formula: `REPT("hello",0)`, want: ""},
+
+		// Empty string repeated
+		{name: "empty_string_repeated", formula: `REPT("",5)`, want: ""},
+		{name: "empty_string_zero", formula: `REPT("",0)`, want: ""},
+
+		// Decimal number_times is truncated (floored)
+		{name: "decimal_truncated_2.9", formula: `REPT("a",2.9)`, want: "aa"},
+		{name: "decimal_truncated_3.1", formula: `REPT("a",3.1)`, want: "aaa"},
+		{name: "decimal_truncated_1.5", formula: `REPT("xy",1.5)`, want: "xy"},
+
+		// Number coerced to string for text arg
+		{name: "number_as_text", formula: `REPT(123,2)`, want: "123123"},
+		{name: "decimal_as_text", formula: `REPT(1.5,3)`, want: "1.51.51.5"},
+
+		// Boolean coercion for text arg
+		{name: "true_as_text", formula: `REPT(TRUE,2)`, want: "TRUETRUE"},
+		{name: "false_as_text", formula: `REPT(FALSE,3)`, want: "FALSEFALSEFALSE"},
+
+		// Boolean coercion for number_times arg (TRUE=1, FALSE=0)
+		{name: "true_as_count", formula: `REPT("x",TRUE)`, want: "x"},
+		{name: "false_as_count", formula: `REPT("x",FALSE)`, want: ""},
+
+		// Special characters
+		{name: "space_repeated", formula: `REPT(" ",4)`, want: "    "},
+		{name: "newline_repeated", formula: "REPT(\"\n\",3)", want: "\n\n\n"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+			}
+		})
+	}
+}
+
+func TestREPTErrors(t *testing.T) {
+	resolver := &mockResolver{}
+
+	errTests := []struct {
+		name    string
+		formula string
+	}{
+		// Wrong argument count
+		{name: "no_args", formula: `REPT()`},
+		{name: "one_arg", formula: `REPT("a")`},
+		{name: "three_args", formula: `REPT("a",2,3)`},
+
+		// Negative number_times
+		{name: "negative_count", formula: `REPT("a",-1)`},
+		{name: "negative_large", formula: `REPT("a",-100)`},
+
+		// Non-numeric string for number_times
+		{name: "string_count", formula: `REPT("a","b")`},
+		{name: "empty_string_count", formula: `REPT("a","")`},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError {
+				t.Errorf("Eval(%q) = %v, want #VALUE!", tt.formula, got)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // REPLACE comprehensive tests
 // ---------------------------------------------------------------------------
 
