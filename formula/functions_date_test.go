@@ -1627,3 +1627,186 @@ func TestNETWORKDAYS_INTL(t *testing.T) {
 		})
 	}
 }
+
+func TestWEEKNUM(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+		errVal  ErrorValue
+	}{
+		// Excel doc examples: Mar 9, 2012 (serial 40978, Friday)
+		{"doc_example_default", "WEEKNUM(40978)", 10, false, 0},
+		{"doc_example_rt2", "WEEKNUM(40978,2)", 11, false, 0},
+
+		// Default return_type (1 = Sunday start)
+		{"jan1_2023_sunday_default", "WEEKNUM(44928)", 1, false, 0},       // Jan 1, 2023 is Sunday
+		{"jan1_2024_monday_default", "WEEKNUM(45293)", 1, false, 0},       // Jan 1, 2024 is Monday
+		{"dec31_2023_sunday_default", "WEEKNUM(45292)", 53, false, 0},     // Dec 31, 2023 is Sunday
+		{"dec31_2024_tuesday_default", "WEEKNUM(45658)", 53, false, 0},    // Dec 31, 2024 is Tuesday
+		{"jun15_2023_default", "WEEKNUM(45093)", 24, false, 0},            // Jun 15, 2023 (Thursday)
+		{"jan7_2023_sat_default", "WEEKNUM(44934)", 1, false, 0},          // Jan 7, 2023 (Saturday) - last day of week 1
+		{"jan8_2023_sun_default", "WEEKNUM(44935)", 2, false, 0},          // Jan 8, 2023 (Sunday) - first day of week 2
+
+		// return_type 2 (Monday start)
+		{"jan1_2023_rt2", "WEEKNUM(44928,2)", 1, false, 0},               // Jan 1, 2023 (Sunday)
+		{"jan2_2023_rt2", "WEEKNUM(44929,2)", 2, false, 0},               // Jan 2, 2023 (Monday) - new week
+		{"jun15_2023_rt2", "WEEKNUM(45093,2)", 25, false, 0},             // Jun 15, 2023 (Thursday)
+		{"jul4_2023_rt2", "WEEKNUM(45112,2)", 28, false, 0},              // Jul 4, 2023 (Tuesday)
+
+		// return_type 21 (ISO week, Monday start, System 2)
+		{"jan1_2023_iso", "WEEKNUM(44928,21)", 52, false, 0},             // Jan 1, 2023 (Sun) -> ISO week 52 of 2022
+		{"jan1_2024_iso", "WEEKNUM(45293,21)", 1, false, 0},              // Jan 1, 2024 (Mon) -> ISO week 1
+		{"dec31_2023_iso", "WEEKNUM(45292,21)", 52, false, 0},            // Dec 31, 2023 -> ISO week 52
+		{"dec31_2024_iso", "WEEKNUM(45658,21)", 1, false, 0},             // Dec 31, 2024 (Tue) -> ISO week 1 of 2025
+		{"jan1_2021_iso", "WEEKNUM(44198,21)", 53, false, 0},             // Jan 1, 2021 (Fri) -> ISO week 53 of 2020
+
+		// Various return_type values (other week start days)
+		{"mar1_2023_rt11", "WEEKNUM(44987,11)", 10, false, 0},            // rt 11 = Monday start
+		{"mar1_2023_rt12", "WEEKNUM(44987,12)", 10, false, 0},            // rt 12 = Tuesday start
+		{"mar1_2023_rt13", "WEEKNUM(44987,13)", 10, false, 0},            // rt 13 = Wednesday start (Mar 1 is Wed)
+		{"mar1_2023_rt14", "WEEKNUM(44987,14)", 9, false, 0},             // rt 14 = Thursday start
+		{"mar1_2023_rt15", "WEEKNUM(44987,15)", 9, false, 0},             // rt 15 = Friday start
+		{"mar1_2023_rt16", "WEEKNUM(44987,16)", 9, false, 0},             // rt 16 = Saturday start
+		{"mar1_2023_rt17", "WEEKNUM(44987,17)", 9, false, 0},             // rt 17 = Sunday start (same as 1)
+
+		// Using DATE() function for serial input
+		{"date_func_input", "WEEKNUM(DATE(2024,2,29))", 9, false, 0},     // Feb 29, 2024 (Thursday)
+
+		// Error cases: wrong argument count
+		{"no_args", "WEEKNUM()", 0, true, ErrValVALUE},
+		{"too_many_args", "WEEKNUM(44928,1,1)", 0, true, ErrValVALUE},
+
+		// Error cases: invalid return_type
+		{"invalid_rt_0", "WEEKNUM(44928,0)", 0, true, ErrValNUM},
+		{"invalid_rt_3", "WEEKNUM(44928,3)", 0, true, ErrValNUM},
+		{"invalid_rt_10", "WEEKNUM(44928,10)", 0, true, ErrValNUM},
+		{"invalid_rt_18", "WEEKNUM(44928,18)", 0, true, ErrValNUM},
+		{"invalid_rt_20", "WEEKNUM(44928,20)", 0, true, ErrValNUM},
+		{"invalid_rt_22", "WEEKNUM(44928,22)", 0, true, ErrValNUM},
+
+		// Error propagation
+		{"error_in_serial", `WEEKNUM("abc")`, 0, true, ErrValVALUE},
+		{"error_in_rt", `WEEKNUM(44928,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if tc.isErr {
+				if got.Type != ValueError || got.Err != tc.errVal {
+					t.Errorf("%s: got %v, want error %v", tc.formula, got, tc.errVal)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: got type %v (%v), want number", tc.formula, got.Type, got)
+			}
+			if got.Num != tc.want {
+				t.Errorf("%s = %g, want %g", tc.formula, got.Num, tc.want)
+			}
+		})
+	}
+}
+
+func TestISOWEEKNUM(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+		errVal  ErrorValue
+	}{
+		// Excel documentation example: March 9, 2012 = ISO week 10
+		{"excel_doc_mar_9_2012", "ISOWEEKNUM(40977)", 10, false, 0},
+		// Using DATE() to construct the same date
+		{"excel_doc_via_date", "ISOWEEKNUM(DATE(2012,3,9))", 10, false, 0},
+
+		// Jan 1 that falls in ISO week 1 (Thu Jan 1, 2015)
+		{"jan1_week1_2015", "ISOWEEKNUM(42005)", 1, false, 0},
+		// Jan 1 that falls in ISO week 1 (Wed Jan 1, 2014)
+		{"jan1_week1_2014", "ISOWEEKNUM(41640)", 1, false, 0},
+		// Jan 1 that belongs to previous year's last week (Fri Jan 1, 2016 = week 53 of 2015)
+		{"jan1_prev_year_2016", "ISOWEEKNUM(42370)", 53, false, 0},
+		// Jan 1 that belongs to previous year's last week (Sun Jan 1, 2017 = week 52 of 2016)
+		{"jan1_prev_year_2017", "ISOWEEKNUM(42736)", 52, false, 0},
+		// Jan 1 that belongs to previous year's last week (Fri Jan 1, 2010 = week 53 of 2009)
+		{"jan1_prev_year_2010", "ISOWEEKNUM(40179)", 53, false, 0},
+		// Jan 1, 2021 (Fri) = week 53 of 2020
+		{"jan1_prev_year_2021", "ISOWEEKNUM(44197)", 53, false, 0},
+
+		// Dec 31 in a year with 53 ISO weeks (Thu Dec 31, 2015)
+		{"dec31_week53_2015", "ISOWEEKNUM(42369)", 53, false, 0},
+		// Dec 31 that falls in ISO week 1 of the next year (Wed Dec 31, 2014)
+		{"dec31_week1_next_2014", "ISOWEEKNUM(42004)", 1, false, 0},
+		// Dec 31 in a year with 53 ISO weeks (Thu Dec 31, 2009)
+		{"dec31_week53_2009", "ISOWEEKNUM(40178)", 53, false, 0},
+		// Dec 31 that falls in ISO week 1 of the next year (Mon Dec 31, 2012)
+		{"dec31_week1_next_2012", "ISOWEEKNUM(41274)", 1, false, 0},
+		// Dec 31, 2020 (Thu) = week 53
+		{"dec31_week53_2020", "ISOWEEKNUM(44196)", 53, false, 0},
+
+		// Mid-year dates
+		{"mid_year_jun_15_2023", "ISOWEEKNUM(45092)", 24, false, 0},
+		{"mid_year_jul_4_2023", "ISOWEEKNUM(45111)", 27, false, 0},
+		{"mid_year_sep_1_2023", "ISOWEEKNUM(45170)", 35, false, 0},
+
+		// Leap year date: Feb 29, 2024 = week 9
+		{"leap_year_feb29_2024", "ISOWEEKNUM(45351)", 9, false, 0},
+
+		// Early serial numbers
+		// Serial 1 = Jan 1, 1900 (Monday) = ISO week 1
+		{"serial_1_jan1_1900", "ISOWEEKNUM(1)", 1, false, 0},
+		// Serial 7 = Jan 7, 1900 (Sunday) = ISO week 1
+		{"serial_7_jan7_1900", "ISOWEEKNUM(7)", 1, false, 0},
+		// Serial 0 = Excel's "Jan 0, 1900" mapped to Dec 31, 1899 = ISO week 52
+		{"serial_0", "ISOWEEKNUM(0)", 52, false, 0},
+
+		// Fractional serial: should use the date portion only
+		{"fractional_serial", "ISOWEEKNUM(40977.75)", 10, false, 0},
+
+		// Boolean TRUE coerced to 1 = Jan 1, 1900 = week 1
+		{"bool_true", "ISOWEEKNUM(TRUE)", 1, false, 0},
+
+		// Error cases
+		// No arguments
+		{"no_args", "ISOWEEKNUM()", 0, true, ErrValVALUE},
+		// Too many arguments
+		{"too_many_args", "ISOWEEKNUM(1,2)", 0, true, ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric_string", `ISOWEEKNUM("abc")`, 0, true, ErrValVALUE},
+		// Error propagation
+		{"error_propagation", `ISOWEEKNUM("hello")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if tc.isErr {
+				if got.Type != ValueError || got.Err != tc.errVal {
+					t.Errorf("%s: got %v, want error %v", tc.formula, got, tc.errVal)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: got type %v, want number", tc.formula, got.Type)
+			}
+			if got.Num != tc.want {
+				t.Errorf("%s = %g, want %g", tc.formula, got.Num, tc.want)
+			}
+		})
+	}
+}
