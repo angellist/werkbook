@@ -53,6 +53,8 @@ func init() {
 	Register("COUPPCD", NoCtx(fnCouppcd))
 	Register("DURATION", NoCtx(fnDuration))
 	Register("MDURATION", NoCtx(fnMduration))
+	Register("PRICE", NoCtx(fnPrice))
+	Register("YIELD", NoCtx(fnYield))
 }
 
 // flattenValues extracts all numeric values from an arg that may be a scalar or array (range).
@@ -2730,4 +2732,280 @@ func fnMduration(args []Value) (Value, error) {
 	dur := durationCalc(settlement, maturity, coupon, yld, freq, basis)
 	mdur := dur / (1.0 + yld/float64(freq))
 	return NumberVal(mdur), nil
+}
+
+// ---------------------------------------------------------------------------
+// PRICE / YIELD
+// ---------------------------------------------------------------------------
+
+// priceCalc computes the clean price per $100 face value of a security that
+// pays periodic interest. This is the core calculation shared by fnPrice and
+// the Newton solver in fnYield.
+func priceCalc(settlement, maturity, rate, yld float64, freq, basis int) float64 {
+	st := ExcelSerialToTime(settlement)
+	mt := ExcelSerialToTime(maturity)
+
+	n := coupnumRaw(st, mt, freq)
+	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
+	e := coupdaysRaw(settlement, st, mt, freq, basis)
+	a := coupdaybsRaw(settlement, st, mt, freq, basis)
+
+	couponPmt := 100.0 * rate / float64(freq) // coupon payment per period
+
+	if n == 1 {
+		// Last (or only) coupon period: closed-form formula.
+		dsr := dsc // days from settlement to redemption = days to next coupon (which is maturity)
+		t1 := 100.0 + couponPmt
+		t2 := yld / float64(freq) * dsr / e
+		return (t1 / (1.0 + t2)) - (couponPmt * a / e)
+	}
+
+	// Multiple coupon periods: summation formula.
+	frac := dsc / e
+	yf := yld / float64(freq)
+
+	// Redemption discounted to settlement.
+	price := 100.0 / math.Pow(1.0+yf, float64(n-1)+frac)
+
+	// Sum of discounted coupon payments.
+	for k := 1; k <= n; k++ {
+		price += couponPmt / math.Pow(1.0+yf, float64(k-1)+frac)
+	}
+
+	// Subtract accrued interest.
+	price -= couponPmt * a / e
+
+	return price
+}
+
+// fnPrice implements PRICE(settlement, maturity, rate, yld, redemption, frequency, [basis]).
+// Returns the price per $100 face value of a security that pays periodic interest.
+func fnPrice(args []Value) (Value, error) {
+	if len(args) < 6 || len(args) > 7 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, ev := CoerceNum(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	maturityRaw, ev := CoerceNum(args[1])
+	if ev != nil {
+		return *ev, nil
+	}
+	rate, ev := CoerceNum(args[2])
+	if ev != nil {
+		return *ev, nil
+	}
+	yld, ev := CoerceNum(args[3])
+	if ev != nil {
+		return *ev, nil
+	}
+	redemption, ev := CoerceNum(args[4])
+	if ev != nil {
+		return *ev, nil
+	}
+	freqRaw, ev := CoerceNum(args[5])
+	if ev != nil {
+		return *ev, nil
+	}
+	basis := 0
+	if len(args) == 7 {
+		b, ev := CoerceNum(args[6])
+		if ev != nil {
+			return *ev, nil
+		}
+		basis = int(b)
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	freq := int(math.Trunc(freqRaw))
+
+	// Validate inputs.
+	if rate < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if yld < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if redemption <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if freq != 1 && freq != 2 && freq != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Use the general priceCalc which assumes redemption=100, then scale.
+	price := priceCalc(settlement, maturity, rate, yld, freq, basis)
+	// Adjust for non-100 redemption: the redemption component scales linearly.
+	if redemption != 100.0 {
+		// Recompute with explicit redemption handling.
+		price = priceCalcRedemption(settlement, maturity, rate, yld, redemption, freq, basis)
+	}
+
+	return NumberVal(price), nil
+}
+
+// priceCalcRedemption computes the clean price with an arbitrary redemption value.
+func priceCalcRedemption(settlement, maturity, rate, yld, redemption float64, freq, basis int) float64 {
+	st := ExcelSerialToTime(settlement)
+	mt := ExcelSerialToTime(maturity)
+
+	n := coupnumRaw(st, mt, freq)
+	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
+	e := coupdaysRaw(settlement, st, mt, freq, basis)
+	a := coupdaybsRaw(settlement, st, mt, freq, basis)
+
+	couponPmt := 100.0 * rate / float64(freq)
+
+	if n == 1 {
+		dsr := dsc
+		t1 := redemption + couponPmt
+		t2 := yld / float64(freq) * dsr / e
+		return (t1 / (1.0 + t2)) - (couponPmt * a / e)
+	}
+
+	frac := dsc / e
+	yf := yld / float64(freq)
+
+	price := redemption / math.Pow(1.0+yf, float64(n-1)+frac)
+
+	for k := 1; k <= n; k++ {
+		price += couponPmt / math.Pow(1.0+yf, float64(k-1)+frac)
+	}
+
+	price -= couponPmt * a / e
+
+	return price
+}
+
+// fnYield implements YIELD(settlement, maturity, rate, pr, redemption, frequency, [basis]).
+// Returns the yield on a security that pays periodic interest.
+func fnYield(args []Value) (Value, error) {
+	if len(args) < 6 || len(args) > 7 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, ev := CoerceNum(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	maturityRaw, ev := CoerceNum(args[1])
+	if ev != nil {
+		return *ev, nil
+	}
+	rate, ev := CoerceNum(args[2])
+	if ev != nil {
+		return *ev, nil
+	}
+	pr, ev := CoerceNum(args[3])
+	if ev != nil {
+		return *ev, nil
+	}
+	redemption, ev := CoerceNum(args[4])
+	if ev != nil {
+		return *ev, nil
+	}
+	freqRaw, ev := CoerceNum(args[5])
+	if ev != nil {
+		return *ev, nil
+	}
+	basis := 0
+	if len(args) == 7 {
+		b, ev := CoerceNum(args[6])
+		if ev != nil {
+			return *ev, nil
+		}
+		basis = int(b)
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	freq := int(math.Trunc(freqRaw))
+
+	// Validate inputs.
+	if rate < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if pr <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if redemption <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if freq != 1 && freq != 2 && freq != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	st := ExcelSerialToTime(settlement)
+	mt := ExcelSerialToTime(maturity)
+	n := coupnumRaw(st, mt, freq)
+
+	if n == 1 {
+		// Closed-form for single coupon period.
+		dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
+		e := coupdaysRaw(settlement, st, mt, freq, basis)
+		a := coupdaybsRaw(settlement, st, mt, freq, basis)
+
+		couponPmt := rate / float64(freq)
+		dsr := dsc
+
+		num := (redemption/100.0 + couponPmt) - (pr/100.0 + a/e*couponPmt)
+		den := pr/100.0 + a/e*couponPmt
+		yield := (num / den) * (float64(freq) * e / dsr)
+		return NumberVal(yield), nil
+	}
+
+	// Multiple coupon periods: use Newton's method to find yield where
+	// priceCalcRedemption(yield) = pr.
+	priceFn := func(y float64) float64 {
+		return priceCalcRedemption(settlement, maturity, rate, y, redemption, freq, basis)
+	}
+
+	// Initial guess.
+	guess := rate
+	if guess <= 0 {
+		guess = 0.1
+	}
+
+	// Newton's method with numerical derivative.
+	const maxIter = 100
+	const tol = 1e-12
+	const dx = 1e-10
+
+	y := guess
+	for i := 0; i < maxIter; i++ {
+		p := priceFn(y)
+		diff := p - pr
+		if math.Abs(diff) < tol {
+			return NumberVal(y), nil
+		}
+
+		// Numerical derivative dp/dy.
+		p2 := priceFn(y + dx)
+		dpdy := (p2 - p) / dx
+		if dpdy == 0 {
+			break
+		}
+
+		y = y - diff/dpdy
+	}
+
+	// Check if we converged close enough.
+	if math.Abs(priceFn(y)-pr) < 1e-7 {
+		return NumberVal(y), nil
+	}
+
+	return ErrorVal(ErrValNUM), nil
 }
