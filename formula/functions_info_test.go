@@ -287,6 +287,226 @@ func TestFORMULATEXT_NoIntrospector(t *testing.T) {
 	}
 }
 
+func TestCOLUMN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("no_args_returns_current_col", func(t *testing.T) {
+		tests := []struct {
+			name string
+			col  int
+			want float64
+		}{
+			{"col_1", 1, 1},
+			{"col_3", 3, 3},
+			{"col_10", 10, 10},
+			{"col_26_Z", 26, 26},
+			{"col_256", 256, 256},
+			{"col_16384_XFD", 16384, 16384},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx := &EvalContext{
+					CurrentCol:   tt.col,
+					CurrentRow:   1,
+					CurrentSheet: "",
+					Resolver:     resolver,
+				}
+				cf := evalCompile(t, `COLUMN()`)
+				got, err := Eval(cf, resolver, ctx)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueNumber || got.Num != tt.want {
+					t.Errorf("COLUMN() with CurrentCol=%d = %v, want %v", tt.col, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("no_args_nil_context", func(t *testing.T) {
+		// COLUMN() with no EvalContext should return #VALUE!
+		cf := evalCompile(t, `COLUMN()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("COLUMN() with nil ctx = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("single_cell_ref", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			formula string
+			want    float64
+		}{
+			{"A1_col_1", `COLUMN(A1)`, 1},
+			{"B1_col_2", `COLUMN(B1)`, 2},
+			{"C5_col_3", `COLUMN(C5)`, 3},
+			{"Z1_col_26", `COLUMN(Z1)`, 26},
+			{"AA1_col_27", `COLUMN(AA1)`, 27},
+			{"AZ1_col_52", `COLUMN(AZ1)`, 52},
+			{"BA1_col_53", `COLUMN(BA1)`, 53},
+			{"IV1_col_256", `COLUMN(IV1)`, 256},
+			{"XFD1_col_16384", `COLUMN(XFD1)`, 16384},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx := &EvalContext{
+					CurrentCol:   1,
+					CurrentRow:   1,
+					CurrentSheet: "",
+					Resolver:     resolver,
+				}
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, ctx)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueNumber || got.Num != tt.want {
+					t.Errorf("%s = %v, want %v", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("ref_different_rows_same_col", func(t *testing.T) {
+		// COLUMN should return the column regardless of which row the ref is in
+		tests := []struct {
+			name    string
+			formula string
+			want    float64
+		}{
+			{"D1", `COLUMN(D1)`, 4},
+			{"D10", `COLUMN(D10)`, 4},
+			{"D100", `COLUMN(D100)`, 4},
+			{"D1000", `COLUMN(D1000)`, 4},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx := &EvalContext{
+					CurrentCol:   1,
+					CurrentRow:   1,
+					CurrentSheet: "",
+					Resolver:     resolver,
+				}
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, ctx)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueNumber || got.Num != tt.want {
+					t.Errorf("%s = %v, want %v", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("non_reference_arg_returns_VALUE_error", func(t *testing.T) {
+		// Non-reference arguments (numbers, strings, booleans) should return #VALUE!
+		tests := []struct {
+			name    string
+			formula string
+		}{
+			{"number", `COLUMN(42)`},
+			{"string", `COLUMN("hello")`},
+			{"boolean_true", `COLUMN(TRUE)`},
+			{"boolean_false", `COLUMN(FALSE)`},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx := &EvalContext{
+					CurrentCol:   1,
+					CurrentRow:   1,
+					CurrentSheet: "",
+					Resolver:     resolver,
+				}
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, ctx)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueError || got.Err != ErrValVALUE {
+					t.Errorf("%s = %v, want #VALUE!", tt.formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("range_ref_returns_leftmost_column", func(t *testing.T) {
+		// When a range is passed, COLUMN returns the leftmost column.
+		// In the current implementation, a range resolves to a ValueArray
+		// which is not ValueRef, so it returns #VALUE!.
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `COLUMN(A1:C3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("COLUMN(A1:C3) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("absolute_ref", func(t *testing.T) {
+		// Absolute references ($C$1) should work identically
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `COLUMN($C$1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("COLUMN($C$1) = %v, want 3", got)
+		}
+	})
+
+	t.Run("absolute_col_only", func(t *testing.T) {
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `COLUMN($E1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("COLUMN($E1) = %v, want 5", got)
+		}
+	})
+
+	t.Run("absolute_row_only", func(t *testing.T) {
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `COLUMN(F$1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("COLUMN(F$1) = %v, want 6", got)
+		}
+	})
+}
+
 func TestIFNA(t *testing.T) {
 	resolver := &mockResolver{}
 
