@@ -5630,15 +5630,44 @@ func TestASINH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
+		// Identity: ASINH(0) = 0
 		{"asinh_0", "ASINH(0)", 0, 0},
+
+		// Well-known values
 		{"asinh_1", "ASINH(1)", math.Asinh(1), 1e-10},
 		{"asinh_neg1", "ASINH(-1)", math.Asinh(-1), 1e-10},
-		{"asinh_large", "ASINH(100)", math.Asinh(100), 1e-10},
-		{"asinh_neg_large", "ASINH(-100)", math.Asinh(-100), 1e-10},
+
+		// Excel doc examples
+		{"doc_neg2.5", "ASINH(-2.5)", -1.6472311463710958, 1e-10},
+		{"doc_10", "ASINH(10)", 2.99822295029797, 1e-10},
+
+		// Odd function property: ASINH(-x) = -ASINH(x)
+		{"odd_2", "ASINH(2)+ASINH(-2)", 0, 1e-10},
+		{"odd_5", "ASINH(5)+ASINH(-5)", 0, 1e-10},
+
+		// Fractional inputs
 		{"asinh_0.5", "ASINH(0.5)", math.Asinh(0.5), 1e-10},
-		{"asinh_bool_true", "ASINH(TRUE)", math.Asinh(1), 1e-10},
-		{"asinh_bool_false", "ASINH(FALSE)", 0, 0},
-		{"asinh_string_num", `ASINH("2")`, math.Asinh(2), 1e-10},
+		{"asinh_neg0.5", "ASINH(-0.5)", math.Asinh(-0.5), 1e-10},
+		{"asinh_0.25", "ASINH(0.25)", math.Asinh(0.25), 1e-10},
+
+		// Large values
+		{"asinh_100", "ASINH(100)", math.Asinh(100), 1e-10},
+		{"asinh_neg100", "ASINH(-100)", math.Asinh(-100), 1e-10},
+		{"asinh_1000", "ASINH(1000)", math.Asinh(1000), 1e-10},
+
+		// Small values near zero (ASINH(x) ~ x for small x)
+		{"asinh_small", "ASINH(0.001)", math.Asinh(0.001), 1e-15},
+		{"asinh_tiny", "ASINH(0.0000001)", math.Asinh(0.0000001), 1e-18},
+		{"asinh_neg_small", "ASINH(-0.001)", math.Asinh(-0.001), 1e-15},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "ASINH(TRUE)", math.Asinh(1), 1e-10},
+		{"bool_false", "ASINH(FALSE)", 0, 0},
+
+		// String coercion (numeric strings)
+		{"string_2", `ASINH("2")`, math.Asinh(2), 1e-10},
+		{"string_neg3", `ASINH("-3")`, math.Asinh(-3), 1e-10},
+		{"string_0", `ASINH("0")`, 0, 0},
 	}
 
 	for _, tt := range numTests {
@@ -5651,8 +5680,14 @@ func TestASINH(t *testing.T) {
 			if got.Type != ValueNumber {
 				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
 			}
-			if math.Abs(got.Num-tt.want) > tt.tol {
-				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			if tt.tol == 0 {
+				if got.Num != tt.want {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+				}
+			} else {
+				if math.Abs(got.Num-tt.want) > tt.tol {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+				}
 			}
 		})
 	}
@@ -5662,9 +5697,14 @@ func TestASINH(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
+		// Wrong arity
 		{"no_args", "ASINH()", ErrValVALUE},
 		{"too_many_args", "ASINH(1,2)", ErrValVALUE},
+		// Non-numeric string
 		{"string_non_num", `ASINH("abc")`, ErrValVALUE},
+		{"string_empty", `ASINH("")`, ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "ASINH(1/0)", ErrValDIV0},
 	}
 
 	for _, tt := range errTests {
