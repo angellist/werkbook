@@ -6396,6 +6396,108 @@ func TestSIGN(t *testing.T) {
 	}
 }
 
+func TestSIN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Basic: SIN(0) = 0
+		{"sin_0", "SIN(0)", 0, 0},
+
+		// Standard angles (radians)
+		{"sin_pi_6", "SIN(PI()/6)", 0.5, 1e-10},
+		{"sin_pi_4", "SIN(PI()/4)", math.Sqrt2 / 2, 1e-10},
+		{"sin_pi_3", "SIN(PI()/3)", math.Sqrt(3) / 2, 1e-10},
+		{"sin_pi_2", "SIN(PI()/2)", 1, 1e-10},
+		{"sin_pi", "SIN(PI())", 0, 1e-10},
+
+		// Negative angles
+		{"sin_neg_pi_6", "SIN(-PI()/6)", -0.5, 1e-10},
+		{"sin_neg_pi_4", "SIN(-PI()/4)", -math.Sqrt2 / 2, 1e-10},
+		{"sin_neg_pi_2", "SIN(-PI()/2)", -1, 1e-10},
+		{"sin_neg_pi", "SIN(-PI())", 0, 1e-10},
+
+		// Multiples of PI
+		{"sin_2pi", "SIN(2*PI())", 0, 1e-10},
+		{"sin_3pi_2", "SIN(3*PI()/2)", -1, 1e-10},
+		{"sin_4pi", "SIN(4*PI())", 0, 1e-9},
+
+		// Large angles
+		{"sin_10pi", "SIN(10*PI())", 0, 1e-8},
+		{"sin_100", "SIN(100)", math.Sin(100), 1e-10},
+		{"sin_1000", "SIN(1000)", math.Sin(1000), 1e-10},
+
+		// Small angle
+		{"sin_small", "SIN(0.001)", math.Sin(0.001), 1e-10},
+
+		// Degrees via conversion (Excel doc examples)
+		{"doc_ex1_pi", "SIN(PI())", 0, 1e-10},
+		{"doc_ex2_pi_2", "SIN(PI()/2)", 1, 1e-10},
+		{"doc_ex3_30deg", "SIN(30*PI()/180)", 0.5, 1e-10},
+
+		// Boolean coercion
+		{"bool_true", "SIN(TRUE)", math.Sin(1), 1e-10},
+		{"bool_false", "SIN(FALSE)", 0, 0},
+
+		// String coercion
+		{"string_0", `SIN("0")`, 0, 0},
+		{"string_1", `SIN("1")`, math.Sin(1), 1e-10},
+		{"string_neg1", `SIN("-1")`, math.Sin(-1), 1e-10},
+
+		// Expression argument
+		{"expr_add", "SIN(PI()/4+PI()/4)", 1, 1e-10},
+		{"expr_mul", "SIN(2*PI()/6)", math.Sqrt(3) / 2, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "SIN()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "SIN(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `SIN("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "SIN(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCOMBINA(t *testing.T) {
 	resolver := &mockResolver{}
 
