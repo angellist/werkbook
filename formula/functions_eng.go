@@ -21,6 +21,8 @@ func init() {
 	Register("HEX2BIN", NoCtx(fnHex2Bin))
 	Register("HEX2DEC", NoCtx(fnHex2Dec))
 	Register("HEX2OCT", NoCtx(fnHex2Oct))
+	Register("IMAGINARY", NoCtx(fnImaginary))
+	Register("IMREAL", NoCtx(fnImreal))
 	Register("OCT2BIN", NoCtx(fnOct2Bin))
 	Register("OCT2DEC", NoCtx(fnOct2Dec))
 	Register("OCT2HEX", NoCtx(fnOct2Hex))
@@ -1306,6 +1308,177 @@ func fnConvert(args []Value) (Value, error) {
 	// Factor-based conversion.
 	result := num * fromFactor / toFactor
 	return NumberVal(result), nil
+}
+
+// parseComplex parses an Excel-style complex number string (e.g. "3+4i",
+// "-3-4j", "i", "3", "-i") and returns the real and imaginary coefficients.
+// The third return value is true if the string is not a valid complex number.
+func parseComplex(s string) (real, imag float64, fail bool) {
+	if len(s) == 0 {
+		return 0, 0, true
+	}
+
+	// Check for i/j suffix to determine if there's an imaginary part.
+	suffix := s[len(s)-1]
+	if suffix != 'i' && suffix != 'j' {
+		// No imaginary suffix — must be a pure real number.
+		r, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return 0, 0, true
+		}
+		return r, 0, false
+	}
+
+	// Strip the i/j suffix.
+	s = s[:len(s)-1]
+
+	// Bare "i" or "j" → 0+1i.
+	if len(s) == 0 {
+		return 0, 1, false
+	}
+
+	// Just a sign: "-" → 0-1i, "+" → 0+1i.
+	if s == "-" {
+		return 0, -1, false
+	}
+	if s == "+" {
+		return 0, 1, false
+	}
+
+	// Find the last '+' or '-' that separates real and imaginary parts.
+	// We skip index 0 because the first character may be a sign for the
+	// real (or pure-imaginary) part.
+	splitIdx := -1
+	for i := len(s) - 1; i >= 1; i-- {
+		if s[i] == '+' || s[i] == '-' {
+			// Make sure this is not part of an exponent (e.g. "1e+2").
+			if i > 0 && (s[i-1] == 'e' || s[i-1] == 'E') {
+				continue
+			}
+			splitIdx = i
+			break
+		}
+	}
+
+	if splitIdx == -1 {
+		// No separator found — this is a pure imaginary number (e.g. "4i", "-3.5i").
+		imCoeff, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return 0, 0, true
+		}
+		return 0, imCoeff, false
+	}
+
+	// Split into real and imaginary parts.
+	realStr := s[:splitIdx]
+	imagStr := s[splitIdx:] // includes the sign
+
+	r, err := strconv.ParseFloat(realStr, 64)
+	if err != nil {
+		return 0, 0, true
+	}
+
+	// imagStr may be just "+" or "-" meaning coefficient of 1 or -1.
+	var im float64
+	if imagStr == "+" {
+		im = 1
+	} else if imagStr == "-" {
+		im = -1
+	} else {
+		im, err = strconv.ParseFloat(imagStr, 64)
+		if err != nil {
+			return 0, 0, true
+		}
+	}
+
+	return r, im, false
+}
+
+// fnImaginary implements the Excel IMAGINARY function.
+// IMAGINARY(inumber) — returns the imaginary coefficient of a complex number.
+func fnImaginary(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImaginary([]Value{v})
+			return r
+		}), nil
+	}
+
+	// Numeric input: treat as real number with 0 imaginary part.
+	if args[0].Type == ValueNumber {
+		return NumberVal(0), nil
+	}
+
+	// Boolean: TRUE=1, FALSE=0, both are real numbers.
+	if args[0].Type == ValueBool {
+		return NumberVal(0), nil
+	}
+
+	if args[0].Type != ValueString {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	_, imag, fail := parseComplex(args[0].Str)
+	if fail {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(imag), nil
+}
+
+// fnImreal implements the Excel IMREAL function.
+// IMREAL(inumber) — returns the real coefficient of a complex number.
+func fnImreal(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImreal([]Value{v})
+			return r
+		}), nil
+	}
+
+	// Numeric input: the number itself is the real part.
+	if args[0].Type == ValueNumber {
+		return NumberVal(args[0].Num), nil
+	}
+
+	// Boolean: TRUE=1, FALSE=0.
+	if args[0].Type == ValueBool {
+		if args[0].Bool {
+			return NumberVal(1), nil
+		}
+		return NumberVal(0), nil
+	}
+
+	if args[0].Type != ValueString {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	real, _, fail := parseComplex(args[0].Str)
+	if fail {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(real), nil
 }
 
 // fnGESTEP implements the Excel GESTEP function.

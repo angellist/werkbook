@@ -1939,3 +1939,251 @@ func TestGESTEP(t *testing.T) {
 		}
 	})
 }
+
+func TestIMAGINARY(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+		}{
+			// Basic complex numbers
+			{`IMAGINARY("3+4i")`, 4},
+			{`IMAGINARY("3-4i")`, -4},
+			{`IMAGINARY("-3+4i")`, 4},
+			{`IMAGINARY("-3-4i")`, -4},
+
+			// Pure imaginary
+			{`IMAGINARY("i")`, 1},
+			{`IMAGINARY("-i")`, -1},
+			{`IMAGINARY("2i")`, 2},
+			{`IMAGINARY("-3.5i")`, -3.5},
+			{`IMAGINARY("0.5i")`, 0.5},
+
+			// j suffix
+			{`IMAGINARY("3+4j")`, 4},
+			{`IMAGINARY("3-4j")`, -4},
+			{`IMAGINARY("j")`, 1},
+			{`IMAGINARY("-j")`, -1},
+			{`IMAGINARY("0-j")`, -1},
+
+			// Pure real (imaginary part is 0)
+			{`IMAGINARY("3")`, 0},
+			{`IMAGINARY("-5")`, 0},
+			{`IMAGINARY("0")`, 0},
+			{`IMAGINARY("3.14")`, 0},
+
+			// Plain number (not a string)
+			{"IMAGINARY(4)", 0},
+			{"IMAGINARY(0)", 0},
+			{"IMAGINARY(-7)", 0},
+			{"IMAGINARY(3.14)", 0},
+
+			// Boolean treated as real number
+			{"IMAGINARY(TRUE)", 0},
+			{"IMAGINARY(FALSE)", 0},
+
+			// Unit imaginary with real part
+			{`IMAGINARY("3+i")`, 1},
+			{`IMAGINARY("3-i")`, -1},
+
+			// Decimal coefficients
+			{`IMAGINARY("-5.5+2.3i")`, 2.3},
+			{`IMAGINARY("1.5-2.5i")`, -2.5},
+
+			// Zero real, explicit
+			{`IMAGINARY("0+4i")`, 4},
+			{`IMAGINARY("0-4i")`, -4},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber || got.Num != tt.want {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMAGINARY("invalid")`, ErrValNUM},
+			{`IMAGINARY("")`, ErrValNUM},
+			{`IMAGINARY("abc")`, ErrValNUM},
+			{`IMAGINARY("3+4")`, ErrValNUM},
+			{`IMAGINARY("3+4k")`, ErrValNUM},
+			{`IMAGINARY("+")`, ErrValNUM},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMAGINARY(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMAGINARY(1/0) = %v, want error", got)
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"IMAGINARY()", `IMAGINARY("3+4i","extra")`} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
+
+func TestIMREAL(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+		}{
+			// Basic complex numbers
+			{`IMREAL("6-9i")`, 6},
+			{`IMREAL("3+4i")`, 3},
+			{`IMREAL("-3+4i")`, -3},
+			{`IMREAL("-3-4i")`, -3},
+
+			// Pure imaginary (real part is 0)
+			{`IMREAL("i")`, 0},
+			{`IMREAL("-i")`, 0},
+			{`IMREAL("4i")`, 0},
+			{`IMREAL("-4i")`, 0},
+			{`IMREAL("2.5i")`, 0},
+
+			// Pure real
+			{`IMREAL("3")`, 3},
+			{`IMREAL("-5")`, -5},
+			{`IMREAL("0")`, 0},
+			{`IMREAL("3.14")`, 3.14},
+
+			// Plain number (not a string)
+			{"IMREAL(4)", 4},
+			{"IMREAL(5)", 5},
+			{"IMREAL(0)", 0},
+			{"IMREAL(-7)", -7},
+			{"IMREAL(3.14)", 3.14},
+
+			// Boolean: TRUE=1, FALSE=0
+			{"IMREAL(TRUE)", 1},
+			{"IMREAL(FALSE)", 0},
+
+			// j suffix
+			{`IMREAL("3-4j")`, 3},
+			{`IMREAL("3+4j")`, 3},
+			{`IMREAL("j")`, 0},
+			{`IMREAL("-j")`, 0},
+
+			// Decimal coefficients
+			{`IMREAL("-5.5+2.3i")`, -5.5},
+			{`IMREAL("1.5-2.5i")`, 1.5},
+
+			// Unit imaginary with real part
+			{`IMREAL("3+i")`, 3},
+			{`IMREAL("3-i")`, 3},
+
+			// Zero real, explicit
+			{`IMREAL("0+4i")`, 0},
+			{`IMREAL("0-4i")`, 0},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber || got.Num != tt.want {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMREAL("invalid")`, ErrValNUM},
+			{`IMREAL("")`, ErrValNUM},
+			{`IMREAL("abc")`, ErrValNUM},
+			{`IMREAL("3+4")`, ErrValNUM},
+			{`IMREAL("3+4k")`, ErrValNUM},
+			{`IMREAL("+")`, ErrValNUM},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMREAL(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMREAL(1/0) = %v, want error", got)
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"IMREAL()", `IMREAL("3+4i","extra")`} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval: %v", err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
