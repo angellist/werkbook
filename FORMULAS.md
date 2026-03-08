@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **397** Excel formula functions.
+Werkbook supports **398** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -327,6 +327,7 @@ Werkbook supports **397** Excel formula functions.
 | STDEV | Statistical | 24 |
 | STDEV.P | Statistical | 15 |
 | STDEV.S | Statistical | 1 |
+| STDEVA | Statistical | 28 |
 | STDEVP | Statistical | 4 |
 | STEYX | Statistical | 25 |
 | SUBSTITUTE | Text | 23 |
@@ -404,7 +405,7 @@ Werkbook supports **397** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **73** Excel functions are not yet supported.
+The following **72** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -475,7 +476,6 @@ The following **73** Excel functions are not yet supported.
 | SEARCHB | Text |
 | SHEET | Information |
 | SHEETS | Information |
-| STDEVA | Statistical |
 | STDEVPA | Statistical |
 | T.TEST | Statistical |
 | TREND | Statistical |

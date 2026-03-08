@@ -13018,6 +13018,382 @@ func TestVARA(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// STDEVA
+// ---------------------------------------------------------------------------
+
+func TestSTDEVA(t *testing.T) {
+	const tol = 1e-9
+
+	valResolver := func(vals ...Value) *mockResolver {
+		m := &mockResolver{cells: map[CellAddr]Value{}}
+		for i, v := range vals {
+			m.cells[CellAddr{Col: 1, Row: i + 1}] = v
+		}
+		return m
+	}
+
+	t.Run("basic numbers", func(t *testing.T) {
+		// STDEVA(2,4,6) = sqrt(VAR of {2,4,6}) = sqrt(4) = 2
+		cf := evalCompile(t, "STDEVA(2,4,6)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-2) > tol {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("basic range", func(t *testing.T) {
+		r := valResolver(NumberVal(2), NumberVal(4), NumberVal(6))
+		cf := evalCompile(t, "STDEVA(A1:A3)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-2) > tol {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("TRUE in range counts as 1", func(t *testing.T) {
+		// {TRUE, 3} -> {1, 3}, mean=2, ssq=2, var=2, stdev=sqrt(2)
+		r := valResolver(BoolVal(true), NumberVal(3))
+		cf := evalCompile(t, "STDEVA(A1:A2)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(2)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("FALSE in range counts as 0", func(t *testing.T) {
+		// {FALSE, 4} -> {0, 4}, mean=2, ssq=8, var=8, stdev=sqrt(8)
+		r := valResolver(BoolVal(false), NumberVal(4))
+		cf := evalCompile(t, "STDEVA(A1:A2)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(8)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("text in range counts as 0", func(t *testing.T) {
+		// {10, "hello"} -> {10, 0}, mean=5, ssq=50, var=50, stdev=sqrt(50)
+		r := valResolver(NumberVal(10), StringVal("hello"))
+		cf := evalCompile(t, "STDEVA(A1:A2)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(50)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("empty cells in range ignored", func(t *testing.T) {
+		// A1=2, A2=empty, A3=4 -> {2,4}, var=2, stdev=sqrt(2)
+		r := &mockResolver{cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(4),
+		}}
+		cf := evalCompile(t, "STDEVA(A1:A3)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(2)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("direct TRUE arg counts as 1", func(t *testing.T) {
+		// STDEVA(TRUE,3) -> {1,3}, mean=2, ssq=2, var=2, stdev=sqrt(2)
+		cf := evalCompile(t, "STDEVA(TRUE,3)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(2)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("direct FALSE arg counts as 0", func(t *testing.T) {
+		// STDEVA(FALSE,4) -> {0,4}, var=8, stdev=sqrt(8)
+		cf := evalCompile(t, "STDEVA(FALSE,4)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(8)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("direct numeric string coerced", func(t *testing.T) {
+		// STDEVA("5",15) -> {5,15}, mean=10, ssq=50, var=50, stdev=sqrt(50)
+		cf := evalCompile(t, `STDEVA("5",15)`)
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(50)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("direct non-numeric string returns VALUE error", func(t *testing.T) {
+		cf := evalCompile(t, `STDEVA("hello",10)`)
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("error propagation from range", func(t *testing.T) {
+		r := valResolver(NumberVal(1), ErrorVal(ErrValNA), NumberVal(3))
+		cf := evalCompile(t, "STDEVA(A1:A3)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("error propagation from direct arg", func(t *testing.T) {
+		r := valResolver(ErrorVal(ErrValDIV0))
+		cf := evalCompile(t, "STDEVA(A1,10)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("single value returns DIV0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVA(5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("all same values returns 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVA(5,5,5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("no args returns VALUE error", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVA()")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("mixed types in range", func(t *testing.T) {
+		// {1, TRUE, "abc", 3} -> {1, 1, 0, 3}, mean=5/4=1.25
+		// ssq = (0.25^2 + 0.25^2 + 1.25^2 + 1.75^2) = 0.0625+0.0625+1.5625+3.0625 = 4.75
+		// var = 4.75/3, stdev = sqrt(4.75/3)
+		r := valResolver(NumberVal(1), BoolVal(true), StringVal("abc"), NumberVal(3))
+		cf := evalCompile(t, "STDEVA(A1:A4)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(4.75 / 3.0)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("two values", func(t *testing.T) {
+		// STDEVA(10,20), mean=15, ssq=50, var=50, stdev=sqrt(50)
+		cf := evalCompile(t, "STDEVA(10,20)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(50)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("larger dataset", func(t *testing.T) {
+		// {1,2,3,4,5}, mean=3, ssq=10, var=10/4=2.5, stdev=sqrt(2.5)
+		r := valResolver(NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4), NumberVal(5))
+		cf := evalCompile(t, "STDEVA(A1:A5)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(2.5)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("negative numbers", func(t *testing.T) {
+		// STDEVA(-2,0,2), mean=0, ssq=8, var=8/2=4, stdev=2
+		cf := evalCompile(t, "STDEVA(-2,0,2)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-2) > tol {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("range with only booleans", func(t *testing.T) {
+		// {TRUE, FALSE} -> {1, 0}, mean=0.5, ssq=0.5, var=0.5, stdev=sqrt(0.5)
+		r := valResolver(BoolVal(true), BoolVal(false))
+		cf := evalCompile(t, "STDEVA(A1:A2)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(0.5)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > tol {
+			t.Errorf("got %v, want %f", got, want)
+		}
+	})
+
+	t.Run("range with only text", func(t *testing.T) {
+		// {"a", "b"} -> {0, 0}, mean=0, ssq=0, var=0, stdev=0
+		r := valResolver(StringVal("a"), StringVal("b"))
+		cf := evalCompile(t, "STDEVA(A1:A2)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("known Excel result", func(t *testing.T) {
+		// STDEVA(1345,1301,1368,1322,1310,1370,1318,1350,1303,1299) = 27.46391572
+		r := valResolver(
+			NumberVal(1345), NumberVal(1301), NumberVal(1368), NumberVal(1322), NumberVal(1310),
+			NumberVal(1370), NumberVal(1318), NumberVal(1350), NumberVal(1303), NumberVal(1299),
+		)
+		cf := evalCompile(t, "STDEVA(A1:A10)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := 27.46391572
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > 1e-4 {
+			t.Errorf("got %v, want ~%f", got, want)
+		}
+	})
+
+	t.Run("single text cell ref returns VALUE error", func(t *testing.T) {
+		r := valResolver(StringVal("hello"))
+		cf := evalCompile(t, "STDEVA(A1)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("five identical values returns 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVA(7,7,7,7,7)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("large values", func(t *testing.T) {
+		// STDEVA(1000000,2000000,3000000): mean=2e6, ssq=2e12, var=1e12, stdev=1e6
+		cf := evalCompile(t, "STDEVA(1000000,2000000,3000000)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-1e6) > 1e-3 {
+			t.Errorf("got %v, want 1000000", got)
+		}
+	})
+
+	t.Run("decimal values", func(t *testing.T) {
+		// STDEVA(1.5,2.5,3.5): mean=2.5, ssq=2, var=1, stdev=1
+		cf := evalCompile(t, "STDEVA(1.5,2.5,3.5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-1) > tol {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("zeros return 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVA(0,0,0)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("range and scalar combined", func(t *testing.T) {
+		// STDEVA(A1:A2,30) -> STDEVA(10,20,30): mean=20, ssq=200, var=100, stdev=10
+		r := valResolver(NumberVal(10), NumberVal(20))
+		cf := evalCompile(t, "STDEVA(A1:A2,30)")
+		got, err := Eval(cf, r, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-10) > tol {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // VARPA
 // ---------------------------------------------------------------------------
 
