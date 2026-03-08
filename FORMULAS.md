@@ -90,7 +90,7 @@ Werkbook supports **343** Excel formula functions.
 | DECIMAL | Math & Trig | 38 |
 | DEGREES | Math & Trig | 25 |
 | DELTA | Engineering | 24 |
-| DEVSQ | Statistical | - |
+| DEVSQ | Statistical | 23 |
 | DOLLAR | Text | 25 |
 | DOLLARDE | Financial | 18 |
 | DOLLARFR | Financial | 17 |
