@@ -6895,6 +6895,104 @@ func TestCOS(t *testing.T) {
 	}
 }
 
+func TestCOSH(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Excel doc examples
+		{"doc_example_4", "COSH(4)", 27.308232836016487, 1e-10},
+		{"doc_example_e", "COSH(EXP(1))", 7.6101251386622884, 1e-10},
+
+		// COSH(0) = 1
+		{"cosh_0", "COSH(0)", 1, 0},
+
+		// COSH(1) ≈ 1.5430806348152437
+		{"cosh_1", "COSH(1)", math.Cosh(1), 1e-10},
+
+		// COSH(-1) = COSH(1) — even function
+		{"cosh_neg1", "COSH(-1)", math.Cosh(1), 1e-10},
+
+		// Even function: COSH(-x) = COSH(x)
+		{"even_2", "COSH(-2)", math.Cosh(2), 1e-10},
+		{"even_3", "COSH(-3)", math.Cosh(3), 1e-10},
+		{"even_5", "COSH(-5)", math.Cosh(5), 1e-10},
+
+		// Larger values
+		{"cosh_5", "COSH(5)", 74.20994852478785, 1e-8},
+		{"cosh_10", "COSH(10)", 11013.232920103324, 1e-6},
+
+		// Small values
+		{"cosh_0_1", "COSH(0.1)", math.Cosh(0.1), 1e-10},
+		{"cosh_0_01", "COSH(0.01)", math.Cosh(0.01), 1e-10},
+		{"cosh_0_001", "COSH(0.001)", math.Cosh(0.001), 1e-14},
+		{"cosh_neg_0_5", "COSH(-0.5)", math.Cosh(0.5), 1e-10},
+
+		// Expression input
+		{"cosh_expr", "COSH(2+1)", math.Cosh(3), 1e-10},
+		{"cosh_ln_2", "COSH(LN(2))", 1.25, 1e-10},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "COSH(TRUE)", math.Cosh(1), 1e-10},
+		{"bool_false", "COSH(FALSE)", 1, 0},
+
+		// String coercion
+		{"str_zero", `COSH("0")`, 1, 0},
+		{"str_1", `COSH("1")`, math.Cosh(1), 1e-10},
+		{"str_neg_1", `COSH("-1")`, math.Cosh(1), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "COSH()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "COSH(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `COSH("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "COSH(1/0)", ErrValDIV0},
+		// Overflow to infinity
+		{"overflow", "COSH(710)", ErrValNUM},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTAN(t *testing.T) {
 	resolver := &mockResolver{}
 
