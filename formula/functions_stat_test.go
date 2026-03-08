@@ -22092,12 +22092,13 @@ func TestPROB(t *testing.T) {
 
 	// --- Error cases ---
 
-	t.Run("error prob value zero", func(t *testing.T) {
+	t.Run("prob value zero allowed", func(t *testing.T) {
+		// Excel allows zero probabilities as long as the sum equals 1.
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(1),
 				{Col: 1, Row: 2}: NumberVal(2),
-				{Col: 2, Row: 1}: NumberVal(0),   // prob <= 0
+				{Col: 2, Row: 1}: NumberVal(0),
 				{Col: 2, Row: 2}: NumberVal(1.0),
 			},
 		}
@@ -22106,12 +22107,13 @@ func TestPROB(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
-		if got.Type != ValueError || got.Err != ErrValNUM {
-			t.Errorf("expected #NUM!, got %v", got)
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("expected 0, got %v", got)
 		}
 	})
 
-	t.Run("error prob value negative", func(t *testing.T) {
+	t.Run("prob value negative allowed", func(t *testing.T) {
+		// Excel allows negative probabilities as long as the sum equals 1.
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(1),
@@ -22125,8 +22127,8 @@ func TestPROB(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
-		if got.Type != ValueError || got.Err != ErrValNUM {
-			t.Errorf("expected #NUM!, got %v", got)
+		if got.Type != ValueNumber || got.Num != -0.5 {
+			t.Errorf("expected -0.5, got %v", got)
 		}
 	})
 

@@ -4891,10 +4891,6 @@ func fnPROB(args []Value) (Value, error) {
 		if xv.Type != ValueNumber || yv.Type != ValueNumber {
 			return ErrorVal(ErrValVALUE), nil
 		}
-		// Each probability must be > 0 and <= 1.
-		if yv.Num <= 0 || yv.Num > 1 {
-			return ErrorVal(ErrValNUM), nil
-		}
 		xs = append(xs, xv.Num)
 		ps = append(ps, yv.Num)
 		probSum += yv.Num
