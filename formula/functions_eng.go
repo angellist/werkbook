@@ -34,7 +34,13 @@ func init() {
 	Register("IMPOWER", NoCtx(fnImpower))
 	Register("IMPRODUCT", NoCtx(fnImproduct))
 	Register("IMREAL", NoCtx(fnImreal))
+	Register("IMCOSH", NoCtx(fnImcosh))
+	Register("IMCOT", NoCtx(fnImcot))
+	Register("IMCSC", NoCtx(fnImcsc))
+	Register("IMCSCH", NoCtx(fnImcsch))
+	Register("IMSECH", NoCtx(fnImsech))
 	Register("IMSIN", NoCtx(fnImsin))
+	Register("IMSINH", NoCtx(fnImsinh))
 	Register("IMSQRT", NoCtx(fnImsqrt))
 	Register("IMSUB", NoCtx(fnImsub))
 	Register("IMSUM", NoCtx(fnImsum))
@@ -2511,6 +2517,363 @@ func fnImtan(args []Value) (Value, error) {
 
 	realResult := cleanFloat(math.Sin(2*x) / denom)
 	imagResult := cleanFloat(math.Sinh(2*y) / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImsinh implements the Excel IMSINH function.
+// IMSINH(inumber) — returns the hyperbolic sine of a complex number.
+// sinh(x+yi) = sinh(x)*cos(y) + cosh(x)*sin(y)*i.
+func fnImsinh(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsinh([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	realResult := cleanFloat(math.Sinh(x) * math.Cos(y))
+	imagResult := cleanFloat(math.Cosh(x) * math.Sin(y))
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImcosh implements the Excel IMCOSH function.
+// IMCOSH(inumber) — returns the hyperbolic cosine of a complex number.
+// cosh(x+yi) = cosh(x)*cos(y) + sinh(x)*sin(y)*i.
+func fnImcosh(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImcosh([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	realResult := cleanFloat(math.Cosh(x) * math.Cos(y))
+	imagResult := cleanFloat(math.Sinh(x) * math.Sin(y))
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImsech implements the Excel IMSECH function.
+// IMSECH(inumber) — returns the hyperbolic secant of a complex number.
+// sech(z) = 1/cosh(z).
+func fnImsech(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsech([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// cosh(x+yi) = cosh(x)*cos(y) + sinh(x)*sin(y)*i
+	cr := math.Cosh(x) * math.Cos(y)
+	ci := math.Sinh(x) * math.Sin(y)
+
+	// 1/(cr+ci*i): multiply by conjugate → (cr-ci*i)/(cr²+ci²)
+	denom := cr*cr + ci*ci
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(cr / denom)
+	imagResult := cleanFloat(-ci / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImcsc implements the Excel IMCSC function.
+// IMCSC(inumber) — returns the cosecant of a complex number.
+// csc(z) = 1/sin(z).
+func fnImcsc(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImcsc([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// sin(x+yi) = sin(x)*cosh(y) + cos(x)*sinh(y)*i
+	sr := math.Sin(x) * math.Cosh(y)
+	si := math.Cos(x) * math.Sinh(y)
+
+	// 1/(sr+si*i): multiply by conjugate → (sr-si*i)/(sr²+si²)
+	denom := sr*sr + si*si
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(sr / denom)
+	imagResult := cleanFloat(-si / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImcot implements the Excel IMCOT function.
+// IMCOT(inumber) — returns the cotangent of a complex number.
+// cot(z) = cos(z)/sin(z).
+func fnImcot(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImcot([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i
+	cr := math.Cos(x) * math.Cosh(y)
+	ci := -math.Sin(x) * math.Sinh(y)
+
+	// sin(x+yi) = sin(x)*cosh(y) + cos(x)*sinh(y)*i
+	sr := math.Sin(x) * math.Cosh(y)
+	si := math.Cos(x) * math.Sinh(y)
+
+	// (cr+ci*i)/(sr+si*i): multiply by conjugate of denominator
+	// = ((cr*sr+ci*si) + (ci*sr-cr*si)*i) / (sr²+si²)
+	denom := sr*sr + si*si
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat((cr*sr + ci*si) / denom)
+	imagResult := cleanFloat((ci*sr - cr*si) / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
+// fnImcsch implements the Excel IMCSCH function.
+// IMCSCH(inumber) — returns the hyperbolic cosecant of a complex number.
+// csch(z) = 1/sinh(z).
+func fnImcsch(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImcsch([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// sinh(x+yi) = sinh(x)*cos(y) + cosh(x)*sin(y)*i
+	sr := math.Sinh(x) * math.Cos(y)
+	si := math.Cosh(x) * math.Sin(y)
+
+	// 1/(sr+si*i): multiply by conjugate → (sr-si*i)/(sr²+si²)
+	denom := sr*sr + si*si
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(sr / denom)
+	imagResult := cleanFloat(-si / denom)
 
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }

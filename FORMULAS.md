@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **366** Excel formula functions.
+Werkbook supports **372** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -154,6 +154,10 @@ Werkbook supports **366** Excel formula functions.
 | IMARGUMENT | Engineering | 47 |
 | IMCONJUGATE | Engineering | 47 |
 | IMCOS | Engineering | 30 |
+| IMCOSH | Engineering | 27 |
+| IMCOT | Engineering | 25 |
+| IMCSC | Engineering | 25 |
+| IMCSCH | Engineering | 25 |
 | IMDIV | Engineering | 34 |
 | IMEXP | Engineering | 30 |
 | IMLN | Engineering | 30 |
@@ -162,7 +166,9 @@ Werkbook supports **366** Excel formula functions.
 | IMPOWER | Engineering | 39 |
 | IMPRODUCT | Engineering | 36 |
 | IMREAL | Engineering | 38 |
+| IMSECH | Engineering | 25 |
 | IMSIN | Engineering | 30 |
+| IMSINH | Engineering | 27 |
 | IMSQRT | Engineering | 32 |
 | IMSUB | Engineering | 34 |
 | IMSUM | Engineering | 37 |
@@ -373,7 +379,7 @@ Werkbook supports **366** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **104** Excel functions are not yet supported.
+The following **98** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -428,13 +434,7 @@ The following **104** Excel functions are not yet supported.
 | GETPIVOTDATA | Lookup & Reference |
 | GROWTH | Statistical |
 | HYPERLINK | Lookup & Reference |
-| IMCOSH | Engineering |
-| IMCOT | Engineering |
-| IMCSC | Engineering |
-| IMCSCH | Engineering |
 | IMSEC | Engineering |
-| IMSECH | Engineering |
-| IMSINH | Engineering |
 | INFO | Information |
 | INTRATE | Financial |
 | ISO.CEILING | Math & Trig |
