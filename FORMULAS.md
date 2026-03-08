@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **390** Excel formula functions.
+Werkbook supports **392** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -104,6 +104,7 @@ Werkbook supports **390** Excel formula functions.
 | DOLLARDE | Financial | 18 |
 | DOLLARFR | Financial | 17 |
 | DROP | Lookup & Reference | 26 |
+| DURATION | Financial | 2 |
 | EDATE | Date & Time | 19 |
 | EFFECT | Financial | 18 |
 | EOMONTH | Date & Time | 18 |
@@ -218,6 +219,7 @@ Werkbook supports **390** Excel formula functions.
 | MAXA | Statistical | 16 |
 | MAXIFS | Statistical | 45 |
 | MDETERM | Math & Trig | 31 |
+| MDURATION | Financial | 2 |
 | MEDIAN | Statistical | 27 |
 | MID | Text | 50 |
 | MIN | Statistical | 30 |
@@ -397,7 +399,7 @@ Werkbook supports **390** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **80** Excel functions are not yet supported.
+The following **78** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -428,7 +430,6 @@ The following **80** Excel functions are not yet supported.
 | DSTDEV | Database |
 | DSTDEVP | Database |
 | DSUM | Database |
-| DURATION | Financial |
 | DVAR | Database |
 | DVARP | Database |
 | ENCODEURL | Web |
@@ -456,7 +457,6 @@ The following **80** Excel functions are not yet supported.
 | LOGEST | Statistical |
 | MAKEARRAY | Logical |
 | MAP | Logical |
-| MDURATION | Financial |
 | MIDB | Text |
 | MODE.MULT | Statistical |
 | ODDFPRICE | Financial |

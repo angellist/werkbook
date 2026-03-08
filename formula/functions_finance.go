@@ -51,6 +51,8 @@ func init() {
 	Register("COUPNCD", NoCtx(fnCoupncd))
 	Register("COUPNUM", NoCtx(fnCoupnum))
 	Register("COUPPCD", NoCtx(fnCouppcd))
+	Register("DURATION", NoCtx(fnDuration))
+	Register("MDURATION", NoCtx(fnMduration))
 }
 
 // flattenValues extracts all numeric values from an arg that may be a scalar or array (range).
@@ -1696,8 +1698,14 @@ func dayCountBasis(settlement, maturity float64, basis int) (dsm, bYear float64)
 		bYear = 360
 	case 1: // Actual/actual
 		dsm = maturity - settlement
-		if ey-sy <= 1 {
-			// Period within same year or adjacent years: check for Feb 29.
+		if sy == ey {
+			// Same calendar year: use that year's length.
+			bYear = 365
+			if isLeapYear(sy) {
+				bYear = 366
+			}
+		} else if ey-sy == 1 {
+			// Adjacent years: check whether Feb 29 falls within the range.
 			bYear = 365
 			for y := sy; y <= ey; y++ {
 				if isLeapYear(y) {
@@ -2132,9 +2140,9 @@ func fnPricemat(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	dsm, _ := dayCountBasis(settlement, maturity, basis)
 	dim, _ := dayCountBasis(issue, maturity, basis)
-	a, _ := dayCountBasis(issue, settlement, basis)
+	a, bYear := dayCountBasis(issue, settlement, basis)
 
 	if bYear == 0 {
 		return ErrorVal(ErrValDIV0), nil
@@ -2204,9 +2212,9 @@ func fnYieldmat(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	dsm, bYear := dayCountBasis(settlement, maturity, basis)
+	dsm, _ := dayCountBasis(settlement, maturity, basis)
 	dim, _ := dayCountBasis(issue, maturity, basis)
-	a, _ := dayCountBasis(issue, settlement, basis)
+	a, bYear := dayCountBasis(issue, settlement, basis)
 
 	if bYear == 0 {
 		return ErrorVal(ErrValDIV0), nil
@@ -2488,4 +2496,238 @@ func fnCoupdaysnc(args []Value) (Value, error) {
 		ncdSerial := TimeToExcelSerial(ncd)
 		return NumberVal(ncdSerial - settlement), nil
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers for computing coupon metrics from raw values.
+// These avoid the Value boxing/unboxing overhead of the fnCoup* wrappers.
+// ---------------------------------------------------------------------------
+
+// coupnumRaw returns the number of remaining coupon periods.
+func coupnumRaw(st, mt time.Time, freq int) int {
+	count := 0
+	ncd := coupncd(st, mt, freq)
+	monthStep := 12 / freq
+	for !ncd.After(mt) {
+		count++
+		nextMonth := int(ncd.Month()) + monthStep
+		nextYear := ncd.Year()
+		for nextMonth > 12 {
+			nextMonth -= 12
+			nextYear++
+		}
+		ncd = clampDate(nextYear, nextMonth, mt.Day())
+	}
+	return count
+}
+
+// coupdaybsRaw returns the number of days from the previous coupon date to settlement.
+func coupdaybsRaw(settlement float64, st, mt time.Time, freq, basis int) float64 {
+	pcd := couppcd(st, mt, freq)
+	switch basis {
+	case 0, 4:
+		sy, sm, sd := pcd.Year(), int(pcd.Month()), pcd.Day()
+		ey, em, ed := st.Year(), int(st.Month()), st.Day()
+		return days360Calc(sy, sm, sd, ey, em, ed, basis == 4)
+	default:
+		return settlement - TimeToExcelSerial(pcd)
+	}
+}
+
+// coupdaysRaw returns the number of days in the coupon period containing settlement.
+func coupdaysRaw(settlement float64, st, mt time.Time, freq, basis int) float64 {
+	switch basis {
+	case 0, 4:
+		return 360.0 / float64(freq)
+	case 1:
+		pcd := couppcd(st, mt, freq)
+		ncd := coupncd(st, mt, freq)
+		return TimeToExcelSerial(ncd) - TimeToExcelSerial(pcd)
+	case 2:
+		return 360.0 / float64(freq)
+	case 3:
+		return 365.0 / float64(freq)
+	}
+	return 0
+}
+
+// coupdaysncRaw returns the number of days from settlement to the next coupon date.
+func coupdaysncRaw(settlement float64, st, mt time.Time, freq, basis int) float64 {
+	switch basis {
+	case 0, 4:
+		pcd := couppcd(st, mt, freq)
+		sy, sm, sd := pcd.Year(), int(pcd.Month()), pcd.Day()
+		ey, em, ed := st.Year(), int(st.Month()), st.Day()
+		daybs := days360Calc(sy, sm, sd, ey, em, ed, basis == 4)
+		return 360.0/float64(freq) - daybs
+	default:
+		ncd := coupncd(st, mt, freq)
+		return TimeToExcelSerial(ncd) - settlement
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DURATION / MDURATION
+// ---------------------------------------------------------------------------
+
+// fnDuration implements DURATION(settlement, maturity, coupon, yld, frequency, [basis]).
+// Returns the Macaulay duration for a security with an assumed par value of $100.
+func fnDuration(args []Value) (Value, error) {
+	if len(args) < 5 || len(args) > 6 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	coupon, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	yld, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	freqRaw, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 6 {
+		b, e := CoerceNum(args[5])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	freq := int(math.Trunc(freqRaw))
+
+	// Validate inputs.
+	if coupon < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if yld < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if freq != 1 && freq != 2 && freq != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dur := durationCalc(settlement, maturity, coupon, yld, freq, basis)
+	return NumberVal(dur), nil
+}
+
+// durationCalc computes the Macaulay duration.
+func durationCalc(settlement, maturity, coupon, yld float64, freq, basis int) float64 {
+	st := ExcelSerialToTime(settlement)
+	mt := ExcelSerialToTime(maturity)
+
+	n := coupnumRaw(st, mt, freq)
+	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
+	e := coupdaysRaw(settlement, st, mt, freq, basis)
+
+	// Fraction of the first coupon period remaining.
+	accruedFrac := dsc / e
+
+	yf := yld / float64(freq)   // yield per period
+	cf := coupon / float64(freq) // coupon per period (as rate)
+
+	var numerator, denominator float64
+
+	for k := 1; k <= n; k++ {
+		// Time in periods from settlement, expressed in years.
+		tk := (float64(k-1) + accruedFrac) / float64(freq)
+
+		// Cash flow at period k: coupon payment, plus par at maturity.
+		cashFlow := cf * 100.0
+		if k == n {
+			cashFlow += 100.0
+		}
+
+		// Discount factor.
+		discount := math.Pow(1.0+yf, float64(k-1)+accruedFrac)
+
+		pv := cashFlow / discount
+		numerator += tk * pv
+		denominator += pv
+	}
+
+	if denominator == 0 {
+		return 0
+	}
+	return numerator / denominator
+}
+
+// fnMduration implements MDURATION(settlement, maturity, coupon, yld, frequency, [basis]).
+// Returns the modified Macaulay duration: DURATION / (1 + yld/frequency).
+func fnMduration(args []Value) (Value, error) {
+	if len(args) < 5 || len(args) > 6 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	coupon, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	yld, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	freqRaw, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	basis := 0
+	if len(args) == 6 {
+		b, e := CoerceNum(args[5])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+	freq := int(math.Trunc(freqRaw))
+
+	// Validate inputs.
+	if coupon < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if yld < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if settlement >= maturity {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if freq != 1 && freq != 2 && freq != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	dur := durationCalc(settlement, maturity, coupon, yld, freq, basis)
+	mdur := dur / (1.0 + yld/float64(freq))
+	return NumberVal(mdur), nil
 }
