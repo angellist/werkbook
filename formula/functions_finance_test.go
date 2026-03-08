@@ -8927,3 +8927,233 @@ func TestCOUPDAYSNC_ViaEval(t *testing.T) {
 		t.Errorf("got %f, want 110", v.Num)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// DURATION tests
+// ---------------------------------------------------------------------------
+
+func TestDURATION(t *testing.T) {
+	// Serial date constants used in tests:
+	// Jul 1 2018  = 43282    Jan 1 2048  = 54058
+	// Jan 1 2008  = 39448    Jan 1 2016  = 42370
+	// Jan 1 2020  = 43831    Jan 1 2025  = 45658
+	// Jan 1 2030  = 47484    Jun 15 2020 = 43997
+	// Dec 15 2020 = 44180    Jun 15 2021 = 44362
+	// Jan 15 2020 = 43845    Jul 15 2020 = 44027
+	// Jan 15 2021 = 44211    Jan 15 2050 = 54803
+	// Jul 15 2025 = 45853    Jan 15 2025 = 45672
+	// Jan 15 2030 = 47498
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// --- Doc example ---
+		// settlement=7/1/2018, maturity=1/1/2048, coupon=0.08, yld=0.09, freq=2, basis=1
+		{name: "doc example", args: numArgs(43282, 54058, 0.08, 0.09, 2, 1), want: 10.9191},
+
+		// --- All 3 frequencies ---
+		// Annual (freq=1): settlement=1/1/2020, maturity=1/1/2030, coupon=0.05, yld=0.06, basis=0
+		{name: "annual freq=1", args: numArgs(43831, 47484, 0.05, 0.06, 1, 0), want: 8.0225},
+		// Semiannual (freq=2): same dates
+		{name: "semiannual freq=2", args: numArgs(43831, 47484, 0.05, 0.06, 2, 0), want: 7.8950},
+		// Quarterly (freq=4): same dates
+		{name: "quarterly freq=4", args: numArgs(43831, 47484, 0.05, 0.06, 4, 0), want: 7.8304},
+
+		// --- All 5 basis types ---
+		// basis=0 (US 30/360)
+		{name: "basis 0", args: numArgs(43282, 54058, 0.08, 0.09, 2, 0), want: 10.9137},
+		// basis=1 (actual/actual) - doc example
+		{name: "basis 1", args: numArgs(43282, 54058, 0.08, 0.09, 2, 1), want: 10.9191},
+		// basis=2 (actual/360)
+		{name: "basis 2", args: numArgs(43282, 54058, 0.08, 0.09, 2, 2), want: 10.9303},
+		// basis=3 (actual/365)
+		{name: "basis 3", args: numArgs(43282, 54058, 0.08, 0.09, 2, 3), want: 10.9200},
+		// basis=4 (European 30/360)
+		{name: "basis 4", args: numArgs(43282, 54058, 0.08, 0.09, 2, 4), want: 10.9137},
+
+		// --- Zero coupon bond ---
+		// coupon=0: duration equals time to maturity
+		{name: "zero coupon", args: numArgs(43831, 47484, 0, 0.05, 2, 0), want: 10.0000},
+
+		// --- Zero coupon and zero yield ---
+		// coupon=0, yld=0: duration = maturity time in years
+		{name: "zero coupon zero yield", args: numArgs(43831, 47484, 0, 0, 2, 0), want: 10.0},
+
+		// --- Short-term bond (1 period) ---
+		// settlement=Jun 15 2020, maturity=Dec 15 2020, freq=2
+		{name: "one period", args: numArgs(43997, 44180, 0.06, 0.05, 2, 0), want: 0.5},
+
+		// --- Long-term bond (30 years) ---
+		{name: "long-term 30yr", args: numArgs(43845, 54803, 0.06, 0.07, 2, 1), want: 13.2630},
+
+		// --- High yield ---
+		{name: "high yield 20%", args: numArgs(43831, 47484, 0.05, 0.20, 2, 0), want: 6.3224},
+
+		// --- Low yield ---
+		{name: "low yield 0.5%", args: numArgs(43831, 47484, 0.05, 0.005, 2, 0), want: 8.3774},
+
+		// --- High coupon ---
+		{name: "high coupon 15%", args: numArgs(43831, 47484, 0.15, 0.06, 2, 0), want: 6.4988},
+
+		// --- Default basis (5 args, no basis) ---
+		{name: "default basis", args: numArgs(43831, 47484, 0.05, 0.06, 2), want: 7.8950},
+
+		// --- Short maturity, quarterly ---
+		// settlement=Jan 15 2025, maturity=Jul 15 2025, freq=4
+		{name: "short maturity quarterly", args: numArgs(45672, 45853, 0.04, 0.03, 4, 0), want: 0.4951},
+
+		// --- Multi-period, annual, basis=3 ---
+		{name: "annual basis=3", args: numArgs(43831, 47484, 0.07, 0.08, 1, 3), want: 7.4205},
+
+		// --- Error cases ---
+		{name: "too few args", args: numArgs(43831, 47484, 0.05, 0.06), wantErr: true},
+		{name: "too many args", args: numArgs(43831, 47484, 0.05, 0.06, 2, 0, 99), wantErr: true},
+		{name: "negative coupon", args: numArgs(43831, 47484, -0.05, 0.06, 2, 0), wantErr: true},
+		{name: "negative yield", args: numArgs(43831, 47484, 0.05, -0.06, 2, 0), wantErr: true},
+		{name: "settlement >= maturity", args: numArgs(47484, 43831, 0.05, 0.06, 2, 0), wantErr: true},
+		{name: "settlement == maturity", args: numArgs(43831, 43831, 0.05, 0.06, 2, 0), wantErr: true},
+		{name: "bad frequency 3", args: numArgs(43831, 47484, 0.05, 0.06, 3, 0), wantErr: true},
+		{name: "bad frequency 0", args: numArgs(43831, 47484, 0.05, 0.06, 0, 0), wantErr: true},
+		{name: "bad basis -1", args: numArgs(43831, 47484, 0.05, 0.06, 2, -1), wantErr: true},
+		{name: "bad basis 5", args: numArgs(43831, 47484, 0.05, 0.06, 2, 5), wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnDuration(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestDURATION_ViaEval(t *testing.T) {
+	cf := evalCompile(t, "DURATION(DATE(2018,7,1), DATE(2048,1,1), 0.08, 0.09, 2, 1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-10.9191) > 0.01 {
+		t.Errorf("got %f, want ~10.9191", v.Num)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MDURATION tests
+// ---------------------------------------------------------------------------
+
+func TestMDURATION(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// --- Doc example ---
+		// settlement=1/1/2008, maturity=1/1/2016, coupon=0.08, yld=0.09, freq=2, basis=1
+		{name: "doc example", args: numArgs(39448, 42370, 0.08, 0.09, 2, 1), want: 5.7357},
+
+		// --- All 3 frequencies ---
+		// Annual (freq=1): settlement=1/1/2020, maturity=1/1/2030, coupon=0.05, yld=0.06
+		{name: "annual freq=1", args: numArgs(43831, 47484, 0.05, 0.06, 1, 0), want: 7.5684},
+		// Semiannual (freq=2): same dates
+		{name: "semiannual freq=2", args: numArgs(43831, 47484, 0.05, 0.06, 2, 0), want: 7.6650},
+		// Quarterly (freq=4): same dates
+		{name: "quarterly freq=4", args: numArgs(43831, 47484, 0.05, 0.06, 4, 0), want: 7.7146},
+
+		// --- All 5 basis types ---
+		// settlement=7/1/2018, maturity=1/1/2048, coupon=0.08, yld=0.09, freq=2
+		{name: "basis 0", args: numArgs(43282, 54058, 0.08, 0.09, 2, 0), want: 10.4438},
+		{name: "basis 1", args: numArgs(43282, 54058, 0.08, 0.09, 2, 1), want: 10.4490},
+		{name: "basis 2", args: numArgs(43282, 54058, 0.08, 0.09, 2, 2), want: 10.4596},
+		{name: "basis 3", args: numArgs(43282, 54058, 0.08, 0.09, 2, 3), want: 10.4498},
+		{name: "basis 4", args: numArgs(43282, 54058, 0.08, 0.09, 2, 4), want: 10.4438},
+
+		// --- Zero coupon bond ---
+		{name: "zero coupon", args: numArgs(43831, 47484, 0, 0.05, 2, 0), want: 9.7561},
+
+		// --- Zero coupon and zero yield ---
+		{name: "zero coupon zero yield", args: numArgs(43831, 47484, 0, 0, 2, 0), want: 10.0},
+
+		// --- Short-term bond (1 period) ---
+		{name: "one period", args: numArgs(43997, 44180, 0.06, 0.05, 2, 0), want: 0.4878},
+
+		// --- Long-term bond (30 years) ---
+		{name: "long-term 30yr", args: numArgs(43845, 54803, 0.06, 0.07, 2, 1), want: 12.8145},
+
+		// --- High yield ---
+		{name: "high yield 20%", args: numArgs(43831, 47484, 0.05, 0.20, 2, 0), want: 5.7476},
+
+		// --- Low yield ---
+		{name: "low yield 0.5%", args: numArgs(43831, 47484, 0.05, 0.005, 2, 0), want: 8.3565},
+
+		// --- High coupon ---
+		{name: "high coupon 15%", args: numArgs(43831, 47484, 0.15, 0.06, 2, 0), want: 6.3095},
+
+		// --- Default basis (5 args, no basis) ---
+		{name: "default basis", args: numArgs(43831, 47484, 0.05, 0.06, 2), want: 7.6650},
+
+		// --- Short maturity, quarterly ---
+		{name: "short maturity quarterly", args: numArgs(45672, 45853, 0.04, 0.03, 4, 0), want: 0.4914},
+
+		// --- Multi-period, annual, basis=3 ---
+		{name: "annual basis=3", args: numArgs(43831, 47484, 0.07, 0.08, 1, 3), want: 6.8708},
+
+		// --- MDURATION = DURATION / (1 + yld/freq) verified ---
+		// Use the doc example values: DURATION=10.9191, yld=0.09, freq=2
+		// MDURATION = 10.9191 / (1 + 0.045) = 10.4490
+		{name: "formula verification", args: numArgs(43282, 54058, 0.08, 0.09, 2, 1), want: 10.4490},
+
+		// --- Error cases ---
+		{name: "too few args", args: numArgs(43831, 47484, 0.05, 0.06), wantErr: true},
+		{name: "too many args", args: numArgs(43831, 47484, 0.05, 0.06, 2, 0, 99), wantErr: true},
+		{name: "negative coupon", args: numArgs(43831, 47484, -0.05, 0.06, 2, 0), wantErr: true},
+		{name: "negative yield", args: numArgs(43831, 47484, 0.05, -0.06, 2, 0), wantErr: true},
+		{name: "settlement >= maturity", args: numArgs(47484, 43831, 0.05, 0.06, 2, 0), wantErr: true},
+		{name: "settlement == maturity", args: numArgs(43831, 43831, 0.05, 0.06, 2, 0), wantErr: true},
+		{name: "bad frequency 3", args: numArgs(43831, 47484, 0.05, 0.06, 3, 0), wantErr: true},
+		{name: "bad frequency 0", args: numArgs(43831, 47484, 0.05, 0.06, 0, 0), wantErr: true},
+		{name: "bad basis -1", args: numArgs(43831, 47484, 0.05, 0.06, 2, -1), wantErr: true},
+		{name: "bad basis 5", args: numArgs(43831, 47484, 0.05, 0.06, 2, 5), wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnMduration(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestMDURATION_ViaEval(t *testing.T) {
+	cf := evalCompile(t, "MDURATION(DATE(2008,1,1), DATE(2016,1,1), 0.08, 0.09, 2, 1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-5.7357) > 0.01 {
+		t.Errorf("got %f, want ~5.7357", v.Num)
+	}
+}
