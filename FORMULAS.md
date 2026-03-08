@@ -7,8 +7,8 @@ Werkbook supports **343** Excel formula functions.
 | ABS | Math & Trig | 26 |
 | ACOS | Math & Trig | 32 |
 | ACOSH | Math & Trig | 32 |
-| ACOT | Math & Trig | 25 |
-| ACOTH | Math & Trig | 31 |
+| ACOT | Math & Trig | 27 |
+| ACOTH | Math & Trig | 32 |
 | ADDRESS | Lookup & Reference | 44 |
 | ANCHORARRAY | Lookup & Reference | 6 |
 | AND | Logical | 29 |
@@ -32,11 +32,11 @@ Werkbook supports **343** Excel formula functions.
 | BIN2OCT | Engineering | 45 |
 | BINOM.DIST | Statistical | 30 |
 | BINOM.INV | Statistical | 33 |
-| BITAND | Math & Trig | 26 |
-| BITLSHIFT | Math & Trig | 26 |
-| BITOR | Math & Trig | 26 |
-| BITRSHIFT | Math & Trig | 26 |
-| BITXOR | Math & Trig | 26 |
+| BITAND | Math & Trig | 28 |
+| BITLSHIFT | Math & Trig | 27 |
+| BITOR | Math & Trig | 27 |
+| BITRSHIFT | Math & Trig | 27 |
+| BITXOR | Math & Trig | 27 |
 | CEILING | Math & Trig | 51 |
 | CEILING.MATH | Math & Trig | 37 |
 | CEILING.PRECISE | Math & Trig | 37 |
@@ -99,9 +99,9 @@ Werkbook supports **343** Excel formula functions.
 | EFFECT | Financial | 18 |
 | EOMONTH | Date & Time | 18 |
 | ERF | Math & Trig | 22 |
-| ERF.PRECISE | Math & Trig | 18 |
+| ERF.PRECISE | Math & Trig | 20 |
 | ERFC | Math & Trig | 18 |
-| ERFC.PRECISE | Math & Trig | 18 |
+| ERFC.PRECISE | Math & Trig | 19 |
 | ERROR.TYPE | Information | 17 |
 | EVEN | Math & Trig | 34 |
 | EXACT | Text | 32 |
@@ -219,7 +219,7 @@ Werkbook supports **343** Excel formula functions.
 | OCT2HEX | Engineering | 36 |
 | ODD | Math & Trig | 40 |
 | OR | Logical | 50 |
-| PDURATION | Financial | 21 |
+| PDURATION | Financial | 23 |
 | PEARSON | Statistical | 23 |
 | PERCENTILE | Statistical | 32 |
 | PERCENTILE.EXC | Statistical | 31 |
@@ -258,7 +258,7 @@ Werkbook supports **343** Excel formula functions.
 | ROUNDUP | Math & Trig | 36 |
 | ROW | Information | 1 |
 | ROWS | Information | 32 |
-| RRI | Financial | 20 |
+| RRI | Financial | 21 |
 | RSQ | Statistical | 23 |
 | SEARCH | Text | 15 |
 | SEC | Math & Trig | 26 |

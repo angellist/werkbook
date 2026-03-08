@@ -156,6 +156,42 @@ func TestDynamicArrayFormulaPrefixesInXML(t *testing.T) {
 	}
 }
 
+func TestOfficeEraFormulaPrefixesInXML(t *testing.T) {
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+
+	formulas := map[string]string{
+		"A1":  "ACOT(0)",
+		"A2":  "ACOTH(2)",
+		"A3":  "BITAND(1,5)",
+		"A4":  "BITLSHIFT(1,1)",
+		"A5":  "BITOR(1,5)",
+		"A6":  "BITRSHIFT(8,1)",
+		"A7":  "BITXOR(1,5)",
+		"A8":  "ERF.PRECISE(0.5)",
+		"A9":  "ERFC.PRECISE(0.5)",
+		"A10": "PDURATION(0.025,2000,2200)",
+		"A11": "RRI(96,10000,11000)",
+	}
+	for cell, formula := range formulas {
+		s.SetFormula(cell, formula)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "office-era-prefixes.xlsx")
+	if err := f.SaveAs(path); err != nil {
+		t.Fatalf("SaveAs: %v", err)
+	}
+
+	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
+	for _, formula := range formulas {
+		want := "<f>_xlfn." + formula + "</f>"
+		if !strings.Contains(sheetXML, want) {
+			t.Fatalf("formula XML missing expected prefix\nwant: %s\nxml: %s", want, sheetXML)
+		}
+	}
+}
+
 func TestDynamicArrayFormulaMetadataInXML(t *testing.T) {
 	f := werkbook.New(werkbook.FirstSheet("Out - Ledger Summary"))
 	s := f.Sheet("Out - Ledger Summary")
