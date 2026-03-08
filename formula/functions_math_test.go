@@ -8956,3 +8956,202 @@ func TestTRUNC(t *testing.T) {
 		})
 	}
 }
+
+func TestLCM(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		// Excel documentation examples
+		{"doc_ex1", "LCM(5,2)", 10},
+		{"doc_ex2", "LCM(24,36)", 72},
+		// Basic two-argument cases
+		{"4_and_6", "LCM(4,6)", 12},
+		{"3_and_7", "LCM(3,7)", 21},
+		{"6_and_8", "LCM(6,8)", 24},
+		// Zero cases — any zero argument yields 0
+		{"5_and_0", "LCM(5,0)", 0},
+		{"0_and_5", "LCM(0,5)", 0},
+		{"0_and_0", "LCM(0,0)", 0},
+		{"0_0_0", "LCM(0,0,0)", 0},
+		// Multiple arguments
+		{"three_args", "LCM(2,3,5)", 30},
+		{"three_args2", "LCM(4,6,10)", 60},
+		{"four_args", "LCM(2,3,4,5)", 60},
+		// LCM(n,1) = n
+		{"n_and_1_small", "LCM(7,1)", 7},
+		{"n_and_1_large", "LCM(100,1)", 100},
+		{"1_and_n", "LCM(1,12)", 12},
+		// LCM(n,n) = n
+		{"same_5", "LCM(5,5)", 5},
+		{"same_12", "LCM(12,12)", 12},
+		// Single argument
+		{"single_arg", "LCM(7)", 7},
+		{"single_arg_1", "LCM(1)", 1},
+		{"single_arg_0", "LCM(0)", 0},
+		// Decimal truncation — decimals truncated to integer
+		{"decimal_5_9", "LCM(5.9,2)", 10},
+		{"decimal_both", "LCM(4.7,6.3)", 12},
+		{"decimal_0_9", "LCM(0.9,5)", 0},
+		// Boolean coercion
+		{"bool_true", "LCM(TRUE,5)", 5},
+		{"bool_false", "LCM(FALSE,5)", 0},
+		{"bool_true_true", "LCM(TRUE,TRUE)", 1},
+		// String coercion — numeric strings
+		{"string_5", `LCM("5",2)`, 10},
+		{"string_both", `LCM("4","6")`, 12},
+		// Negative decimal that truncates to -0 (not < 0), so treated as zero
+		{"neg_decimal_trunc_zero", "LCM(-0.5,5)", 0},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.want {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		errVal  ErrorValue
+	}{
+		// Negative values → #NUM!
+		{"negative_first", "LCM(-1,5)", ErrValNUM},
+		{"negative_second", "LCM(5,-3)", ErrValNUM},
+		{"negative_both", "LCM(-2,-3)", ErrValNUM},
+		{"negative_decimal_truncates_neg", "LCM(-1.5,5)", ErrValNUM},
+		// No arguments → #VALUE!
+		{"no_args", "LCM()", ErrValVALUE},
+		// Non-numeric string → #VALUE!
+		{"non_numeric_string", `LCM("hello",5)`, ErrValVALUE},
+		{"non_numeric_second", `LCM(5,"abc")`, ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "LCM(1/0,5)", ErrValDIV0},
+		{"error_propagation_na", "LCM(NA(),5)", ErrValNA},
+		{"error_in_second_arg", "LCM(5,1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.errVal {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.errVal)
+			}
+		})
+	}
+}
+
+func TestGCD(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		// Basic two-argument cases (from Excel docs)
+		{"basic_12_8", "GCD(12,8)", 4},
+		{"basic_24_36", "GCD(24,36)", 12},
+		{"basic_5_2", "GCD(5,2)", 1},
+		{"basic_7_1", "GCD(7,1)", 1},
+		// GCD with zero: GCD(n,0) = n
+		{"zero_second", "GCD(5,0)", 5},
+		{"zero_first", "GCD(0,5)", 5},
+		{"both_zero", "GCD(0,0)", 0},
+		// Single argument
+		{"single_arg", "GCD(42)", 42},
+		{"single_zero", "GCD(0)", 0},
+		// Multiple arguments
+		{"three_args", "GCD(12,8,6)", 2},
+		{"four_args", "GCD(60,48,36,24)", 12},
+		{"three_args_common", "GCD(100,75,50)", 25},
+		// GCD with 1 always returns 1
+		{"one_first", "GCD(1,100)", 1},
+		{"one_middle", "GCD(12,1,8)", 1},
+		// Coprime numbers (GCD = 1)
+		{"coprime", "GCD(7,13)", 1},
+		{"coprime_large", "GCD(17,31)", 1},
+		// Decimal truncation: non-integer values are truncated
+		{"decimal_trunc_first", "GCD(12.5,8)", 4},
+		{"decimal_trunc_second", "GCD(12,8.9)", 4},
+		{"decimal_trunc_both", "GCD(12.7,8.3)", 4},
+		{"decimal_trunc_large_frac", "GCD(24.999,36.001)", 12},
+		// Same number: GCD(n,n) = n
+		{"same_number", "GCD(15,15)", 15},
+		// Large values
+		{"large_values", "GCD(1000000,500000)", 500000},
+		// Boolean coercion (TRUE=1, FALSE=0)
+		{"bool_true", "GCD(TRUE,1)", 1},
+		{"bool_false", "GCD(FALSE,5)", 5},
+		{"bool_true_true", "GCD(TRUE,TRUE)", 1},
+		// String number coercion
+		{"string_number", `GCD("12","8")`, 4},
+		{"string_single", `GCD("42")`, 42},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.want {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		errVal  ErrorValue
+	}{
+		// Negative values -> #NUM!
+		{"negative_first", "GCD(-5,10)", ErrValNUM},
+		{"negative_second", "GCD(10,-5)", ErrValNUM},
+		{"negative_both", "GCD(-3,-7)", ErrValNUM},
+		{"negative_decimal", "GCD(-1.5,8)", ErrValNUM},
+		// Non-numeric string -> #VALUE!
+		{"non_numeric_string", `GCD("hello",5)`, ErrValVALUE},
+		{"non_numeric_second", `GCD(5,"abc")`, ErrValVALUE},
+		{"empty_string", `GCD("",5)`, ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "GCD(1/0,5)", ErrValDIV0},
+		{"error_propagation_na", "GCD(NA(),5)", ErrValNA},
+		{"error_propagation_second", "GCD(5,1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.errVal {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.errVal)
+			}
+		})
+	}
+}

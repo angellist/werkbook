@@ -133,7 +133,7 @@ Werkbook supports **343** Excel formula functions.
 | GAMMALN | Statistical | 23 |
 | GAMMALN.PRECISE | Statistical | 6 |
 | GAUSS | Statistical | 9 |
-| GCD | Math & Trig | - |
+| GCD | Math & Trig | 37 |
 | GEOMEAN | Statistical | 24 |
 | GESTEP | Engineering | 29 |
 | HARMEAN | Statistical | 21 |
@@ -168,7 +168,7 @@ Werkbook supports **343** Excel formula functions.
 | ISTEXT | Information | - |
 | KURT | Statistical | 22 |
 | LARGE | Statistical | 30 |
-| LCM | Math & Trig | - |
+| LCM | Math & Trig | 39 |
 | LEFT | Text | 42 |
 | LEN | Text | 29 |
 | LN | Math & Trig | 32 |
