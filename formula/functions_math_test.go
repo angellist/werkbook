@@ -7105,6 +7105,102 @@ func TestCOSH(t *testing.T) {
 	}
 }
 
+func TestCOT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Key angles
+		{"cot_pi_4", "COT(PI()/4)", 1, 1e-10},
+		{"cot_pi_6", "COT(PI()/6)", math.Sqrt(3), 1e-10},
+		{"cot_pi_3", "COT(PI()/3)", 1 / math.Sqrt(3), 1e-10},
+		{"cot_pi_2", "COT(PI()/2)", 0, 1e-10},
+
+		// COT(x) = 1/tan(x)
+		{"cot_1", "COT(1)", 1 / math.Tan(1), 1e-10},
+		{"cot_2", "COT(2)", 1 / math.Tan(2), 1e-10},
+		{"cot_0_5", "COT(0.5)", 1 / math.Tan(0.5), 1e-10},
+
+		// Negative angles: COT(-x) = -COT(x) (odd function)
+		{"cot_neg_pi_4", "COT(-PI()/4)", -1, 1e-10},
+		{"cot_neg_pi_6", "COT(-PI()/6)", -math.Sqrt(3), 1e-10},
+		{"cot_neg_1", "COT(-1)", 1 / math.Tan(-1), 1e-10},
+		{"cot_neg_2", "COT(-2)", 1 / math.Tan(-2), 1e-10},
+
+		// Large angles
+		{"cot_100", "COT(100)", 1 / math.Tan(100), 1e-10},
+		{"cot_1000", "COT(1000)", 1 / math.Tan(1000), 1e-10},
+
+		// Small angle close to zero
+		{"cot_0_01", "COT(0.01)", 1 / math.Tan(0.01), 1e-6},
+
+		// Boolean coercion: TRUE=1
+		{"bool_true", "COT(TRUE)", 1 / math.Tan(1), 1e-10},
+
+		// String coercion
+		{"str_1", `COT("1")`, 1 / math.Tan(1), 1e-10},
+		{"str_0_5", `COT("0.5")`, 1 / math.Tan(0.5), 1e-10},
+
+		// Degree conversion via expression (45 degrees = PI/4)
+		{"degrees_45", "COT(45*PI()/180)", 1, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "COT()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "COT(1,2)", ErrValVALUE},
+		// COT(0) = 1/tan(0) => division by zero
+		{"zero_div0", "COT(0)", ErrValDIV0},
+		// FALSE coerces to 0 => DIV/0!
+		{"bool_false_div0", "COT(FALSE)", ErrValDIV0},
+		// String "0" coerces to 0 => DIV/0!
+		{"str_zero_div0", `COT("0")`, ErrValDIV0},
+		// Non-numeric string
+		{"non_numeric", `COT("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "COT(1/0)", ErrValDIV0},
+		{"err_na", "COT(NA())", ErrValNA},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTAN(t *testing.T) {
 	resolver := &mockResolver{}
 
