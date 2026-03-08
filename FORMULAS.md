@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **373** Excel formula functions.
+Werkbook supports **376** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -332,6 +332,9 @@ Werkbook supports **373** Excel formula functions.
 | TAKE | Lookup & Reference | 30 |
 | TAN | Math & Trig | 23 |
 | TANH | Math & Trig | 27 |
+| TBILLEQ | Financial | 3 |
+| TBILLPRICE | Financial | 3 |
+| TBILLYIELD | Financial | 3 |
 | TEXT | Text | 127 |
 | TEXTAFTER | Text | 34 |
 | TEXTBEFORE | Text | 34 |
@@ -380,7 +383,7 @@ Werkbook supports **373** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **97** Excel functions are not yet supported.
+The following **94** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -472,9 +475,6 @@ The following **97** Excel functions are not yet supported.
 | STDEVA | Statistical |
 | STDEVPA | Statistical |
 | T.TEST | Statistical |
-| TBILLEQ | Financial |
-| TBILLPRICE | Financial |
-| TBILLYIELD | Financial |
 | TREND | Statistical |
 | WEBSERVICE | Web |
 | YIELD | Financial |

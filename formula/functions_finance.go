@@ -34,6 +34,9 @@ func init() {
 	Register("SYD", NoCtx(fnSYD))
 	Register("VDB", NoCtx(fnVdb))
 	Register("ISPMT", NoCtx(fnIspmt))
+	Register("TBILLPRICE", NoCtx(fnTbillPrice))
+	Register("TBILLYIELD", NoCtx(fnTbillYield))
+	Register("TBILLEQ", NoCtx(fnTbillEq))
 }
 
 // flattenValues extracts all numeric values from an arg that may be a scalar or array (range).
@@ -1525,4 +1528,112 @@ func fnIspmt(args []Value) (Value, error) {
 		return ErrorVal(ErrValDIV0), nil
 	}
 	return NumberVal(pv * rate * (per/nper - 1)), nil
+}
+
+// tbillValidate is a shared helper for TBILLPRICE, TBILLYIELD, and TBILLEQ.
+// It parses settlement and maturity as date serial numbers (truncated to int),
+// validates that settlement < maturity (or settlement <= maturity for strictLess=false),
+// that maturity is not more than one calendar year after settlement, and returns
+// DSM (days from settlement to maturity).
+func tbillValidate(args []Value, strictLess bool) (dsm float64, thirdArg float64, ev *Value) {
+	if len(args) != 3 {
+		ev := ErrorVal(ErrValVALUE)
+		return 0, 0, &ev
+	}
+	settlementRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return 0, 0, e
+	}
+	maturityRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return 0, 0, e
+	}
+	third, e := CoerceNum(args[2])
+	if e != nil {
+		return 0, 0, e
+	}
+
+	// Truncate to integers (date serial numbers).
+	settlement := math.Trunc(settlementRaw)
+	maturity := math.Trunc(maturityRaw)
+
+	// Validate third argument (discount or price) > 0.
+	if third <= 0 {
+		ev := ErrorVal(ErrValNUM)
+		return 0, 0, &ev
+	}
+
+	// Validate settlement vs maturity.
+	if strictLess {
+		// TBILLPRICE and TBILLYIELD: settlement must be strictly less than maturity.
+		if settlement >= maturity {
+			ev := ErrorVal(ErrValNUM)
+			return 0, 0, &ev
+		}
+	} else {
+		// TBILLEQ: settlement must not be greater than maturity (settlement == maturity is allowed... but yields 0 DSM).
+		if settlement > maturity {
+			ev := ErrorVal(ErrValNUM)
+			return 0, 0, &ev
+		}
+	}
+
+	// Convert serial numbers to time.Time and check "more than one year" rule.
+	settlementTime := ExcelSerialToTime(settlement)
+	maturityTime := ExcelSerialToTime(maturity)
+
+	// Maturity must not be more than one calendar year after settlement.
+	oneYearLater := settlementTime.AddDate(1, 0, 0)
+	if maturityTime.After(oneYearLater) {
+		ev := ErrorVal(ErrValNUM)
+		return 0, 0, &ev
+	}
+
+	// DSM = actual number of days between settlement and maturity.
+	dsm = maturity - settlement
+
+	return dsm, third, nil
+}
+
+// fnTbillPrice implements TBILLPRICE(settlement, maturity, discount).
+// Returns the price per $100 face value for a Treasury bill.
+// Formula: TBILLPRICE = 100 * (1 - discount * DSM / 360)
+func fnTbillPrice(args []Value) (Value, error) {
+	dsm, discount, ev := tbillValidate(args, true)
+	if ev != nil {
+		return *ev, nil
+	}
+	price := 100.0 * (1.0 - discount*dsm/360.0)
+	return NumberVal(price), nil
+}
+
+// fnTbillYield implements TBILLYIELD(settlement, maturity, pr).
+// Returns the yield for a Treasury bill.
+// Formula: TBILLYIELD = ((100 - pr) / pr) * (360 / DSM)
+func fnTbillYield(args []Value) (Value, error) {
+	dsm, pr, ev := tbillValidate(args, true)
+	if ev != nil {
+		return *ev, nil
+	}
+	if dsm == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	yield := ((100.0 - pr) / pr) * (360.0 / dsm)
+	return NumberVal(yield), nil
+}
+
+// fnTbillEq implements TBILLEQ(settlement, maturity, discount).
+// Returns the bond-equivalent yield for a Treasury bill.
+// Formula: TBILLEQ = (365 * discount) / (360 - discount * DSM)
+func fnTbillEq(args []Value) (Value, error) {
+	dsm, discount, ev := tbillValidate(args, false)
+	if ev != nil {
+		return *ev, nil
+	}
+	denom := 360.0 - discount*dsm
+	if denom == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	result := (365.0 * discount) / denom
+	return NumberVal(result), nil
 }

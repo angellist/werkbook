@@ -5808,3 +5808,589 @@ func TestISPMT_BoolCoercion(t *testing.T) {
 	}
 	assertClose(t, "ISPMT bool coercion", v, -1)
 }
+
+// === TBILLPRICE ===
+
+// Date serial number constants for tests:
+// 2008-01-01 => 39448
+// 2008-03-30 => 39537
+// 2008-03-31 => 39538
+// 2008-04-01 => 39539
+// 2008-04-30 => 39568
+// 2008-05-01 => 39569
+// 2008-06-01 => 39600
+// 2008-07-01 => 39630
+// 2008-09-30 => 39721
+// 2008-12-30 => 39812
+// 2008-12-31 => 39813
+// 2009-01-01 => 39814
+// 2009-03-30 => 39902
+// 2009-03-31 => 39903
+// 2009-04-01 => 39904
+
+func TestTBILLPRICE_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// Excel doc example: settlement=3/31/2008, maturity=6/1/2008, discount=9%
+		// DSM=62, price = 100*(1-0.09*62/360) = 98.45
+		{
+			name: "Excel doc example",
+			args: numArgs(39538, 39600, 0.09),
+			want: 98.45,
+		},
+		// 30-day T-bill, 5% discount: DSM=30, price = 100*(1-0.05*30/360) = 99.5833...
+		{
+			name: "30 day 5%",
+			args: numArgs(39538, 39568, 0.05),
+			want: 99.5833,
+		},
+		// 90-day T-bill, 3% discount: DSM=92 (4/1 to 7/1), price = 100*(1-0.03*92/360) = 99.2333...
+		{
+			name: "92 day 3%",
+			args: numArgs(39539, 39630, 0.03),
+			want: 99.2333,
+		},
+		// 182-day T-bill, 4% discount: DSM=182 (4/1 to 9/30), price = 100*(1-0.04*182/360) = 97.9778
+		{
+			name: "182 day 4%",
+			args: numArgs(39539, 39721, 0.04),
+			want: 97.9778,
+		},
+		// 364-day T-bill, 2% discount: DSM=364 (1/1/2008 to 12/30/2008), price = 100*(1-0.02*364/360) = 97.9778
+		{
+			name: "364 day 2%",
+			args: numArgs(39448, 39812, 0.02),
+			want: 97.9778,
+		},
+		// 1-day T-bill: DSM=1, discount=10%, price = 100*(1-0.10*1/360) = 99.9722
+		{
+			name: "1 day 10%",
+			args: numArgs(39538, 39539, 0.10),
+			want: 99.9722,
+		},
+		// Very small discount: 0.001 (0.1%), DSM=62
+		// price = 100*(1-0.001*62/360) = 99.9828
+		{
+			name: "very small discount",
+			args: numArgs(39538, 39600, 0.001),
+			want: 99.9828,
+		},
+		// Large discount: 50%, DSM=62
+		// price = 100*(1-0.50*62/360) = 91.3889
+		{
+			name: "large discount 50%",
+			args: numArgs(39538, 39600, 0.50),
+			want: 91.3889,
+		},
+		// Very large discount: 100%, DSM=62
+		// price = 100*(1-1.0*62/360) = 82.7778
+		{
+			name: "very large discount 100%",
+			args: numArgs(39538, 39600, 1.0),
+			want: 82.7778,
+		},
+		// Exactly 365 days (one year): 3/31/2008 to 3/31/2009, DSM=365
+		// price = 100*(1-0.05*365/360) = 94.9306
+		{
+			name: "exactly one year",
+			args: numArgs(39538, 39903, 0.05),
+			want: 94.9306,
+		},
+		// 2% discount, DSM=31 (3/31 to 4/30)
+		// price = 100*(1-0.02*31/360) = 99.8278
+		{
+			name: "31 day 2%",
+			args: numArgs(39538, 39569, 0.02),
+			want: 99.8278,
+		},
+		// High precision check: 7.5% discount, DSM=62
+		// price = 100*(1-0.075*62/360) = 98.7083...
+		{
+			name: "7.5% discount 62 day",
+			args: numArgs(39538, 39600, 0.075),
+			want: 98.7083,
+		},
+		// Fractional serial numbers should be truncated
+		// 39538.7 => 39538, 39600.9 => 39600, DSM=62
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39538.7, 39600.9, 0.09),
+			want: 98.45,
+		},
+		// DSM=275 (1/1/2008 to 9/30/2008): 0.06 discount
+		// price = 100*(1-0.06*273/360) = 95.45
+		{
+			name: "273 day 6%",
+			args: numArgs(39448, 39721, 0.06),
+			want: 95.45,
+		},
+		// --- Error cases ---
+		// settlement == maturity
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39538, 39538, 0.05),
+			wantErr: true,
+		},
+		// settlement > maturity
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39600, 39538, 0.05),
+			wantErr: true,
+		},
+		// maturity more than one year after settlement
+		{
+			name:    "maturity more than one year",
+			args:    numArgs(39538, 39904, 0.05),
+			wantErr: true,
+		},
+		// discount <= 0
+		{
+			name:    "discount zero",
+			args:    numArgs(39538, 39600, 0),
+			wantErr: true,
+		},
+		{
+			name:    "discount negative",
+			args:    numArgs(39538, 39600, -0.05),
+			wantErr: true,
+		},
+		// wrong number of arguments
+		{
+			name:    "too few args",
+			args:    numArgs(39538, 39600),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39538, 39600, 0.09, 1),
+			wantErr: true,
+		},
+		// non-numeric args
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39600), NumberVal(0.09)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39538), StringVal("xyz"), NumberVal(0.09)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric discount",
+			args:    []Value{NumberVal(39538), NumberVal(39600), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnTbillPrice(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+// === TBILLYIELD ===
+
+func TestTBILLYIELD_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// Excel doc example: settlement=3/31/2008, maturity=6/1/2008, pr=$98.45
+		// DSM=62, yield = ((100-98.45)/98.45)*(360/62) = 0.09141...
+		{
+			name: "Excel doc example",
+			args: numArgs(39538, 39600, 98.45),
+			want: 0.09141,
+		},
+		// 30-day T-bill, pr=99.50: DSM=30
+		// yield = ((100-99.50)/99.50)*(360/30) = 0.005025*12 = 0.06030
+		{
+			name: "30 day pr 99.50",
+			args: numArgs(39538, 39568, 99.50),
+			want: 0.06030,
+		},
+		// 92-day T-bill, pr=99.00: DSM=91 (4/1 to 7/1)
+		// yield = ((100-99)/99)*(360/91) = 0.01010*3.95604 = 0.03996
+		{
+			name: "91 day pr 99.00",
+			args: numArgs(39539, 39630, 99.00),
+			want: 0.03957,
+		},
+		// 183-day T-bill, pr=97.50: DSM=182 (4/1 to 9/30)
+		// yield = ((100-97.50)/97.50)*(360/183) = 0.02564*1.9672 = 0.05043
+		{
+			name: "182 day pr 97.50",
+			args: numArgs(39539, 39721, 97.50),
+			want: 0.05043,
+		},
+		// 364-day T-bill, pr=95.00: DSM=364 (1/1/2008 to 12/30/2008)
+		// yield = ((100-95)/95)*(360/364) = 0.05263*0.9890 = 0.05205
+		{
+			name: "364 day pr 95",
+			args: numArgs(39448, 39812, 95),
+			want: 0.05205,
+		},
+		// 1-day T-bill, pr=99.99: DSM=1
+		// yield = ((100-99.99)/99.99)*(360/1) = 0.0001*360 = 0.03601
+		{
+			name: "1 day pr 99.99",
+			args: numArgs(39538, 39539, 99.99),
+			want: 0.03601,
+		},
+		// pr=50 (very low): DSM=62
+		// yield = ((100-50)/50)*(360/62) = 1.0*5.80645 = 5.80645
+		{
+			name: "very low price",
+			args: numArgs(39538, 39600, 50),
+			want: 5.80645,
+		},
+		// pr=99.99 (very high): DSM=62
+		// yield = ((100-99.99)/99.99)*(360/62) = 0.0001*5.80645 = 0.000581
+		{
+			name: "very high price",
+			args: numArgs(39538, 39600, 99.99),
+			want: 0.000581,
+		},
+		// pr=1 (extremely low): DSM=62
+		// yield = ((100-1)/1)*(360/62) = 99*5.80645 = 574.84
+		{
+			name: "extremely low price",
+			args: numArgs(39538, 39600, 1),
+			want: 574.84,
+		},
+		// pr=0.01 (near zero): DSM=62
+		// yield = ((100-0.01)/0.01)*(360/62) = 9999*5.80645 = 58058.71
+		{
+			name: "near zero price",
+			args: numArgs(39538, 39600, 0.01),
+			want: 58058.71,
+		},
+		// Exactly one year (365 days): pr=95
+		// yield = ((100-95)/95)*(360/365) = 0.05263*0.98630 = 0.05191
+		{
+			name: "exactly one year",
+			args: numArgs(39538, 39903, 95),
+			want: 0.05191,
+		},
+		// Fractional serial numbers truncated
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39538.5, 39600.9, 98.45),
+			want: 0.09141,
+		},
+		// pr=100 (par): DSM=62
+		// yield = ((100-100)/100)*(360/62) = 0
+		{
+			name: "price at par",
+			args: numArgs(39538, 39600, 100),
+			want: 0,
+		},
+		// pr > 100 (premium): DSM=62
+		// yield = ((100-105)/105)*(360/62) = -0.04762*5.80645 = -0.27650
+		{
+			name: "price above par (negative yield)",
+			args: numArgs(39538, 39600, 105),
+			want: -0.27650,
+		},
+		// --- Error cases ---
+		// settlement == maturity
+		{
+			name:    "settlement equals maturity",
+			args:    numArgs(39538, 39538, 98.45),
+			wantErr: true,
+		},
+		// settlement > maturity
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39600, 39538, 98.45),
+			wantErr: true,
+		},
+		// maturity more than one year after settlement
+		{
+			name:    "maturity more than one year",
+			args:    numArgs(39538, 39904, 98.45),
+			wantErr: true,
+		},
+		// pr <= 0
+		{
+			name:    "price zero",
+			args:    numArgs(39538, 39600, 0),
+			wantErr: true,
+		},
+		{
+			name:    "price negative",
+			args:    numArgs(39538, 39600, -10),
+			wantErr: true,
+		},
+		// wrong number of arguments
+		{
+			name:    "too few args",
+			args:    numArgs(39538, 39600),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39538, 39600, 98.45, 1),
+			wantErr: true,
+		},
+		// non-numeric args
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39600), NumberVal(98.45)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39538), StringVal("xyz"), NumberVal(98.45)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric price",
+			args:    []Value{NumberVal(39538), NumberVal(39600), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnTbillYield(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+// === TBILLEQ ===
+
+func TestTBILLEQ_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// Excel doc example: settlement=3/31/2008, maturity=6/1/2008, discount=9.14%
+		// DSM=62, TBILLEQ = (365*0.0914)/(360-0.0914*62) = 33.361/(360-5.6668) = 33.361/354.3332 = 0.09415
+		{
+			name: "Excel doc example",
+			args: numArgs(39538, 39600, 0.0914),
+			want: 0.09415,
+		},
+		// 30-day, 5% discount: DSM=30
+		// TBILLEQ = (365*0.05)/(360-0.05*30) = 18.25/(360-1.5) = 18.25/358.5 = 0.05091
+		{
+			name: "30 day 5%",
+			args: numArgs(39538, 39568, 0.05),
+			want: 0.05091,
+		},
+		// 91-day, 3% discount: DSM=91 (4/1 to 7/1)
+		// TBILLEQ = (365*0.03)/(360-0.03*91) = 10.95/(360-2.73) = 10.95/357.27 = 0.03065
+		{
+			name: "91 day 3%",
+			args: numArgs(39539, 39630, 0.03),
+			want: 0.03065,
+		},
+		// 182-day, 4% discount: DSM=182 (4/1 to 9/30)
+		// TBILLEQ = (365*0.04)/(360-0.04*182) = 14.6/(360-7.28) = 14.6/352.72 = 0.04139
+		{
+			name: "182 day 4%",
+			args: numArgs(39539, 39721, 0.04),
+			want: 0.04139,
+		},
+		// 364-day, 2% discount: DSM=364 (1/1/2008 to 12/30/2008)
+		// TBILLEQ = (365*0.02)/(360-0.02*364) = 7.3/(360-7.28) = 7.3/352.72 = 0.02070
+		{
+			name: "364 day 2%",
+			args: numArgs(39448, 39812, 0.02),
+			want: 0.02070,
+		},
+		// 1-day, 10% discount: DSM=1
+		// TBILLEQ = (365*0.10)/(360-0.10*1) = 36.5/359.9 = 0.10142
+		{
+			name: "1 day 10%",
+			args: numArgs(39538, 39539, 0.10),
+			want: 0.10142,
+		},
+		// Very small discount: 0.001, DSM=62
+		// TBILLEQ = (365*0.001)/(360-0.001*62) = 0.365/359.938 = 0.001014
+		{
+			name: "very small discount",
+			args: numArgs(39538, 39600, 0.001),
+			want: 0.001014,
+		},
+		// Large discount: 50%, DSM=62
+		// TBILLEQ = (365*0.50)/(360-0.50*62) = 182.5/(360-31) = 182.5/329 = 0.55471
+		{
+			name: "large discount 50%",
+			args: numArgs(39538, 39600, 0.50),
+			want: 0.55471,
+		},
+		// Very large discount: 100%, DSM=62
+		// TBILLEQ = (365*1.0)/(360-1.0*62) = 365/298 = 1.22483
+		{
+			name: "very large discount 100%",
+			args: numArgs(39538, 39600, 1.0),
+			want: 1.22483,
+		},
+		// Exactly one year (365 days): 5% discount
+		// TBILLEQ = (365*0.05)/(360-0.05*365) = 18.25/(360-18.25) = 18.25/341.75 = 0.05339
+		{
+			name: "exactly one year 5%",
+			args: numArgs(39538, 39903, 0.05),
+			want: 0.05339,
+		},
+		// 12% discount, DSM=62
+		// TBILLEQ = (365*0.12)/(360-0.12*62) = 43.8/(360-7.44) = 43.8/352.56 = 0.12425
+		{
+			name: "12% discount 62 day",
+			args: numArgs(39538, 39600, 0.12),
+			want: 0.12425,
+		},
+		// Fractional dates truncated: same as Excel doc example
+		{
+			name: "fractional dates truncated",
+			args: numArgs(39538.7, 39600.9, 0.0914),
+			want: 0.09415,
+		},
+		// settlement == maturity (allowed for TBILLEQ, not strict less)
+		// DSM=0, TBILLEQ = (365*0.05)/(360-0.05*0) = 18.25/360 = 0.05069
+		{
+			name: "settlement equals maturity",
+			args: numArgs(39538, 39538, 0.05),
+			want: 0.05069,
+		},
+		// 15% discount, DSM=62
+		// TBILLEQ = (365*0.15)/(360-0.15*62) = 54.75/(360-9.3) = 54.75/350.7 = 0.15611
+		{
+			name: "15% discount",
+			args: numArgs(39538, 39600, 0.15),
+			want: 0.15611,
+		},
+		// 0.5% discount, DSM=62
+		// TBILLEQ = (365*0.005)/(360-0.005*62) = 1.825/(360-0.31) = 1.825/359.69 = 0.005074
+		{
+			name: "0.5% discount",
+			args: numArgs(39538, 39600, 0.005),
+			want: 0.005074,
+		},
+		// --- Error cases ---
+		// settlement > maturity (strictly greater)
+		{
+			name:    "settlement after maturity",
+			args:    numArgs(39600, 39538, 0.05),
+			wantErr: true,
+		},
+		// maturity more than one year after settlement
+		{
+			name:    "maturity more than one year",
+			args:    numArgs(39538, 39904, 0.05),
+			wantErr: true,
+		},
+		// discount <= 0
+		{
+			name:    "discount zero",
+			args:    numArgs(39538, 39600, 0),
+			wantErr: true,
+		},
+		{
+			name:    "discount negative",
+			args:    numArgs(39538, 39600, -0.05),
+			wantErr: true,
+		},
+		// wrong number of arguments
+		{
+			name:    "too few args",
+			args:    numArgs(39538, 39600),
+			wantErr: true,
+		},
+		{
+			name:    "too many args",
+			args:    numArgs(39538, 39600, 0.0914, 1),
+			wantErr: true,
+		},
+		// non-numeric args
+		{
+			name:    "non-numeric settlement",
+			args:    []Value{StringVal("abc"), NumberVal(39600), NumberVal(0.0914)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric maturity",
+			args:    []Value{NumberVal(39538), StringVal("xyz"), NumberVal(0.0914)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric discount",
+			args:    []Value{NumberVal(39538), NumberVal(39600), StringVal("abc")},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnTbillEq(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+// === TBILLPRICE / TBILLYIELD / TBILLEQ via formula evaluation ===
+
+func TestTBILLPRICE_ViaEval(t *testing.T) {
+	// TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0.09)
+	cf := evalCompile(t, "TBILLPRICE(DATE(2008,3,31), DATE(2008,6,1), 0.09)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE via eval", v, 98.45)
+}
+
+func TestTBILLYIELD_ViaEval(t *testing.T) {
+	// TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)
+	cf := evalCompile(t, "TBILLYIELD(DATE(2008,3,31), DATE(2008,6,1), 98.45)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD via eval", v, 0.09141)
+}
+
+func TestTBILLEQ_ViaEval(t *testing.T) {
+	// TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0.0914)
+	cf := evalCompile(t, "TBILLEQ(DATE(2008,3,31), DATE(2008,6,1), 0.0914)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ via eval", v, 0.09415)
+}
