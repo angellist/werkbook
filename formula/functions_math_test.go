@@ -9528,3 +9528,107 @@ func TestPERMUT(t *testing.T) {
 		})
 	}
 }
+
+func TestBASE(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// String-result tests: BASE returns a string representation.
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Excel documentation examples
+		{"doc_binary_7", "BASE(7,2)", "111"},
+		{"doc_hex_100", "BASE(100,16)", "64"},
+		{"doc_binary_15_padded", "BASE(15,2,10)", "0000001111"},
+
+		// Additional basic conversions
+		{"hex_15", "BASE(15,16)", "F"},
+		{"hex_255", "BASE(255,16)", "FF"},
+		{"octal_8", "BASE(8,8)", "10"},
+		{"octal_63", "BASE(63,8)", "77"},
+		{"base36", "BASE(35,36)", "Z"},
+		{"base36_large", "BASE(1295,36)", "ZZ"},
+
+		// Zero
+		{"zero_binary", "BASE(0,2)", "0"},
+		{"zero_hex", "BASE(0,16)", "0"},
+		{"zero_base10", "BASE(0,10)", "0"},
+
+		// Min-length padding
+		{"pad_binary_7", "BASE(7,2,8)", "00000111"},
+		{"pad_hex_1", "BASE(1,16,4)", "0001"},
+		{"pad_zero", "BASE(0,2,5)", "00000"},
+		// min_length shorter than result: no truncation
+		{"pad_shorter", "BASE(255,2,1)", "11111111"},
+		// min_length equals result length: no change
+		{"pad_exact", "BASE(7,2,3)", "111"},
+		// min_length zero: same as omitting
+		{"pad_zero_len", "BASE(7,2,0)", "111"},
+
+		// Decimal truncation: non-integer number is truncated
+		{"trunc_number", "BASE(7.9,2)", "111"},
+		{"trunc_radix", "BASE(7,2.9)", "111"},
+		{"trunc_minlen", "BASE(7,2,8.7)", "00000111"},
+
+		// String and boolean coercion
+		{"string_number", `BASE("7",2)`, "111"},
+		{"string_radix", `BASE(7,"2")`, "111"},
+		{"bool_true_number", "BASE(TRUE,2)", "1"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueString {
+				t.Fatalf("Eval(%q): got type %v, want string", tt.formula, got.Type)
+			}
+			if got.Str != tt.want {
+				t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want)
+			}
+		})
+	}
+
+	// Error tests
+	errTests := []struct {
+		name    string
+		formula string
+		errVal  ErrorValue
+	}{
+		// Radix out of range
+		{"radix_too_low", "BASE(7,1)", ErrValNUM},
+		{"radix_too_high", "BASE(7,37)", ErrValNUM},
+
+		// Negative number
+		{"negative_number", "BASE(-1,2)", ErrValNUM},
+
+		// Negative min_length
+		{"negative_minlen", "BASE(7,2,-1)", ErrValNUM},
+
+		// Wrong argument count
+		{"too_few_args", "BASE(7)", ErrValVALUE},
+		{"too_many_args", "BASE(7,2,8,1)", ErrValVALUE},
+
+		// Non-numeric string
+		{"non_numeric_string", `BASE("abc",2)`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): unexpected error: %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.errVal {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.errVal)
+			}
+		})
+	}
+}
+
