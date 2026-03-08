@@ -60,7 +60,7 @@ Werkbook supports **343** Excel formula functions.
 | CONFIDENCE.T | Statistical | 29 |
 | CONVERT | Engineering | 57 |
 | CORREL | Statistical | 20 |
-| COS | Math & Trig | 26 |
+| COS | Math & Trig | 28 |
 | COSH | Math & Trig | 26 |
 | COT | Math & Trig | 26 |
 | COTH | Math & Trig | 26 |
@@ -88,7 +88,7 @@ Werkbook supports **343** Excel formula functions.
 | DEC2HEX | Engineering | 45 |
 | DEC2OCT | Engineering | 45 |
 | DECIMAL | Math & Trig | - |
-| DEGREES | Math & Trig | - |
+| DEGREES | Math & Trig | 1 |
 | DELTA | Engineering | 24 |
 | DEVSQ | Statistical | - |
 | DOLLAR | Text | 25 |
@@ -230,10 +230,10 @@ Werkbook supports **343** Excel formula functions.
 | PERMUT | Math & Trig | - |
 | PERMUTATIONA | Statistical | 17 |
 | PHI | Statistical | 11 |
-| PI | Math & Trig | - |
+| PI | Math & Trig | 13 |
 | PMT | Financial | 5 |
 | POISSON.DIST | Statistical | 26 |
-| POWER | Math & Trig | 48 |
+| POWER | Math & Trig | 49 |
 | PPMT | Financial | 2 |
 | PRODUCT | Math & Trig | - |
 | PROPER | Text | - |
@@ -242,7 +242,7 @@ Werkbook supports **343** Excel formula functions.
 | QUARTILE.EXC | Statistical | 27 |
 | QUARTILE.INC | Statistical | 5 |
 | QUOTIENT | Math & Trig | - |
-| RADIANS | Math & Trig | - |
+| RADIANS | Math & Trig | 1 |
 | RAND | Math & Trig | 1 |
 | RANDBETWEEN | Math & Trig | 1 |
 | RANK | Statistical | - |
@@ -267,7 +267,7 @@ Werkbook supports **343** Excel formula functions.
 | SEQUENCE | Math & Trig | 46 |
 | SERIESSUM | Math & Trig | 27 |
 | SIGN | Math & Trig | 30 |
-| SIN | Math & Trig | 31 |
+| SIN | Math & Trig | 33 |
 | SINH | Math & Trig | 23 |
 | SKEW | Statistical | 23 |
 | SLN | Financial | 6 |

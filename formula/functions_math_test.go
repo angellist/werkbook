@@ -8223,3 +8223,91 @@ func TestCSCH(t *testing.T) {
 		})
 	}
 }
+
+func TestPI(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+		tol     float64
+	}{
+		// Basic value
+		{"pi_value", "PI()", math.Pi, 0},
+		{"pi_approx", "PI()", 3.14159265358979, 1e-14},
+
+		// Division by constants
+		{"pi_over_2", "PI()/2", math.Pi / 2, 0},
+		{"pi_over_4", "PI()/4", math.Pi / 4, 0},
+		{"pi_over_180", "PI()/180", math.Pi / 180, 1e-18},
+
+		// Multiplication by constants
+		{"two_pi", "2*PI()", 2 * math.Pi, 0},
+		{"pi_times_2", "PI()*2", math.Pi * 2, 0},
+		{"three_pi", "3*PI()", 3 * math.Pi, 0},
+
+		// Arithmetic expressions
+		{"pi_plus_1", "PI()+1", math.Pi + 1, 0},
+		{"pi_minus_3", "PI()-3", math.Pi - 3, 1e-15},
+		{"pi_squared", "PI()*PI()", math.Pi * math.Pi, 1e-14},
+		{"pi_power_2", "POWER(PI(),2)", math.Pi * math.Pi, 1e-10},
+
+		// Trigonometric identities using PI
+		{"sin_pi", "SIN(PI())", 0, 1e-10},
+		{"cos_pi", "COS(PI())", -1, 1e-10},
+		{"sin_pi_over_2", "SIN(PI()/2)", 1, 1e-10},
+		{"cos_pi_over_2", "COS(PI()/2)", 0, 1e-10},
+
+		// Degrees conversion: 180 degrees = PI radians
+		{"radians_180", "RADIANS(180)", math.Pi, 1e-10},
+		{"degrees_pi", "DEGREES(PI())", 180, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if tt.tol == 0 {
+				if got.Num != tt.wantNum {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+				}
+			} else {
+				if math.Abs(got.Num-tt.wantNum) > tt.tol {
+					t.Errorf("Eval(%q) = %g, want %g (tol %g)", tt.formula, got.Num, tt.wantNum, tt.tol)
+				}
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// PI takes no arguments
+		{"one_arg_number", "PI(1)", ErrValVALUE},
+		{"one_arg_string", "PI(\"a\")", ErrValVALUE},
+		{"one_arg_bool", "PI(TRUE)", ErrValVALUE},
+		{"two_args", "PI(1,2)", ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
