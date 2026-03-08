@@ -6,7 +6,7 @@ Werkbook supports **343** Excel formula functions.
 |----------|----------|------:|
 | ABS | Math & Trig | 26 |
 | ACOS | Math & Trig | 32 |
-| ACOSH | Math & Trig | 14 |
+| ACOSH | Math & Trig | 32 |
 | ACOT | Math & Trig | 25 |
 | ACOTH | Math & Trig | 31 |
 | ADDRESS | Lookup & Reference | 33 |

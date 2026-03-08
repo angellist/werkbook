@@ -5407,13 +5407,43 @@ func TestACOSH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		{"acosh_1", "ACOSH(1)", 0, 0},
-		{"acosh_2", "ACOSH(2)", math.Acosh(2), 1e-10},
-		{"acosh_10", "ACOSH(10)", math.Acosh(10), 1e-10},
+		// Excel doc examples
+		{"doc_example_1", "ACOSH(1)", 0, 0},
+		{"doc_example_10", "ACOSH(10)", 2.9932228461263808, 1e-10},
+
+		// Domain boundary: ACOSH(1) = 0 exactly
+		{"boundary_1", "ACOSH(1)", 0, 0},
+
+		// Common values
+		{"acosh_2", "ACOSH(2)", 1.3169578969248166, 1e-10},
+		{"acosh_1_5", "ACOSH(1.5)", math.Acosh(1.5), 1e-10},
+		{"acosh_3", "ACOSH(3)", math.Acosh(3), 1e-10},
+		{"acosh_5", "ACOSH(5)", math.Acosh(5), 1e-10},
+
+		// Large values
 		{"acosh_100", "ACOSH(100)", math.Acosh(100), 1e-10},
-		{"acosh_1.5", "ACOSH(1.5)", math.Acosh(1.5), 1e-10},
-		{"acosh_bool_true", "ACOSH(TRUE)", 0, 0},
-		{"acosh_string_num", `ACOSH("2")`, math.Acosh(2), 1e-10},
+		{"acosh_1000", "ACOSH(1000)", math.Acosh(1000), 1e-8},
+		{"acosh_1e6", "ACOSH(1000000)", math.Acosh(1e6), 1e-6},
+
+		// Value just above domain boundary
+		{"just_above_1", "ACOSH(1.0001)", math.Acosh(1.0001), 1e-10},
+		{"just_above_1_tiny", "ACOSH(1.00000001)", math.Acosh(1.00000001), 1e-10},
+
+		// Expression input
+		{"expr_add", "ACOSH(1+1)", math.Acosh(2), 1e-10},
+		{"expr_mul", "ACOSH(2*3)", math.Acosh(6), 1e-10},
+
+		// Identity: ACOSH(COSH(x)) = x for x >= 0
+		{"identity_cosh_1", "ACOSH(COSH(1))", 1, 1e-10},
+		{"identity_cosh_2", "ACOSH(COSH(2))", 2, 1e-10},
+
+		// Boolean coercion: TRUE = 1 -> ACOSH(1) = 0
+		{"bool_true", "ACOSH(TRUE)", 0, 0},
+
+		// String coercion with numeric strings
+		{"str_2", `ACOSH("2")`, math.Acosh(2), 1e-10},
+		{"str_10", `ACOSH("10")`, math.Acosh(10), 1e-10},
+		{"str_1", `ACOSH("1")`, 0, 0},
 	}
 
 	for _, tt := range numTests {
@@ -5437,13 +5467,25 @@ func TestACOSH(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
-		{"below_domain", "ACOSH(0)", ErrValNUM},
-		{"below_domain_neg", "ACOSH(-1)", ErrValNUM},
-		{"below_domain_0.5", "ACOSH(0.5)", ErrValNUM},
+		// Domain errors: ACOSH requires number >= 1
+		{"below_domain_0", "ACOSH(0)", ErrValNUM},
+		{"below_domain_neg1", "ACOSH(-1)", ErrValNUM},
+		{"below_domain_neg100", "ACOSH(-100)", ErrValNUM},
+		{"below_domain_0_5", "ACOSH(0.5)", ErrValNUM},
+		{"below_domain_0_999", "ACOSH(0.999)", ErrValNUM},
+		// Boolean coercion: FALSE = 0 -> below domain
 		{"bool_false", "ACOSH(FALSE)", ErrValNUM},
+		// String below domain
+		{"str_below_domain", `ACOSH("0.5")`, ErrValNUM},
+		// No args
 		{"no_args", "ACOSH()", ErrValVALUE},
+		// Too many args
 		{"too_many_args", "ACOSH(1,2)", ErrValVALUE},
-		{"string_non_num", `ACOSH("abc")`, ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `ACOSH("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "ACOSH(1/0)", ErrValDIV0},
+		{"err_na", "ACOSH(NA())", ErrValNA},
 	}
 
 	for _, tt := range errTests {
