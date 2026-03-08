@@ -14,7 +14,7 @@ Werkbook supports **343** Excel formula functions.
 | AND | Logical | 27 |
 | ARABIC | Math & Trig | 28 |
 | ARRAYTOTEXT | Text | 24 |
-| ASIN | Math & Trig | 14 |
+| ASIN | Math & Trig | 30 |
 | ASINH | Math & Trig | 12 |
 | ATAN | Math & Trig | 12 |
 | ATAN2 | Math & Trig | 15 |

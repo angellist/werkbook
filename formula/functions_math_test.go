@@ -5544,14 +5544,29 @@ func TestASIN(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
+		// Exact / well-known values
 		{"asin_0", "ASIN(0)", 0, 0},
 		{"asin_1", "ASIN(1)", math.Pi / 2, 1e-10},
 		{"asin_neg1", "ASIN(-1)", -math.Pi / 2, 1e-10},
 		{"asin_0.5", "ASIN(0.5)", math.Pi / 6, 1e-10},
 		{"asin_neg0.5", "ASIN(-0.5)", -math.Pi / 6, 1e-10},
+		// Additional values between -1 and 1
+		{"asin_0.25", "ASIN(0.25)", math.Asin(0.25), 1e-10},
+		{"asin_neg0.25", "ASIN(-0.25)", math.Asin(-0.25), 1e-10},
+		{"asin_0.75", "ASIN(0.75)", math.Asin(0.75), 1e-10},
+		{"asin_neg0.75", "ASIN(-0.75)", math.Asin(-0.75), 1e-10},
+		{"asin_sqrt2_over2", "ASIN(SQRT(2)/2)", math.Pi / 4, 1e-10},
+		{"asin_small", "ASIN(0.01)", math.Asin(0.01), 1e-10},
+		{"asin_near1", "ASIN(0.999)", math.Asin(0.999), 1e-10},
+		{"asin_near_neg1", "ASIN(-0.999)", math.Asin(-0.999), 1e-10},
+		// Boolean coercion
 		{"asin_bool_true", "ASIN(TRUE)", math.Pi / 2, 1e-10},
 		{"asin_bool_false", "ASIN(FALSE)", 0, 0},
-		{"asin_string_num", `ASIN("0.5")`, math.Pi / 6, 1e-10},
+		// String coercion (numeric strings)
+		{"asin_string_0.5", `ASIN("0.5")`, math.Pi / 6, 1e-10},
+		{"asin_string_1", `ASIN("1")`, math.Pi / 2, 1e-10},
+		{"asin_string_neg1", `ASIN("-1")`, -math.Pi / 2, 1e-10},
+		{"asin_string_0", `ASIN("0")`, 0, 0},
 	}
 
 	for _, tt := range numTests {
@@ -5575,12 +5590,21 @@ func TestASIN(t *testing.T) {
 		formula string
 		wantErr ErrorValue
 	}{
+		// Out of range
+		{"out_of_range_2", "ASIN(2)", ErrValNUM},
+		{"out_of_range_neg2", "ASIN(-2)", ErrValNUM},
 		{"out_of_range_high", "ASIN(1.1)", ErrValNUM},
 		{"out_of_range_low", "ASIN(-1.1)", ErrValNUM},
 		{"out_of_range_large", "ASIN(100)", ErrValNUM},
+		{"out_of_range_neg_large", "ASIN(-100)", ErrValNUM},
+		// Wrong arity
 		{"no_args", "ASIN()", ErrValVALUE},
 		{"too_many_args", "ASIN(1,2)", ErrValVALUE},
+		// Non-numeric string
 		{"string_non_num", `ASIN("abc")`, ErrValVALUE},
+		{"string_empty", `ASIN("")`, ErrValVALUE},
+		// Error propagation
+		{"error_propagation_div0", "ASIN(1/0)", ErrValDIV0},
 	}
 
 	for _, tt := range errTests {
