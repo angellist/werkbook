@@ -105,7 +105,7 @@ Werkbook supports **343** Excel formula functions.
 | ERROR.TYPE | Information | - |
 | EVEN | Math & Trig | 34 |
 | EXACT | Text | - |
-| EXP | Math & Trig | - |
+| EXP | Math & Trig | 29 |
 | EXPON.DIST | Statistical | 28 |
 | F.DIST | Statistical | 42 |
 | F.DIST.RT | Statistical | 19 |

@@ -5995,3 +5995,101 @@ func TestEVEN(t *testing.T) {
 		})
 	}
 }
+
+func TestEXP(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Basic cases
+		{"exp_0", "EXP(0)", 1, 0},
+		{"exp_1", "EXP(1)", math.E, 1e-10},
+		{"exp_2", "EXP(2)", math.E * math.E, 1e-10},
+
+		// Negative exponents
+		{"exp_neg1", "EXP(-1)", 1 / math.E, 1e-10},
+		{"exp_neg2", "EXP(-2)", 1 / (math.E * math.E), 1e-10},
+		{"exp_neg0.5", "EXP(-0.5)", math.Exp(-0.5), 1e-10},
+
+		// Decimal exponents
+		{"exp_0.5", "EXP(0.5)", math.Sqrt(math.E), 1e-10},
+		{"exp_0.1", "EXP(0.1)", math.Exp(0.1), 1e-10},
+		{"exp_1.5", "EXP(1.5)", math.Exp(1.5), 1e-10},
+		{"exp_3.14", "EXP(3.14)", math.Exp(3.14), 1e-10},
+
+		// Large positive values
+		{"exp_10", "EXP(10)", math.Exp(10), 1e-3},
+		{"exp_20", "EXP(20)", math.Exp(20), 1e3},
+		{"exp_50", "EXP(50)", math.Exp(50), 1e6},
+
+		// Small negative values (approaching zero)
+		{"exp_neg10", "EXP(-10)", math.Exp(-10), 1e-14},
+		{"exp_neg20", "EXP(-20)", math.Exp(-20), 1e-18},
+
+		// EXP(LN(x)) = x identity
+		{"exp_ln_1", "EXP(LN(1))", 1, 1e-10},
+		{"exp_ln_5", "EXP(LN(5))", 5, 1e-10},
+		{"exp_ln_100", "EXP(LN(100))", 100, 1e-10},
+
+		// Boolean coercion
+		{"bool_true", "EXP(TRUE)", math.E, 1e-10},
+		{"bool_false", "EXP(FALSE)", 1, 0},
+
+		// String coercion
+		{"string_0", `EXP("0")`, 1, 0},
+		{"string_1", `EXP("1")`, math.E, 1e-10},
+		{"string_neg1", `EXP("-1")`, 1 / math.E, 1e-10},
+
+		// Expression argument
+		{"expr_add", "EXP(1+1)", math.Exp(2), 1e-10},
+		{"expr_sub", "EXP(3-1)", math.Exp(2), 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "EXP()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "EXP(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `EXP("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "EXP(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
