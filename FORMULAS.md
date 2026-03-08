@@ -289,7 +289,7 @@ Werkbook supports **343** Excel formula functions.
 | SUMIF | Statistical | 37 |
 | SUMIFS | Statistical | 42 |
 | SUMPRODUCT | Statistical | 22 |
-| SUMSQ | Statistical | - |
+| SUMSQ | Statistical | 30 |
 | SUMX2MY2 | Math & Trig | 31 |
 | SUMX2PY2 | Math & Trig | 31 |
 | SUMXMY2 | Math & Trig | 31 |

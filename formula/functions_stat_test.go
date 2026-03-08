@@ -17059,3 +17059,201 @@ func TestGAUSS(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SUMSQ
+// ---------------------------------------------------------------------------
+
+func TestSUMSQ(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+	}{
+		// Excel doc example
+		{"excel_doc_3_4", "SUMSQ(3,4)", 25, false},
+
+		// Basic multi-arg
+		{"three_args", "SUMSQ(1,2,3)", 14, false},
+
+		// Single value
+		{"single_5", "SUMSQ(5)", 25, false},
+		{"single_1", "SUMSQ(1)", 1, false},
+
+		// Zero
+		{"zero", "SUMSQ(0)", 0, false},
+
+		// Negative numbers: (-3)^2 = 9
+		{"negative", "SUMSQ(-3)", 9, false},
+		{"neg_4", "SUMSQ(-4)", 16, false},
+
+		// Mixed positive and negative: 3^2 + (-4)^2 = 9 + 16 = 25
+		{"mixed_sign", "SUMSQ(3,-4)", 25, false},
+
+		// Larger set: 1+4+9+16+25 = 55
+		{"five_args", "SUMSQ(1,2,3,4,5)", 55, false},
+
+		// Decimals: 1.5^2 + 2.5^2 = 2.25 + 6.25 = 8.5
+		{"decimals", "SUMSQ(1.5,2.5)", 8.5, false},
+
+		// Boolean coercion as direct args: TRUE=1, FALSE=0
+		{"bool_true", "SUMSQ(TRUE)", 1, false},
+		{"bool_false", "SUMSQ(FALSE)", 0, false},
+		{"bool_true_and_num", "SUMSQ(TRUE,3)", 10, false},
+
+		// Numeric string coercion as direct arg: "2" -> 2
+		{"string_numeric", `SUMSQ("2")`, 4, false},
+		{"string_numeric_and_num", `SUMSQ("3",4)`, 25, false},
+
+		// Non-numeric string -> #VALUE!
+		{"string_non_numeric", `SUMSQ("abc")`, 0, true},
+
+		// Empty string -> #VALUE!
+		{"string_empty", `SUMSQ("")`, 0, true},
+
+		// Large values
+		{"large_value", "SUMSQ(100)", 10000, false},
+		{"large_pair", "SUMSQ(100,200)", 50000, false},
+
+		// All zeros
+		{"all_zeros", "SUMSQ(0,0,0)", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", tt.formula, got)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", tt.formula, got)
+			}
+			if got.Num != tt.want {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestSUMSQ_RangeSkipsNonNumeric(t *testing.T) {
+	// In ranges, strings and booleans are skipped (not coerced)
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: StringVal("hello"),
+			{Col: 1, Row: 3}: NumberVal(4),
+			{Col: 1, Row: 4}: BoolVal(true),
+		},
+	}
+
+	cf := evalCompile(t, "SUMSQ(A1:A4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Only 3^2 + 4^2 = 25 (string and bool in range are skipped)
+	if got.Type != ValueNumber || got.Num != 25 {
+		t.Errorf("SUMSQ range with mixed types: got %v, want 25", got)
+	}
+}
+
+func TestSUMSQ_ErrorPropagation(t *testing.T) {
+	t.Run("error in direct arg", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: ErrorVal(ErrValNA),
+			},
+		}
+		cf := evalCompile(t, "SUMSQ(A1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("SUMSQ with #N/A: got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("error in range", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(3),
+				{Col: 1, Row: 2}: ErrorVal(ErrValDIV0),
+				{Col: 1, Row: 3}: NumberVal(4),
+			},
+		}
+		cf := evalCompile(t, "SUMSQ(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("SUMSQ with #DIV/0!: got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("error stops early", func(t *testing.T) {
+		// First arg is error — should propagate immediately
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: ErrorVal(ErrValVALUE),
+			},
+		}
+		cf := evalCompile(t, "SUMSQ(A1,5)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("SUMSQ with leading error: got %v, want #VALUE!", got)
+		}
+	})
+}
+
+func TestSUMSQ_RangeOnly(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// 1 + 4 + 9 + 16 = 30
+	cf := evalCompile(t, "SUMSQ(A1:A4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 30 {
+		t.Errorf("SUMSQ(A1:A4) = %v, want 30", got)
+	}
+}
+
+func TestSUMSQ_MixedRangeAndScalar(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// range: 1^2 + 2^2 = 5, scalar: 3^2 = 9, total = 14
+	cf := evalCompile(t, "SUMSQ(A1:A2,3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 14 {
+		t.Errorf("SUMSQ(A1:A2,3) = %v, want 14", got)
+	}
+}
