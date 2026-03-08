@@ -6297,3 +6297,101 @@ func TestEXP(t *testing.T) {
 		})
 	}
 }
+
+func TestSIGN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// Basic: positive, negative, zero
+		{"pos_int", "SIGN(5)", 1},
+		{"neg_int", "SIGN(-5)", -1},
+		{"zero", "SIGN(0)", 0},
+
+		// Various positive numbers
+		{"pos_one", "SIGN(1)", 1},
+		{"pos_large_int", "SIGN(42)", 1},
+		{"pos_hundred", "SIGN(100)", 1},
+
+		// Various negative numbers
+		{"neg_one", "SIGN(-1)", -1},
+		{"neg_large_int", "SIGN(-42)", -1},
+		{"neg_hundred", "SIGN(-100)", -1},
+
+		// Decimal numbers
+		{"pos_decimal", "SIGN(0.5)", 1},
+		{"neg_decimal", "SIGN(-0.5)", -1},
+		{"small_pos_decimal", "SIGN(0.001)", 1},
+		{"small_neg_decimal", "SIGN(-0.001)", -1},
+
+		// Large positive and negative numbers
+		{"large_pos", "SIGN(999999999)", 1},
+		{"large_neg", "SIGN(-999999999)", -1},
+
+		// Boolean coercion
+		{"bool_true", "SIGN(TRUE)", 1},
+		{"bool_false", "SIGN(FALSE)", 0},
+
+		// String coercion
+		{"string_pos", `SIGN("5")`, 1},
+		{"string_neg", `SIGN("-3")`, -1},
+		{"string_zero", `SIGN("0")`, 0},
+
+		// Expression argument
+		{"expr_pos_result", "SIGN(5-2)", 1},
+		{"expr_neg_result", "SIGN(2-5)", -1},
+		{"expr_zero_result", "SIGN(4-4)", 0},
+
+		// Excel doc examples
+		{"doc_ex1", "SIGN(10)", 1},
+		{"doc_ex2", "SIGN(4-4)", 0},
+		{"doc_ex3", "SIGN(-0.00001)", -1},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// No args
+		{"no_args", "SIGN()", ErrValVALUE},
+		// Too many args
+		{"too_many_args", "SIGN(1,2)", ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric", `SIGN("abc")`, ErrValVALUE},
+		// Error propagation
+		{"err_div0", "SIGN(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
