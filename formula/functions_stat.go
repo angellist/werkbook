@@ -116,6 +116,7 @@ func init() {
 	Register("NEGBINOM.DIST", NoCtx(fnNegbinomDist))
 	Register("PHI", NoCtx(fnPhi))
 	Register("PROB", NoCtx(fnPROB))
+	Register("AGGREGATE", NoCtx(fnAggregate))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -4926,4 +4927,108 @@ func fnPROB(args []Value) (Value, error) {
 	}
 
 	return NumberVal(result), nil
+}
+
+// aggregateFuncNames maps AGGREGATE function_num (1-19) to the sub-function
+// name. Indices 1-13 are reference-form functions; 14-19 are array-form
+// functions that require a k/quart argument.
+var aggregateFuncNames = [20]string{
+	1: "AVERAGE", 2: "COUNT", 3: "COUNTA", 4: "MAX", 5: "MIN",
+	6: "PRODUCT", 7: "STDEV.S", 8: "STDEV.P", 9: "SUM", 10: "VAR.S", 11: "VAR.P",
+	12: "MEDIAN", 13: "MODE.SNGL", 14: "LARGE", 15: "SMALL",
+	16: "PERCENTILE.INC", 17: "QUARTILE.INC", 18: "PERCENTILE.EXC", 19: "QUARTILE.EXC",
+}
+
+// fnAggregate implements the AGGREGATE function.
+// AGGREGATE(function_num, options, ref1, [ref2], ...) — reference form
+// AGGREGATE(function_num, options, array, [k])          — array form
+//
+// It applies one of 19 aggregate functions to the supplied data, with the
+// ability to ignore error values (hidden-row options are accepted but treated
+// as no-ops because the formula engine has no UI state).
+func fnAggregate(args []Value) (Value, error) {
+	if len(args) < 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Parse function_num (must be 1-19).
+	fnRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	fnNum := int(fnRaw)
+	if fnNum < 1 || fnNum > 19 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Parse options (must be 0-7).
+	optRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	opt := int(optRaw)
+	if opt < 0 || opt > 7 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Determine whether to ignore error values (options 2, 3, 6, 7).
+	ignoreErrors := opt == 2 || opt == 3 || opt == 6 || opt == 7
+
+	// Functions 14-19 require a k/quart argument (the last positional arg).
+	needsK := fnNum >= 14
+
+	dataArgs := args[2:]
+	var kArg Value
+	if needsK {
+		if len(dataArgs) < 2 {
+			return ErrorVal(ErrValVALUE), nil
+		}
+		kArg = dataArgs[len(dataArgs)-1]
+		dataArgs = dataArgs[:len(dataArgs)-1]
+	}
+
+	// Flatten all data arguments into a single list of values, optionally
+	// filtering out error values.
+	var vals []Value
+	for _, arg := range dataArgs {
+		if arg.Type == ValueArray {
+			for _, row := range arg.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						if ignoreErrors {
+							continue
+						}
+						return cell, nil
+					}
+					vals = append(vals, cell)
+				}
+			}
+		} else {
+			if arg.Type == ValueError {
+				if ignoreErrors {
+					continue
+				}
+				return arg, nil
+			}
+			vals = append(vals, arg)
+		}
+	}
+
+	// Build a single-row ValueArray from the filtered values.
+	arr := Value{Type: ValueArray, Array: [][]Value{vals}}
+
+	// Look up and call the sub-function.
+	name := aggregateFuncNames[fnNum]
+	id := LookupFunc(name)
+	if id < 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	var callArgs []Value
+	if needsK {
+		callArgs = []Value{arr, kArg}
+	} else {
+		callArgs = []Value{arr}
+	}
+	return CallFunc(id, callArgs, nil)
 }
