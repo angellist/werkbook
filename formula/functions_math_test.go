@@ -6743,3 +6743,87 @@ func TestCOMBIN(t *testing.T) {
 		})
 	}
 }
+
+func TestTAN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		// Basic values
+		{"tan_0", "TAN(0)", 0, 0},
+		{"tan_pi_over_4", "TAN(PI()/4)", 1, 1e-10},
+		{"tan_pi_over_6", "TAN(PI()/6)", 1.0 / math.Sqrt(3), 1e-10},
+		{"tan_pi_over_3", "TAN(PI()/3)", math.Sqrt(3), 1e-10},
+		{"tan_pi", "TAN(PI())", 0, 1e-10},
+
+		// Negative angles
+		{"tan_neg_pi_over_4", "TAN(-PI()/4)", -1, 1e-10},
+		{"tan_neg_pi_over_6", "TAN(-PI()/6)", -1.0 / math.Sqrt(3), 1e-10},
+		{"tan_neg_pi_over_3", "TAN(-PI()/3)", -math.Sqrt(3), 1e-10},
+		{"tan_neg1", "TAN(-1)", math.Tan(-1), 1e-10},
+
+		// Large angles
+		{"tan_large", "TAN(100)", math.Tan(100), 1e-10},
+		{"tan_neg_large", "TAN(-100)", math.Tan(-100), 1e-10},
+
+		// Fractional values
+		{"tan_0.785", "TAN(0.785)", math.Tan(0.785), 1e-10},
+		{"tan_0.5", "TAN(0.5)", math.Tan(0.5), 1e-10},
+		{"tan_1", "TAN(1)", math.Tan(1), 1e-10},
+
+		// Boolean coercion
+		{"tan_bool_true", "TAN(TRUE)", math.Tan(1), 1e-10},
+		{"tan_bool_false", "TAN(FALSE)", 0, 0},
+
+		// String coercion
+		{"tan_string_num", `TAN("0.785")`, math.Tan(0.785), 1e-10},
+		{"tan_string_zero", `TAN("0")`, 0, 0},
+
+		// Two pi periodicity
+		{"tan_two_pi", "TAN(2*PI())", 0, 1e-10},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tt.tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "TAN()", ErrValVALUE},
+		{"too_many_args", "TAN(1,2)", ErrValVALUE},
+		{"string_non_num", `TAN("abc")`, ErrValVALUE},
+		{"error_prop_div0", "TAN(1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
