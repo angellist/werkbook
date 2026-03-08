@@ -16,6 +16,8 @@ func init() {
 	Register("COUNT", NoCtx(fnCOUNT))
 	Register("COUNTA", NoCtx(fnCOUNTA))
 	Register("CORREL", NoCtx(fnCORREL))
+	Register("CONFIDENCE.NORM", NoCtx(fnConfidenceNorm))
+	Register("CONFIDENCE.T", NoCtx(fnConfidenceT))
 	Register("COVAR", NoCtx(fnCOVARIANCEP))
 	Register("COVARIANCE.P", NoCtx(fnCOVARIANCEP))
 	Register("COVARIANCE.S", NoCtx(fnCOVARIANCES))
@@ -47,8 +49,10 @@ func init() {
 	Register("PEARSON", NoCtx(fnCORREL))
 	Register("PERCENTILE", NoCtx(fnPERCENTILE))
 	Register("PERCENTILE.EXC", NoCtx(fnPERCENTILEEXC))
+	Register("PERCENTILE.INC", NoCtx(fnPERCENTILE))
 	Register("QUARTILE", NoCtx(fnQUARTILE))
 	Register("QUARTILE.EXC", NoCtx(fnQUARTILEEXC))
+	Register("QUARTILE.INC", NoCtx(fnQUARTILE))
 	Register("PERCENTRANK", NoCtx(fnPERCENTRANK))
 	Register("PERCENTRANK.INC", NoCtx(fnPERCENTRANK))
 	Register("PERCENTRANK.EXC", NoCtx(fnPERCENTRANKEXC))
@@ -82,6 +86,34 @@ func init() {
 	Register("NORM.INV", NoCtx(fnNormInv))
 	Register("NORM.S.DIST", NoCtx(fnNormSDist))
 	Register("NORM.S.INV", NoCtx(fnNormSInv))
+	Register("BINOM.DIST", NoCtx(fnBinomDist))
+	Register("BINOM.INV", NoCtx(fnBinomInv))
+	Register("POISSON.DIST", NoCtx(fnPoissonDist))
+	Register("EXPON.DIST", NoCtx(fnExponDist))
+	Register("WEIBULL.DIST", NoCtx(fnWeibullDist))
+	Register("LOGNORM.DIST", NoCtx(fnLognormDist))
+	Register("LOGNORM.INV", NoCtx(fnLognormInv))
+	Register("CHISQ.DIST", NoCtx(fnChisqDist))
+	Register("CHISQ.INV", NoCtx(fnChisqInv))
+	Register("GAMMA.DIST", NoCtx(fnGammaDist))
+	Register("GAMMA.INV", NoCtx(fnGammaInv))
+	Register("T.DIST", NoCtx(fnTDist))
+	Register("T.DIST.RT", NoCtx(fnTDistRT))
+	Register("T.DIST.2T", NoCtx(fnTDist2T))
+	Register("T.INV", NoCtx(fnTInv))
+	Register("T.INV.2T", NoCtx(fnTInv2T))
+	Register("BETA.DIST", NoCtx(fnBetaDist))
+	Register("BETA.INV", NoCtx(fnBetaInv))
+	Register("CHISQ.DIST.RT", NoCtx(fnChisqDistRT))
+	Register("CHISQ.INV.RT", NoCtx(fnChisqInvRT))
+	Register("F.DIST", NoCtx(fnFDist))
+	Register("F.DIST.RT", NoCtx(fnFDistRT))
+	Register("F.INV", NoCtx(fnFInv))
+	Register("F.INV.RT", NoCtx(fnFInvRT))
+	Register("GAUSS", NoCtx(fnGauss))
+	Register("HYPGEOM.DIST", NoCtx(fnHypgeomDist))
+	Register("NEGBINOM.DIST", NoCtx(fnNegbinomDist))
+	Register("PHI", NoCtx(fnPhi))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -800,6 +832,9 @@ func fnSUMIF(args []Value) (Value, error) {
 
 	if rangeArg.Type != ValueArray {
 		if MatchesCriteria(rangeArg, criteria) {
+			if sumRange.Type == ValueError {
+				return sumRange, nil
+			}
 			n, e := CoerceNum(sumRange)
 			if e != nil {
 				return NumberVal(0), nil
@@ -818,6 +853,9 @@ func fnSUMIF(args []Value) (Value, error) {
 					sv = sumRange.Array[i][j]
 				} else if sumRange.Type != ValueArray {
 					sv = sumRange
+				}
+				if sv.Type == ValueError {
+					return sv, nil
 				}
 				if n, e := CoerceNum(sv); e == nil {
 					sum += n
@@ -2687,6 +2725,36 @@ func fnNormSDist(args []Value) (Value, error) {
 }
 
 // ---------------------------------------------------------------------------
+// PHI — Standard normal PDF φ(x)
+// ---------------------------------------------------------------------------
+
+func fnPhi(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	return NumberVal(normSDistPDF(x)), nil
+}
+
+// ---------------------------------------------------------------------------
+// GAUSS — P(0 < Z < z) = NORM.S.DIST(z, TRUE) - 0.5
+// ---------------------------------------------------------------------------
+
+func fnGauss(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	z, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	return NumberVal(normSDistCDF(z) - 0.5), nil
+}
+
+// ---------------------------------------------------------------------------
 // NORM.S.INV — Inverse of the standard normal CDF
 // ---------------------------------------------------------------------------
 
@@ -2764,5 +2832,1978 @@ func normSInv(p float64) float64 {
 			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
 	}
 
+	// One Halley step closes the remaining gap to Excel's float64 results.
+	e := 0.5*math.Erfc(-x/math.Sqrt2) - p
+	u := e * math.Sqrt(2*math.Pi) * math.Exp(x*x/2)
+	x = x - u/(1+x*u/2)
+
 	return x
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.DIST — Binomial distribution (PMF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnBinomDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	sf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	tf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate to integers.
+	k := int(sf)
+	n := int(tf)
+
+	if k < 0 || k > n {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: P(X <= k) = sum from i=0 to k of PMF(i)
+		sum := 0.0
+		for i := 0; i <= k; i++ {
+			sum += binomPMF(n, i, p)
+		}
+		return NumberVal(sum), nil
+	}
+	return NumberVal(binomPMF(n, k, p)), nil
+}
+
+// binomPMF returns the binomial probability mass function:
+// P(X=k) = C(n,k) * p^k * (1-p)^(n-k)
+// Uses log-gamma for numerical stability with large n.
+func binomPMF(n, k int, p float64) float64 {
+	if p == 0 {
+		if k == 0 {
+			return 1
+		}
+		return 0
+	}
+	if p == 1 {
+		if k == n {
+			return 1
+		}
+		return 0
+	}
+	// log(C(n,k)) = lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1)
+	logC, _ := math.Lgamma(float64(n + 1))
+	logK, _ := math.Lgamma(float64(k + 1))
+	logNK, _ := math.Lgamma(float64(n - k + 1))
+	logBinom := logC - logK - logNK
+	logProb := logBinom + float64(k)*math.Log(p) + float64(n-k)*math.Log(1-p)
+	return math.Exp(logProb)
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.INV — Inverse binomial distribution
+// ---------------------------------------------------------------------------
+
+// fnBinomInv implements BINOM.INV(trials, probability_s, alpha).
+// Returns the smallest k such that BINOM.DIST(k, trials, p, TRUE) >= alpha.
+func fnBinomInv(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	tf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate trials to integer.
+	n := int(tf)
+
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if p <= 0 || p >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Accumulate the binomial CDF and return the first k where CDF >= alpha.
+	cum := 0.0
+	for k := 0; k <= n; k++ {
+		cum += binomPMF(n, k, p)
+		if cum >= alpha {
+			return NumberVal(float64(k)), nil
+		}
+	}
+	// Fallback: should not be reached for valid inputs since CDF(n) = 1.
+	return NumberVal(float64(n)), nil
+}
+
+// fnPoissonDist implements POISSON.DIST(x, mean, cumulative).
+func fnPoissonDist(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	xf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	mean, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate x to integer.
+	k := int(xf)
+
+	if k < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if mean < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Special case: mean == 0.
+	if mean == 0 {
+		if k == 0 {
+			return NumberVal(1), nil
+		}
+		if cum != 0 {
+			return NumberVal(1), nil
+		}
+		return NumberVal(0), nil
+	}
+
+	if cum != 0 {
+		// CDF: P(X <= k) = sum from i=0 to k of PMF(i)
+		sum := 0.0
+		for i := 0; i <= k; i++ {
+			sum += poissonPMF(i, mean)
+		}
+		return NumberVal(sum), nil
+	}
+	return NumberVal(poissonPMF(k, mean)), nil
+}
+
+// poissonPMF returns the Poisson probability mass function:
+// P(X=k) = (mean^k * e^(-mean)) / k!
+// Uses log-gamma for numerical stability.
+func poissonPMF(k int, mean float64) float64 {
+	lg, _ := math.Lgamma(float64(k + 1))
+	return math.Exp(float64(k)*math.Log(mean) - mean - lg)
+}
+
+// ---------------------------------------------------------------------------
+// EXPON.DIST — Exponential distribution
+// ---------------------------------------------------------------------------
+
+func fnExponDist(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	lambda, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if lambda <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: F(x) = 1 - exp(-lambda * x)
+		return NumberVal(1 - math.Exp(-lambda*x)), nil
+	}
+	// PDF: f(x) = lambda * exp(-lambda * x)
+	return NumberVal(lambda * math.Exp(-lambda*x)), nil
+}
+
+// WEIBULL.DIST — Weibull distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnWeibullDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: F(x) = 1 - exp(-(x/beta)^alpha)
+		return NumberVal(1 - math.Exp(-math.Pow(x/beta, alpha))), nil
+	}
+	// PDF: f(x) = (alpha/beta) * (x/beta)^(alpha-1) * exp(-(x/beta)^alpha)
+	if x == 0 {
+		// Excel returns 0 for all PDF evaluations at x=0.
+		return NumberVal(0), nil
+	}
+	return NumberVal((alpha / beta) * math.Pow(x/beta, alpha-1) * math.Exp(-math.Pow(x/beta, alpha))), nil
+}
+
+// ---------------------------------------------------------------------------
+// LOGNORM.DIST — Lognormal distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnLognormDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	mean, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	stdev, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stdev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: Φ((ln(x) - μ) / σ)
+		z := (math.Log(x) - mean) / stdev
+		return NumberVal(normSDistCDF(z)), nil
+	}
+	// PDF: (1 / (x * σ * √(2π))) * exp(-((ln(x) - μ)² / (2σ²)))
+	lnx := math.Log(x)
+	return NumberVal((1 / (x * stdev * math.Sqrt(2*math.Pi))) * math.Exp(-(lnx-mean)*(lnx-mean)/(2*stdev*stdev))), nil
+}
+
+// ---------------------------------------------------------------------------
+// LOGNORM.INV — Inverse of the lognormal CDF
+// ---------------------------------------------------------------------------
+
+func fnLognormInv(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	mean, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	stdev, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	if p <= 0 || p >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stdev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// LOGNORM.INV(p, μ, σ) = exp(μ + σ * NORM.S.INV(p))
+	return NumberVal(math.Exp(mean + stdev*normSInv(p))), nil
+}
+
+// ---------------------------------------------------------------------------
+// GAMMA.DIST — Gamma distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+// regLowerGamma returns the regularized lower incomplete gamma function P(a, x).
+// It uses the series expansion for x < a+1 and the continued fraction
+// (via the complementary function Q) for x >= a+1.
+func regLowerGamma(a, x float64) float64 {
+	if x == 0 {
+		return 0
+	}
+	if x < a+1 {
+		return regLowerGammaSeries(a, x)
+	}
+	// Use complementary: P(a,x) = 1 - Q(a,x)
+	return 1 - regUpperGammaCF(a, x)
+}
+
+// regLowerGammaSeries computes P(a, x) via the series expansion:
+//
+//	P(a,x) = e^(-x) * x^a / Γ(a) * Σ_{n=0}^∞ x^n / (a*(a+1)*...*(a+n))
+func regLowerGammaSeries(a, x float64) float64 {
+	sum := 1.0 / a
+	term := 1.0 / a
+	for n := 1; n < 1000; n++ {
+		term *= x / (a + float64(n))
+		sum += term
+		if math.Abs(term) < 1e-15*math.Abs(sum) {
+			break
+		}
+	}
+	lgA, _ := math.Lgamma(a)
+	return math.Exp(-x+a*math.Log(x)-lgA) * sum
+}
+
+// regUpperGammaCF computes Q(a, x) = 1 - P(a, x) via the Lentz continued fraction.
+func regUpperGammaCF(a, x float64) float64 {
+	const eps = 1e-15
+	const tiny = 1e-30
+
+	// Modified Lentz's method for the CF representation of Q(a,x).
+	// CF: Q(a,x) = e^(-x)*x^a/Γ(a) * 1/(x+1-a- 1*(1-a)/(x+3-a- 2*(2-a)/(x+5-a- ...)))
+	// Using the standard form: b0=0, a1=1, b1=x+1-a, then an = -n*(n-a), bn = x+2n+1-a
+	f := tiny
+	c := f
+	d := 0.0
+	for n := 1; n < 1000; n++ {
+		an := float64(0)
+		bn := float64(0)
+		if n == 1 {
+			an = 1.0
+			bn = x + 1 - a
+		} else {
+			nf := float64(n - 1)
+			an = -nf * (nf - a)
+			bn = x + 2*nf + 1 - a
+		}
+
+		d = bn + an*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = bn + an/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		delta := c * d
+		f *= delta
+		if math.Abs(delta-1.0) < eps {
+			break
+		}
+	}
+
+	lgA, _ := math.Lgamma(a)
+	return math.Exp(-x+a*math.Log(x)-lgA) * f
+}
+
+func fnGammaDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: regularized lower incomplete gamma function P(alpha, x/beta)
+		return NumberVal(regLowerGamma(alpha, x/beta)), nil
+	}
+
+	// PDF: f(x) = (1 / (beta^alpha * Γ(alpha))) * x^(alpha-1) * exp(-x/beta)
+	if x == 0 {
+		if alpha > 1 {
+			return NumberVal(0), nil
+		}
+		// alpha <= 1: Excel returns #NUM! at x=0 (PDF diverges for alpha<1,
+		// and Excel also returns #NUM! for the alpha==1 boundary case).
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	lgA, _ := math.Lgamma(alpha)
+	logPdf := (alpha-1)*math.Log(x) - x/beta - alpha*math.Log(beta) - lgA
+	return NumberVal(math.Exp(logPdf)), nil
+}
+
+// ---------------------------------------------------------------------------
+// GAMMA.INV — Inverse of the gamma cumulative distribution function
+// ---------------------------------------------------------------------------
+// Given p, alpha, beta it finds x such that GAMMA.DIST(x, alpha, beta, TRUE) = p.
+
+func fnGammaInv(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Validate ranges.
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if alpha <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 0 {
+		return NumberVal(0), nil
+	}
+	// Excel returns #NUM! for probability = 1.
+	if p == 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Initial guess using the Wilson-Hilferty normal approximation:
+	//   x/alpha ≈ (1 - 1/(9*alpha) + z * sqrt(1/(9*alpha)))^3
+	// where z = NORM.S.INV(p).
+	z := normSInv(p)
+	t := 1.0 / (9 * alpha)
+	wh := 1 - t + z*math.Sqrt(t)
+	var x float64
+	if wh > 0 {
+		x = alpha * beta * wh * wh * wh
+	} else {
+		// Fallback for cases where the WH approximation gives non-positive.
+		x = alpha * beta * 0.5
+	}
+	if x <= 0 {
+		x = beta * 0.001
+	}
+
+	// Newton-Raphson iteration.
+	// f(x) = regLowerGamma(alpha, x/beta) - p
+	// f'(x) = gammaPDF(x, alpha, beta)
+	//       = x^(alpha-1) * exp(-x/beta) / (beta^alpha * Γ(alpha))
+	lgA, _ := math.Lgamma(alpha)
+	const maxIter = 200
+	const tol = 1e-12
+
+	for i := 0; i < maxIter; i++ {
+		cdf := regLowerGamma(alpha, x/beta)
+		f := cdf - p
+
+		if math.Abs(f) < tol {
+			return NumberVal(x), nil
+		}
+
+		// Gamma PDF as the derivative of the CDF.
+		logPdf := (alpha-1)*math.Log(x) - x/beta - alpha*math.Log(beta) - lgA
+		pdf := math.Exp(logPdf)
+
+		if pdf < 1e-300 {
+			// PDF too small for Newton step; use bisection fallback.
+			break
+		}
+
+		step := f / pdf
+		xNew := x - step
+		// Ensure x stays positive.
+		if xNew <= 0 {
+			x = x / 2
+		} else {
+			x = xNew
+		}
+	}
+
+	// If Newton didn't converge, fall back to bisection.
+	lo := 0.0
+	hi := x
+	// Expand hi until CDF(hi) > p.
+	for regLowerGamma(alpha, hi/beta) < p {
+		hi *= 2
+		if hi > 1e308 {
+			return ErrorVal(ErrValNA), nil
+		}
+	}
+
+	for i := 0; i < maxIter; i++ {
+		mid := (lo + hi) / 2
+		cdf := regLowerGamma(alpha, mid/beta)
+		if math.Abs(cdf-p) < tol {
+			return NumberVal(mid), nil
+		}
+		if cdf < p {
+			lo = mid
+		} else {
+			hi = mid
+		}
+		if (hi - lo) < tol*hi {
+			return NumberVal((lo + hi) / 2), nil
+		}
+	}
+
+	return ErrorVal(ErrValNA), nil
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.DIST — Chi-squared distribution (PDF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnChisqDist(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	alpha := df / 2.0
+
+	if cum != 0 {
+		// CDF: regularized lower incomplete gamma P(df/2, x/2)
+		return NumberVal(regLowerGamma(alpha, x/2.0)), nil
+	}
+
+	// PDF: gamma PDF with alpha=df/2, beta=2
+	// f(x) = x^(alpha-1) * exp(-x/2) / (2^alpha * Γ(alpha))
+	if x == 0 {
+		if df == 1 {
+			// PDF diverges at x=0 for df=1 (alpha=0.5).
+			// Excel returns Inf.
+			return NumberVal(math.Inf(1)), nil
+		}
+		if df == 2 {
+			// alpha=1, PDF = exp(0)/(2*1) = 0.5
+			return NumberVal(0.5), nil
+		}
+		// df > 2 ⇒ alpha > 1 ⇒ PDF = 0
+		return NumberVal(0), nil
+	}
+
+	lgA, _ := math.Lgamma(alpha)
+	logPdf := (alpha-1)*math.Log(x) - x/2.0 - alpha*math.Log(2) - lgA
+	return NumberVal(math.Exp(logPdf)), nil
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.INV — Inverse of the left-tailed chi-squared distribution
+// ---------------------------------------------------------------------------
+// CHISQ.INV(probability, deg_freedom)
+// Since chi-squared is gamma(alpha=df/2, beta=2):
+//   CHISQ.INV(p, df) = GAMMA.INV(p, df/2, 2)
+
+func fnChisqInv(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 0 {
+		return NumberVal(0), nil
+	}
+	if p == 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Delegate to GAMMA.INV(p, df/2, 2).
+	return fnGammaInv([]Value{NumberVal(p), NumberVal(df / 2), NumberVal(2)})
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.DIST.RT — Right-tailed chi-squared distribution
+// ---------------------------------------------------------------------------
+// CHISQ.DIST.RT(x, deg_freedom)
+//   x           – must be >= 0 (if x < 0, #NUM!)
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 1 - CHISQ.DIST(x, df, TRUE).
+
+func fnChisqDistRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	alpha := df / 2.0
+	return NumberVal(1 - regLowerGamma(alpha, x/2.0)), nil
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.INV.RT — Right-tailed inverse chi-squared distribution
+// ---------------------------------------------------------------------------
+// CHISQ.INV.RT(probability, deg_freedom)
+//   probability  – 0 <= p <= 1
+//   deg_freedom  – truncated to integer, must be >= 1
+// Returns CHISQ.INV(1 - probability, df).
+
+func fnChisqInvRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 || df > 1e10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 1 {
+		return NumberVal(0), nil
+	}
+	if p == 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Delegate to CHISQ.INV(1-p, df) = GAMMA.INV(1-p, df/2, 2).
+	return fnGammaInv([]Value{NumberVal(1 - p), NumberVal(df / 2), NumberVal(2)})
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST — Student's t-distribution (left-tailed)
+// ---------------------------------------------------------------------------
+// T.DIST(x, deg_freedom, cumulative)
+//   x           – numeric value at which to evaluate
+//   deg_freedom – degrees of freedom (truncated to integer, must be >= 1)
+//   cumulative  – TRUE for CDF, FALSE for PDF
+
+func fnTDist(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		return NumberVal(tDistCDF(x, df)), nil
+	}
+	return NumberVal(tDistPDF(x, df)), nil
+}
+
+// tDistCDF computes the CDF of the Student's t-distribution at x with df
+// degrees of freedom: P(T <= x).
+func tDistCDF(x, df float64) float64 {
+	bx := df / (df + x*x)
+	beta := regBetaInc(bx, df/2, 0.5)
+	if x >= 0 {
+		return 1 - 0.5*beta
+	}
+	return 0.5 * beta
+}
+
+// tDistPDF computes the PDF of the Student's t-distribution at x with df
+// degrees of freedom, evaluated in log space for numerical stability.
+func tDistPDF(x, df float64) float64 {
+	lgNum, _ := math.Lgamma((df + 1) / 2)
+	lgDen, _ := math.Lgamma(df / 2)
+	logPdf := lgNum - lgDen - 0.5*math.Log(df*math.Pi) - ((df+1)/2)*math.Log(1+x*x/df)
+	return math.Exp(logPdf)
+}
+
+// ---------------------------------------------------------------------------
+// T.INV — Inverse of the Student's t-distribution (left-tailed)
+// ---------------------------------------------------------------------------
+// T.INV(probability, deg_freedom)
+//   probability  – 0 < p < 1 (p=0 and p=1 return #NUM!)
+//   deg_freedom  – truncated to integer, must be >= 1
+
+func fnTInv(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate deg_freedom to integer.
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if p <= 0 || p >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	result, ok := tInv(p, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(result), nil
+}
+
+// tInv computes the inverse of the Student's t-distribution (left-tailed).
+// It returns the t-value such that CDF(t, df) = p, plus a boolean indicating
+// convergence. Caller must ensure 0 < p < 1 and df >= 1.
+func tInv(p, df float64) (float64, bool) {
+	// By symmetry, p = 0.5 always returns 0.
+	if p == 0.5 {
+		return 0, true
+	}
+
+	// Initial guess from the standard normal inverse.
+	t := normSInv(p)
+
+	// For small df the normal approximation is poor; clamp the initial
+	// guess to keep it in a reasonable range.
+	if df <= 2 && math.Abs(t) > 10 {
+		if t > 0 {
+			t = 10
+		} else {
+			t = -10
+		}
+	}
+
+	// Newton-Raphson iteration: t_new = t - (CDF(t) - p) / PDF(t)
+	const maxIter = 100
+	const tol = 1e-12
+
+	for i := 0; i < maxIter; i++ {
+		cdf := tDistCDF(t, df)
+		f := cdf - p
+		if math.Abs(f) < tol {
+			return t, true
+		}
+
+		pdf := tDistPDF(t, df)
+		if pdf < 1e-300 {
+			// PDF too small; fall back to bisection.
+			break
+		}
+
+		step := f / pdf
+		tNew := t - step
+		t = tNew
+	}
+
+	// Bisection fallback.
+	lo := -1000.0
+	hi := 1000.0
+	// Adjust bounds so that CDF(lo) < p < CDF(hi).
+	for tDistCDF(lo, df) > p {
+		lo *= 2
+	}
+	for tDistCDF(hi, df) < p {
+		hi *= 2
+	}
+
+	for i := 0; i < 200; i++ {
+		mid := (lo + hi) / 2
+		cdf := tDistCDF(mid, df)
+		if math.Abs(cdf-p) < tol {
+			return mid, true
+		}
+		if cdf < p {
+			lo = mid
+		} else {
+			hi = mid
+		}
+		if (hi - lo) < tol*math.Abs(hi) {
+			return (lo + hi) / 2, true
+		}
+	}
+
+	return 0, false
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST.RT — Right-tailed Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.DIST.RT(x, deg_freedom)
+//   x           – any numeric value
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 1 - T.DIST(x, df, TRUE).
+
+func fnTDistRT(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(1 - tDistCDF(x, df)), nil
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST.2T — Two-tailed Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.DIST.2T(x, deg_freedom)
+//   x           – must be >= 0 (if x < 0, return #NUM!)
+//   deg_freedom – truncated to integer, must be >= 1
+// Returns 2 * (1 - T.DIST(|x|, df, TRUE)).
+
+func fnTDist2T(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	if x < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(2 * (1 - tDistCDF(x, df))), nil
+}
+
+// ---------------------------------------------------------------------------
+// T.INV.2T — Two-tailed inverse of Student's t-distribution
+// ---------------------------------------------------------------------------
+// T.INV.2T(probability, deg_freedom)
+//   probability  – 0 < p <= 1 (p <= 0 or p > 1 → #NUM!)
+//   deg_freedom  – truncated to integer, must be >= 1
+// Returns T.INV(1 - probability/2, df), i.e. the positive t-value such that
+// P(|T| >= t) = probability.
+
+func fnTInv2T(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	dfRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	df := math.Trunc(dfRaw)
+	if df < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if p <= 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// T.INV.2T(p, df) = T.INV(1 - p/2, df)
+	// For p=1, 1 - p/2 = 0.5, so T.INV(0.5, df) = 0.
+	result, ok := tInv(1-p/2, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(result), nil
+}
+
+// regBetaInc returns the regularized incomplete beta function I_x(a, b).
+// It uses Lentz's continued fraction method for efficient evaluation.
+func regBetaInc(x, a, b float64) float64 {
+	if x <= 0 {
+		return 0
+	}
+	if x >= 1 {
+		return 1
+	}
+
+	// Use the symmetry relation: I_x(a,b) = 1 - I_{1-x}(b,a)
+	// when x > (a+1)/(a+b+2) for better convergence of the CF.
+	if x > (a+1)/(a+b+2) {
+		return 1 - regBetaInc(1-x, b, a)
+	}
+
+	// Log of the front factor: x^a * (1-x)^b / B(a,b)
+	lgA, _ := math.Lgamma(a)
+	lgB, _ := math.Lgamma(b)
+	lgAB, _ := math.Lgamma(a + b)
+	lbeta := lgA + lgB - lgAB
+	front := math.Exp(a*math.Log(x) + b*math.Log(1-x) - lbeta)
+
+	// Evaluate the continued fraction using the modified Lentz's method.
+	// From Numerical Recipes, the CF for I_x(a,b) / front is:
+	//   1/(1+ d1/(1+ d2/(1+ ...)))
+	// where the coefficients are:
+	//   d_{2m+1} = -(a+m)(a+b+m) x / ((a+2m)(a+2m+1))
+	//   d_{2m}   = m(b-m) x / ((a+2m-1)(a+2m))
+	//
+	// This evaluates to: betacf(a,b,x) and I_x(a,b) = front * betacf / a
+	return front * betacf(a, b, x) / a
+}
+
+// betacf evaluates the continued fraction for the incomplete beta function.
+// This implements the algorithm from Numerical Recipes (betacf).
+func betacf(a, b, x float64) float64 {
+	const eps = 1e-15
+	const tiny = 1e-30
+	const maxIter = 1000
+
+	qab := a + b
+	qap := a + 1
+	qam := a - 1
+
+	// Initial setup for modified Lentz's method.
+	c := 1.0
+	d := 1.0 - qab*x/qap
+	if math.Abs(d) < tiny {
+		d = tiny
+	}
+	d = 1.0 / d
+	h := d
+
+	for m := 1; m <= maxIter; m++ {
+		mf := float64(m)
+		m2 := 2.0 * mf
+
+		// Even coefficient: d_{2m} = m(b-m)x / ((a+2m-1)(a+2m))
+		aa := mf * (b - mf) * x / ((qam + m2) * (a + m2))
+		d = 1.0 + aa*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = 1.0 + aa/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		h *= d * c
+
+		// Odd coefficient: d_{2m+1} = -(a+m)(a+b+m)x / ((a+2m)(a+2m+1))
+		aa = -(a + mf) * (qab + mf) * x / ((a + m2) * (qap + m2))
+		d = 1.0 + aa*d
+		if math.Abs(d) < tiny {
+			d = tiny
+		}
+		c = 1.0 + aa/c
+		if math.Abs(c) < tiny {
+			c = tiny
+		}
+		d = 1.0 / d
+		delta := d * c
+		h *= delta
+
+		if math.Abs(delta-1.0) < eps {
+			break
+		}
+	}
+	return h
+}
+
+// ---------------------------------------------------------------------------
+// F.DIST — F probability distribution
+// ---------------------------------------------------------------------------
+// F.DIST(x, deg_freedom1, deg_freedom2, cumulative)
+//
+//	x            – value at which to evaluate (must be >= 0)
+//	deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//	deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+//	cumulative   – TRUE for CDF, FALSE for PDF
+
+func fnFDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	xRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	if xRaw < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Truncate degrees of freedom to integers.
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: I(d1*x/(d1*x+d2), d1/2, d2/2) using the regularized
+		// incomplete beta function.
+		if xRaw == 0 {
+			return NumberVal(0), nil
+		}
+		z := d1 * xRaw / (d1*xRaw + d2)
+		return NumberVal(regBetaInc(z, d1/2.0, d2/2.0)), nil
+	}
+
+	// PDF
+	if xRaw == 0 {
+		if d1 < 2 {
+			// df1 = 1: PDF diverges at x=0.
+			return ErrorVal(ErrValNUM), nil
+		}
+		if d1 == 2 {
+			return NumberVal(1), nil
+		}
+		// df1 > 2: PDF is 0 at x=0.
+		return NumberVal(0), nil
+	}
+
+	// Use log form for numerical stability:
+	// log(f(x)) = 0.5*d1*log(d1) + 0.5*d2*log(d2) +
+	//             (0.5*d1-1)*log(x) - 0.5*(d1+d2)*log(d1*x+d2) -
+	//             lbeta(d1/2, d2/2)
+	lgA, _ := math.Lgamma(d1 / 2)
+	lgB, _ := math.Lgamma(d2 / 2)
+	lgAB, _ := math.Lgamma((d1 + d2) / 2)
+	lb := lgA + lgB - lgAB
+
+	logPdf := 0.5*d1*math.Log(d1) + 0.5*d2*math.Log(d2) +
+		(0.5*d1-1)*math.Log(xRaw) - 0.5*(d1+d2)*math.Log(d1*xRaw+d2) - lb
+	return NumberVal(math.Exp(logPdf)), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.INV — Inverse of the F probability distribution
+// ---------------------------------------------------------------------------
+// F.INV(probability, deg_freedom1, deg_freedom2)
+//
+//	probability  – 0 <= p <= 1
+//	deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//	deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+//
+// Returns x such that F.DIST(x, df1, df2, TRUE) = probability.
+
+func fnFInv(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Truncate degrees of freedom to integers.
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 0 {
+		return NumberVal(0), nil
+	}
+	if p == 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// fDistCDF computes the CDF of the F-distribution at x:
+	//   I(d1*x/(d1*x+d2), d1/2, d2/2)
+	fDistCDF := func(x float64) float64 {
+		if x <= 0 {
+			return 0
+		}
+		z := d1 * x / (d1*x + d2)
+		return regBetaInc(z, d1/2.0, d2/2.0)
+	}
+
+	// fDistPDF computes the PDF of the F-distribution at x (log form for stability).
+	lgA, _ := math.Lgamma(d1 / 2)
+	lgB, _ := math.Lgamma(d2 / 2)
+	lgAB, _ := math.Lgamma((d1 + d2) / 2)
+	lb := lgA + lgB - lgAB
+
+	fDistPDF := func(x float64) float64 {
+		if x <= 0 {
+			return 0
+		}
+		logPdf := 0.5*d1*math.Log(d1) + 0.5*d2*math.Log(d2) +
+			(0.5*d1-1)*math.Log(x) - 0.5*(d1+d2)*math.Log(d1*x+d2) - lb
+		return math.Exp(logPdf)
+	}
+
+	// Initial guess: use the mean of the F-distribution (d2/(d2-2)) scaled by p,
+	// or a simple heuristic for a starting point.
+	var x float64
+	if d2 > 2 {
+		mean := d2 / (d2 - 2)
+		// Use the normal inverse to adjust the initial guess.
+		z := normSInv(p)
+		// Approximate: x ≈ mean * exp(z * sqrt(2/d1))
+		x = mean * math.Exp(z*math.Sqrt(2/d1))
+		if x <= 0 {
+			x = 0.001
+		}
+	} else {
+		// For small d2, start with 1.0 and adjust.
+		x = 1.0
+		if p < 0.5 {
+			x = 0.5 * p
+			if x < 0.001 {
+				x = 0.001
+			}
+		} else if p > 0.9 {
+			x = 10.0
+		}
+	}
+
+	// Newton-Raphson iteration.
+	const maxIter = 100
+	const tol = 1e-12
+
+	for i := 0; i < maxIter; i++ {
+		cdf := fDistCDF(x)
+		f := cdf - p
+
+		if math.Abs(f) < tol {
+			return NumberVal(x), nil
+		}
+
+		pdf := fDistPDF(x)
+		if pdf < 1e-300 {
+			break
+		}
+
+		step := f / pdf
+		xNew := x - step
+		// Ensure x stays positive.
+		if xNew <= 0 {
+			x = x / 2
+		} else {
+			x = xNew
+		}
+	}
+
+	// Bisection fallback.
+	lo := 0.0
+	hi := x
+	if hi <= 0 {
+		hi = 1.0
+	}
+	// Expand hi until CDF(hi) > p.
+	for fDistCDF(hi) < p {
+		hi *= 2
+		if hi > 1e100 {
+			return ErrorVal(ErrValNUM), nil
+		}
+	}
+
+	for i := 0; i < 200; i++ {
+		mid := (lo + hi) / 2
+		cdf := fDistCDF(mid)
+		if math.Abs(cdf-p) < tol {
+			return NumberVal(mid), nil
+		}
+		if cdf < p {
+			lo = mid
+		} else {
+			hi = mid
+		}
+		if (hi - lo) < tol*math.Abs(hi) {
+			return NumberVal((lo + hi) / 2), nil
+		}
+	}
+
+	return ErrorVal(ErrValNA), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.DIST.RT — Right-tailed F-distribution
+// ---------------------------------------------------------------------------
+// F.DIST.RT(x, deg_freedom1, deg_freedom2)
+//   x            – must be >= 0 (if x < 0, #NUM!)
+//   deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//   deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+// Returns 1 - F.DIST(x, df1, df2, TRUE).
+
+func fnFDistRT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	xRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if xRaw < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if xRaw == 0 {
+		return NumberVal(1), nil
+	}
+	z := d1 * xRaw / (d1*xRaw + d2)
+	return NumberVal(1 - regBetaInc(z, d1/2.0, d2/2.0)), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.INV.RT — Right-tailed inverse of the F probability distribution
+// ---------------------------------------------------------------------------
+// F.INV.RT(probability, deg_freedom1, deg_freedom2)
+//   probability  – 0 <= p <= 1
+//   deg_freedom1 – numerator degrees of freedom (truncated to integer, >= 1)
+//   deg_freedom2 – denominator degrees of freedom (truncated to integer, >= 1)
+// Returns F.INV(1 - probability, df1, df2).
+
+func fnFInvRT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	df1Raw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	df2Raw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	d1 := math.Trunc(df1Raw)
+	d2 := math.Trunc(df2Raw)
+	if d1 < 1 || d2 < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Edge cases.
+	if p == 1 {
+		return NumberVal(0), nil
+	}
+	if p == 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Delegate to F.INV(1-p, df1, df2).
+	return fnFInv([]Value{NumberVal(1 - p), NumberVal(d1), NumberVal(d2)})
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM — Confidence interval for a population mean (normal dist)
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM(alpha, standard_dev, size)
+//
+//	alpha        – significance level, 0 < alpha < 1
+//	standard_dev – population standard deviation, must be > 0
+//	size         – sample size, truncated to integer, must be >= 1
+//
+// Returns NORM.S.INV(1 - alpha/2) * standard_dev / SQRT(size).
+
+func fnConfidenceNorm(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	alpha, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	stddev, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sizeRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	size := math.Trunc(sizeRaw)
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stddev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	z := normSInv(1 - alpha/2)
+	return NumberVal(z * stddev / math.Sqrt(size)), nil
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T — Confidence interval for a population mean (t-distribution)
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T(alpha, standard_dev, size)
+//
+//	alpha        – significance level, 0 < alpha < 1
+//	standard_dev – population standard deviation, must be > 0
+//	size         – sample size, truncated to integer, must be >= 1
+//	              (size = 1 returns #DIV/0! because df = 0)
+//
+// Returns T.INV(1 - alpha/2, size-1) * standard_dev / SQRT(size).
+
+func fnConfidenceT(args []Value) (Value, error) {
+	if len(args) != 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	alpha, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	stddev, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sizeRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	size := math.Trunc(sizeRaw)
+	if alpha <= 0 || alpha >= 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if stddev <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if size == 1 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	df := size - 1
+	t, ok := tInv(1-alpha/2, df)
+	if !ok {
+		return ErrorVal(ErrValNA), nil
+	}
+	return NumberVal(t * stddev / math.Sqrt(size)), nil
+}
+
+// ---------------------------------------------------------------------------
+// BETA.DIST — Beta distribution (CDF or PDF)
+// ---------------------------------------------------------------------------
+// BETA.DIST(x, alpha, beta, cumulative, [A], [B])
+//
+//	x          – value at which to evaluate (must be between A and B)
+//	alpha      – first shape parameter (> 0)
+//	beta       – second shape parameter (> 0)
+//	cumulative – TRUE for CDF, FALSE for PDF
+//	A          – optional lower bound (default 0)
+//	B          – optional upper bound (default 1)
+
+func fnBetaDist(args []Value) (Value, error) {
+	if len(args) < 4 || len(args) > 6 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	beta, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	a := 0.0 // lower bound
+	b := 1.0 // upper bound
+	if len(args) >= 5 {
+		a, e = CoerceNum(args[4])
+		if e != nil {
+			return *e, nil
+		}
+	}
+	if len(args) >= 6 {
+		b, e = CoerceNum(args[5])
+		if e != nil {
+			return *e, nil
+		}
+	}
+
+	// Validate parameters.
+	if alpha <= 0 || beta <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if a == b {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if x < a || x > b {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Transform to standard [0,1] range.
+	z := (x - a) / (b - a)
+
+	if cum != 0 {
+		// CDF: regularized incomplete beta function I_z(alpha, beta).
+		return NumberVal(regBetaInc(z, alpha, beta)), nil
+	}
+
+	// PDF: z^(alpha-1) * (1-z)^(beta-1) / (B(alpha,beta) * (b-a))
+	// Handle boundary cases.
+	if z == 0 {
+		if alpha < 1 {
+			// PDF diverges.
+			return ErrorVal(ErrValNUM), nil
+		}
+		if alpha == 1 {
+			// PDF = (1-0)^(beta-1) / (B(1,beta) * (b-a)) = 1 / (B(1,beta) * (b-a))
+			// B(1, beta) = 1/beta, so PDF = beta / (b-a)
+			lgA, _ := math.Lgamma(alpha)
+			lgB, _ := math.Lgamma(beta)
+			lgAB, _ := math.Lgamma(alpha + beta)
+			lb := lgA + lgB - lgAB
+			logPdf := (beta-1)*math.Log(1) - lb - math.Log(b-a)
+			return NumberVal(math.Exp(logPdf)), nil
+		}
+		// alpha > 1: PDF = 0
+		return NumberVal(0), nil
+	}
+	if z == 1 {
+		if beta < 1 {
+			// PDF diverges.
+			return ErrorVal(ErrValNUM), nil
+		}
+		if beta == 1 {
+			lgA, _ := math.Lgamma(alpha)
+			lgB, _ := math.Lgamma(beta)
+			lgAB, _ := math.Lgamma(alpha + beta)
+			lb := lgA + lgB - lgAB
+			logPdf := (alpha-1)*math.Log(1) - lb - math.Log(b-a)
+			return NumberVal(math.Exp(logPdf)), nil
+		}
+		// beta > 1: PDF = 0
+		return NumberVal(0), nil
+	}
+
+	lgA, _ := math.Lgamma(alpha)
+	lgB, _ := math.Lgamma(beta)
+	lgAB, _ := math.Lgamma(alpha + beta)
+	lb := lgA + lgB - lgAB
+
+	logPdf := (alpha-1)*math.Log(z) + (beta-1)*math.Log(1-z) - lb - math.Log(b-a)
+	return NumberVal(math.Exp(logPdf)), nil
+}
+
+// ---------------------------------------------------------------------------
+// BETA.INV — Inverse of the beta cumulative distribution function
+// ---------------------------------------------------------------------------
+// BETA.INV(probability, alpha, beta, [A], [B])
+//
+//	probability – value at which to evaluate the inverse (0 < p <= 1;
+//	              p=0 returns A, p<=0 or p>1 ⇒ #NUM!)
+//	alpha       – first shape parameter (> 0)
+//	beta        – second shape parameter (> 0)
+//	A           – optional lower bound (default 0)
+//	B           – optional upper bound (default 1)
+//
+// Returns x such that BETA.DIST(x, alpha, beta, TRUE, A, B) = probability.
+
+func fnBetaInv(args []Value) (Value, error) {
+	if len(args) < 3 || len(args) > 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	p, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	alpha, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	bt, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	a := 0.0 // lower bound
+	b := 1.0 // upper bound
+	if len(args) >= 4 {
+		a, e = CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+	}
+	if len(args) >= 5 {
+		b, e = CoerceNum(args[4])
+		if e != nil {
+			return *e, nil
+		}
+	}
+
+	// Validate parameters.
+	if alpha <= 0 || bt <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if p <= 0 || p > 1 {
+		// Excel: probability <= 0 or > 1 ⇒ #NUM!
+		// But p == 0 returns A in practice.
+		if p == 0 {
+			return NumberVal(a), nil
+		}
+		return ErrorVal(ErrValNUM), nil
+	}
+	if a >= b {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// p == 1 → return B
+	if p == 1 {
+		return NumberVal(b), nil
+	}
+
+	// Find z in [0,1] such that regBetaInc(z, alpha, bt) = p,
+	// then transform back: x = a + z*(b-a).
+
+	// Initial guess: use the mean of the beta distribution as starting point.
+	z := alpha / (alpha + bt)
+
+	// Newton-Raphson iteration.
+	// f(z)  = regBetaInc(z, alpha, bt) - p
+	// f'(z) = betaPDF(z) = z^(alpha-1) * (1-z)^(bt-1) / B(alpha,bt)
+	lgA, _ := math.Lgamma(alpha)
+	lgB, _ := math.Lgamma(bt)
+	lgAB, _ := math.Lgamma(alpha + bt)
+	lbeta := lgA + lgB - lgAB
+
+	const maxIter = 200
+	const tol = 1e-12
+
+	for i := 0; i < maxIter; i++ {
+		cdf := regBetaInc(z, alpha, bt)
+		f := cdf - p
+
+		if math.Abs(f) < tol {
+			return NumberVal(a + z*(b-a)), nil
+		}
+
+		// Beta PDF as derivative of the CDF.
+		if z <= 0 || z >= 1 {
+			break // can't compute PDF at boundary; fall to bisection
+		}
+		logPdf := (alpha-1)*math.Log(z) + (bt-1)*math.Log(1-z) - lbeta
+		pdf := math.Exp(logPdf)
+
+		if pdf < 1e-300 {
+			break // PDF too small for Newton step; bisection fallback
+		}
+
+		step := f / pdf
+		zNew := z - step
+
+		// Keep z strictly in (0,1).
+		if zNew <= 0 {
+			z = z / 2
+		} else if zNew >= 1 {
+			z = (z + 1) / 2
+		} else {
+			z = zNew
+		}
+	}
+
+	// Bisection fallback on [0, 1].
+	lo := 0.0
+	hi := 1.0
+
+	for i := 0; i < maxIter; i++ {
+		mid := (lo + hi) / 2
+		cdf := regBetaInc(mid, alpha, bt)
+		if math.Abs(cdf-p) < tol {
+			return NumberVal(a + mid*(b-a)), nil
+		}
+		if cdf < p {
+			lo = mid
+		} else {
+			hi = mid
+		}
+		if (hi - lo) < tol {
+			return NumberVal(a + (lo+hi)/2*(b-a)), nil
+		}
+	}
+
+	return NumberVal(a + (lo+hi)/2*(b-a)), nil
+}
+
+// ---------------------------------------------------------------------------
+// HYPGEOM.DIST — Hypergeometric distribution (PMF or CDF)
+// ---------------------------------------------------------------------------
+
+func fnHypgeomDist(args []Value) (Value, error) {
+	if len(args) != 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	sampleSF, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	numberSampleF, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	populationSF, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	numberPopF, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	cumF, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate all to integers.
+	k := int(sampleSF)        // sample_s
+	n := int(numberSampleF)   // number_sample
+	bigM := int(populationSF) // population_s (M)
+	bigN := int(numberPopF)   // number_pop (N)
+
+	// Validate constraints.
+	if bigN <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if n <= 0 || n > bigN {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if bigM <= 0 || bigM > bigN {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// k must be >= 0 and <= min(n, M)
+	minNM := n
+	if bigM < minNM {
+		minNM = bigM
+	}
+	if k < 0 || k > minNM {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// k must be >= max(0, n + M - N)
+	lowerBound := 0
+	if n+bigM-bigN > 0 {
+		lowerBound = n + bigM - bigN
+	}
+	if k < lowerBound {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cumF != 0 {
+		// CDF: sum PMF from lowerBound to k.
+		sum := 0.0
+		for i := lowerBound; i <= k; i++ {
+			sum += hypgeomPMF(i, n, bigM, bigN)
+		}
+		return NumberVal(sum), nil
+	}
+	return NumberVal(hypgeomPMF(k, n, bigM, bigN)), nil
+}
+
+// hypgeomPMF returns the hypergeometric probability mass function:
+// P(X=k) = C(M,k) * C(N-M, n-k) / C(N, n)
+// Uses log-gamma for numerical stability with large values.
+func hypgeomPMF(k, n, bigM, bigN int) float64 {
+	// log(C(M,k))
+	lgM1, _ := math.Lgamma(float64(bigM + 1))
+	lgK1, _ := math.Lgamma(float64(k + 1))
+	lgMK1, _ := math.Lgamma(float64(bigM - k + 1))
+
+	// log(C(N-M, n-k))
+	lgNM1, _ := math.Lgamma(float64(bigN - bigM + 1))
+	lgNK1, _ := math.Lgamma(float64(n - k + 1))
+	lgNMNK1, _ := math.Lgamma(float64(bigN - bigM - n + k + 1))
+
+	// log(C(N, n))
+	lgN1, _ := math.Lgamma(float64(bigN + 1))
+	lgn1, _ := math.Lgamma(float64(n + 1))
+	lgNn1, _ := math.Lgamma(float64(bigN - n + 1))
+
+	logP := (lgM1 - lgK1 - lgMK1) + (lgNM1 - lgNK1 - lgNMNK1) - (lgN1 - lgn1 - lgNn1)
+	return math.Exp(logP)
+}
+
+// fnNegbinomDist implements NEGBINOM.DIST(number_f, number_s, probability_s, cumulative).
+// Returns the negative binomial distribution — the probability of number_f failures
+// before the number_s-th success, with probability_s chance of success on each trial.
+func fnNegbinomDist(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	ff, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	rf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	cum, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate to integers.
+	f := int(ff)
+	r := int(rf)
+
+	if f < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if r < 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if p < 0 || p > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	if cum != 0 {
+		// CDF: use the regularized incomplete beta function.
+		// CDF of NegBinom(f; r, p) = I_p(r, f+1)
+		return NumberVal(regBetaInc(p, float64(r), float64(f+1))), nil
+	}
+
+	// PMF: P(X=f) = C(f+r-1, r-1) * p^r * (1-p)^f
+	return NumberVal(negbinomPMF(f, r, p)), nil
+}
+
+// negbinomPMF returns the negative binomial PMF:
+// P(X=f) = C(f+r-1, r-1) * p^r * (1-p)^f
+// Uses log-gamma for numerical stability.
+func negbinomPMF(f, r int, p float64) float64 {
+	if p == 0 {
+		if f == 0 {
+			return 1
+		}
+		return 0
+	}
+	if p == 1 {
+		if f == 0 {
+			return 1
+		}
+		return 0
+	}
+	// log(C(f+r-1, r-1)) = lgamma(f+r) - lgamma(r) - lgamma(f+1)
+	lgFR, _ := math.Lgamma(float64(f + r))
+	lgR, _ := math.Lgamma(float64(r))
+	lgF1, _ := math.Lgamma(float64(f + 1))
+	logC := lgFR - lgR - lgF1
+	logProb := logC + float64(r)*math.Log(p) + float64(f)*math.Log(1-p)
+	return math.Exp(logProb)
 }

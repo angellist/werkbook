@@ -67,9 +67,9 @@ func TestCountBlank(t *testing.T) {
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(1),
 				// A2 is empty (missing)
-				{Col: 1, Row: 3}: StringVal(""),    // empty string = blank
+				{Col: 1, Row: 3}: StringVal(""), // empty string = blank
 				{Col: 1, Row: 4}: StringVal("hello"),
-				{Col: 1, Row: 5}: NumberVal(0),      // zero is not blank
+				{Col: 1, Row: 5}: NumberVal(0), // zero is not blank
 			},
 		}
 
@@ -325,6 +325,26 @@ func TestSUMIF(t *testing.T) {
 	}
 }
 
+func TestSUMIFPropagatesMatchedSumRangeError(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("East"),
+			{Col: 1, Row: 2}: StringVal("West"),
+			{Col: 2, Row: 1}: ErrorVal(ErrValNAME),
+			{Col: 2, Row: 2}: NumberVal(10),
+		},
+	}
+
+	cf := evalCompile(t, `SUMIF(A1:A2,"East",B1:B2)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNAME {
+		t.Fatalf(`SUMIF(A1:A2,"East",B1:B2) = %v, want #NAME?`, got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // COUNT – boolean handling
 // ---------------------------------------------------------------------------
@@ -488,39 +508,39 @@ func TestCOUNT(t *testing.T) {
 			expected: 3,
 		},
 		{
-			name:    "scalar number argument counted",
-			formula: "COUNT(42)",
-			cells:   map[CellAddr]Value{},
+			name:     "scalar number argument counted",
+			formula:  "COUNT(42)",
+			cells:    map[CellAddr]Value{},
 			expected: 1,
 		},
 		{
-			name:    "scalar string not counted",
-			formula: `COUNT("hello")`,
-			cells:   map[CellAddr]Value{},
+			name:     "scalar string not counted",
+			formula:  `COUNT("hello")`,
+			cells:    map[CellAddr]Value{},
 			expected: 0,
 		},
 		{
-			name:    "scalar boolean TRUE counted",
-			formula: "COUNT(TRUE)",
-			cells:   map[CellAddr]Value{},
+			name:     "scalar boolean TRUE counted",
+			formula:  "COUNT(TRUE)",
+			cells:    map[CellAddr]Value{},
 			expected: 1,
 		},
 		{
-			name:    "scalar boolean FALSE counted",
-			formula: "COUNT(FALSE)",
-			cells:   map[CellAddr]Value{},
+			name:     "scalar boolean FALSE counted",
+			formula:  "COUNT(FALSE)",
+			cells:    map[CellAddr]Value{},
 			expected: 1,
 		},
 		{
-			name:    "scalar string number counted",
-			formula: `COUNT("5")`,
-			cells:   map[CellAddr]Value{},
+			name:     "scalar string number counted",
+			formula:  `COUNT("5")`,
+			cells:    map[CellAddr]Value{},
 			expected: 1,
 		},
 		{
-			name:    "scalar non-numeric string not counted",
-			formula: `COUNT("abc")`,
-			cells:   map[CellAddr]Value{},
+			name:     "scalar non-numeric string not counted",
+			formula:  `COUNT("abc")`,
+			cells:    map[CellAddr]Value{},
 			expected: 0,
 		},
 		{
@@ -568,9 +588,9 @@ func TestCOUNT(t *testing.T) {
 			expected: 4,
 		},
 		{
-			name:    "mixed scalar args",
-			formula: `COUNT(1,2,"hi",TRUE,"3")`,
-			cells:   map[CellAddr]Value{},
+			name:     "mixed scalar args",
+			formula:  `COUNT(1,2,"hi",TRUE,"3")`,
+			cells:    map[CellAddr]Value{},
 			expected: 4, // 1, 2, TRUE, "3"
 		},
 	}
@@ -1317,10 +1337,10 @@ func TestCOUNTA(t *testing.T) {
 	t.Run("excel_doc_example", func(t *testing.T) {
 		r := &mockResolver{
 			cells: map[CellAddr]Value{
-				{Col: 1, Row: 1}: NumberVal(39790),   // date serial
-				{Col: 1, Row: 2}: NumberVal(19),       // integer
-				{Col: 1, Row: 3}: NumberVal(22.24),    // decimal
-				{Col: 1, Row: 4}: BoolVal(true),       // TRUE
+				{Col: 1, Row: 1}: NumberVal(39790),     // date serial
+				{Col: 1, Row: 2}: NumberVal(19),        // integer
+				{Col: 1, Row: 3}: NumberVal(22.24),     // decimal
+				{Col: 1, Row: 4}: BoolVal(true),        // TRUE
 				{Col: 1, Row: 5}: ErrorVal(ErrValDIV0), // #DIV/0!
 			},
 		}
@@ -1451,11 +1471,11 @@ func TestSUMIFS_AllComparisonOperators(t *testing.T) {
 		want    float64
 	}{
 		{"greater than", `SUMIFS(A1:A5,B1:B5,">30")`, 90},       // 40+50
-		{"less than", `SUMIFS(A1:A5,B1:B5,"<30")`, 30},           // 10+20
-		{"greater or equal", `SUMIFS(A1:A5,B1:B5,">=30")`, 120},  // 30+40+50
-		{"less or equal", `SUMIFS(A1:A5,B1:B5,"<=30")`, 60},      // 10+20+30
-		{"equal", `SUMIFS(A1:A5,B1:B5,"=30")`, 30},               // 30
-		{"not equal", `SUMIFS(A1:A5,B1:B5,"<>30")`, 120},         // 10+20+40+50
+		{"less than", `SUMIFS(A1:A5,B1:B5,"<30")`, 30},          // 10+20
+		{"greater or equal", `SUMIFS(A1:A5,B1:B5,">=30")`, 120}, // 30+40+50
+		{"less or equal", `SUMIFS(A1:A5,B1:B5,"<=30")`, 60},     // 10+20+30
+		{"equal", `SUMIFS(A1:A5,B1:B5,"=30")`, 30},              // 30
+		{"not equal", `SUMIFS(A1:A5,B1:B5,"<>30")`, 120},        // 10+20+40+50
 	}
 
 	for _, tt := range tests {
@@ -2372,12 +2392,12 @@ func TestAVERAGEIF_ComparisonOperators(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		{"greater than", `AVERAGEIF(A1:A5,">25")`, 40},           // 30+40+50 = 120/3
-		{"less than", `AVERAGEIF(A1:A5,"<25")`, 15},              // 10+20 = 30/2
-		{"greater or equal", `AVERAGEIF(A1:A5,">=30")`, 40},      // 30+40+50 = 120/3
-		{"less or equal", `AVERAGEIF(A1:A5,"<=20")`, 15},         // 10+20 = 30/2
-		{"equal operator", `AVERAGEIF(A1:A5,"=30")`, 30},         // 30/1
-		{"not equal", `AVERAGEIF(A1:A5,"<>30")`, 30},             // 10+20+40+50 = 120/4
+		{"greater than", `AVERAGEIF(A1:A5,">25")`, 40},      // 30+40+50 = 120/3
+		{"less than", `AVERAGEIF(A1:A5,"<25")`, 15},         // 10+20 = 30/2
+		{"greater or equal", `AVERAGEIF(A1:A5,">=30")`, 40}, // 30+40+50 = 120/3
+		{"less or equal", `AVERAGEIF(A1:A5,"<=20")`, 15},    // 10+20 = 30/2
+		{"equal operator", `AVERAGEIF(A1:A5,"=30")`, 30},    // 30/1
+		{"not equal", `AVERAGEIF(A1:A5,"<>30")`, 30},        // 10+20+40+50 = 120/4
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -3000,7 +3020,7 @@ func TestSUMIF_AllComparisonOperators(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		{"greater than", `SUMIF(A1:A5,">30")`, 90},      // 40+50
+		{"greater than", `SUMIF(A1:A5,">30")`, 90},       // 40+50
 		{"less than", `SUMIF(A1:A5,"<30")`, 30},          // 10+20
 		{"greater or equal", `SUMIF(A1:A5,">=30")`, 120}, // 30+40+50
 		{"less or equal", `SUMIF(A1:A5,"<=30")`, 60},     // 10+20+30
@@ -13059,4 +13079,3983 @@ func TestMEDIAN(t *testing.T) {
 
 	_ = numResolver // suppress unused if only direct-arg tests
 	_ = valResolver
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.DIST
+// ---------------------------------------------------------------------------
+
+func TestBINOM_DIST(t *testing.T) {
+	const tol = 1e-9
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF
+		{"pmf_basic", "BINOM.DIST(6,10,0.5,FALSE)", 0.205078125, false, 0},
+
+		// Basic CDF
+		{"cdf_basic", "BINOM.DIST(6,10,0.5,TRUE)", 0.828125, false, 0},
+
+		// All successes PMF
+		{"pmf_all_success", "BINOM.DIST(10,10,0.5,FALSE)", 0.0009765625, false, 0},
+
+		// Zero successes PMF
+		{"pmf_zero_success", "BINOM.DIST(0,10,0.5,FALSE)", 0.0009765625, false, 0},
+
+		// Probability 0, zero successes
+		{"pmf_p0_k0", "BINOM.DIST(0,10,0,FALSE)", 1, false, 0},
+
+		// Probability 1, all successes
+		{"pmf_p1_kn", "BINOM.DIST(10,10,1,FALSE)", 1, false, 0},
+
+		// Probability 0, nonzero successes
+		{"pmf_p0_k5", "BINOM.DIST(5,10,0,FALSE)", 0, false, 0},
+
+		// Probability 1, partial successes
+		{"pmf_p1_k5", "BINOM.DIST(5,10,1,FALSE)", 0, false, 0},
+
+		// CDF at max
+		{"cdf_at_max", "BINOM.DIST(10,10,0.5,TRUE)", 1, false, 0},
+
+		// CDF at 0
+		{"cdf_at_zero", "BINOM.DIST(0,10,0.5,TRUE)", 0.0009765625, false, 0},
+
+		// Truncation: 6.9 -> 6, 10.7 -> 10
+		{"truncation", "BINOM.DIST(6.9,10.7,0.5,FALSE)", 0.205078125, false, 0},
+
+		// Small probability
+		{"small_prob", "BINOM.DIST(1,100,0.01,FALSE)", 0.369729637650, false, 0},
+
+		// Large trials PMF
+		{"large_trials_pmf", "BINOM.DIST(50,100,0.5,FALSE)", 0.079589237387, false, 0},
+
+		// Single trial PMF
+		{"single_trial_pmf", "BINOM.DIST(1,1,0.5,FALSE)", 0.5, false, 0},
+
+		// Single trial CDF at 0
+		{"single_trial_cdf_0", "BINOM.DIST(0,1,0.5,TRUE)", 0.5, false, 0},
+
+		// CDF with p=0
+		{"cdf_p0_k5", "BINOM.DIST(5,10,0,TRUE)", 1, false, 0},
+
+		// CDF with p=1
+		{"cdf_p1_k5", "BINOM.DIST(5,10,1,TRUE)", 0, false, 0},
+
+		// CDF with p=1, k=n
+		{"cdf_p1_kn", "BINOM.DIST(10,10,1,TRUE)", 1, false, 0},
+
+		// CDF with p=0, k=0
+		{"cdf_p0_k0", "BINOM.DIST(0,10,0,TRUE)", 1, false, 0},
+
+		// Asymmetric probability PMF
+		{"pmf_asym_prob", "BINOM.DIST(3,10,0.25,FALSE)", 0.250282287598, false, 0},
+
+		// Single trial CDF at 1
+		{"single_trial_cdf_1", "BINOM.DIST(1,1,0.5,TRUE)", 1, false, 0},
+
+		// Zero trials
+		{"zero_trials", "BINOM.DIST(0,0,0.5,FALSE)", 1, false, 0},
+
+		// Error: number_s negative
+		{"err_neg_k", "BINOM.DIST(-1,10,0.5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_s > trials
+		{"err_k_gt_n", "BINOM.DIST(11,10,0.5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability < 0
+		{"err_p_neg", "BINOM.DIST(5,10,-0.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability > 1
+		{"err_p_gt1", "BINOM.DIST(5,10,1.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric", `BINOM.DIST("abc",10,0.5,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric2", `BINOM.DIST(5,"abc",0.5,FALSE)`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBINOM_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "BINOM.DIST(5,10,0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST(5,10,0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "BINOM.DIST(5,10,0.5,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST(5,10,0.5,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(BINOM.DIST(5,10,0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(BINOM.DIST(5,10,0.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestPOISSON_DIST(t *testing.T) {
+	const tol = 1e-6
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF
+		{"pmf_basic", "POISSON.DIST(2,5,FALSE)", 0.084224, false, 0},
+
+		// Basic CDF
+		{"cdf_basic", "POISSON.DIST(2,5,TRUE)", 0.124652, false, 0},
+
+		// Zero events PMF: e^(-5)
+		{"pmf_zero_events", "POISSON.DIST(0,5,FALSE)", 0.006738, false, 0},
+
+		// Zero events CDF (same as PMF when x=0)
+		{"cdf_zero_events", "POISSON.DIST(0,5,TRUE)", 0.006738, false, 0},
+
+		// Mean 0, x=0, PMF: should be 1
+		{"pmf_mean0_x0", "POISSON.DIST(0,0,FALSE)", 1, false, 0},
+
+		// Mean 0, x>0, PMF: should be 0
+		{"pmf_mean0_x5", "POISSON.DIST(5,0,FALSE)", 0, false, 0},
+
+		// Mean 0, CDF: should be 1
+		{"cdf_mean0_x0", "POISSON.DIST(0,0,TRUE)", 1, false, 0},
+
+		// Mean 0, x>0, CDF: should be 1
+		{"cdf_mean0_x5", "POISSON.DIST(5,0,TRUE)", 1, false, 0},
+
+		// Large x CDF approaching 1
+		{"cdf_large_x", "POISSON.DIST(20,5,TRUE)", 1.0, false, 0},
+
+		// Truncation: 2.9 → 2
+		{"truncation", "POISSON.DIST(2.9,5,FALSE)", 0.084224, false, 0},
+
+		// Mean 1, x=1, PMF: 1 * e^(-1) / 1! = e^(-1)
+		{"pmf_mean1_x1", "POISSON.DIST(1,1,FALSE)", 0.367879, false, 0},
+
+		// Mean 1, x=1, CDF: P(0) + P(1) = e^(-1) + e^(-1) = 2*e^(-1)
+		{"cdf_mean1_x1", "POISSON.DIST(1,1,TRUE)", 0.735759, false, 0},
+
+		// Small mean: P(0; 0.1) = e^(-0.1)
+		{"pmf_small_mean", "POISSON.DIST(0,0.1,FALSE)", 0.904837, false, 0},
+
+		// Large mean: P(10; 10)
+		{"pmf_large_mean", "POISSON.DIST(10,10,FALSE)", 0.12511, false, 0},
+
+		// Single event: P(1; 0.5) = 0.5 * e^(-0.5)
+		{"pmf_single_event", "POISSON.DIST(1,0.5,FALSE)", 0.303265, false, 0},
+
+		// Large x PMF: P(10; 5)
+		{"pmf_large_x", "POISSON.DIST(10,5,FALSE)", 0.018133, false, 0},
+
+		// CDF x=5, mean=5
+		{"cdf_x5_mean5", "POISSON.DIST(5,5,TRUE)", 0.615961, false, 0},
+
+		// PMF x=0, mean=1: e^(-1)
+		{"pmf_x0_mean1", "POISSON.DIST(0,1,FALSE)", 0.367879, false, 0},
+
+		// CDF x=0, mean=1: e^(-1)
+		{"cdf_x0_mean1", "POISSON.DIST(0,1,TRUE)", 0.367879, false, 0},
+
+		// PMF x=3, mean=2
+		{"pmf_x3_mean2", "POISSON.DIST(3,2,FALSE)", 0.180447, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "POISSON.DIST(-1,5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: mean < 0
+		{"err_neg_mean", "POISSON.DIST(2,-1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric x
+		{"err_non_numeric_x", `POISSON.DIST("abc",5,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric mean
+		{"err_non_numeric_mean", `POISSON.DIST(2,"abc",FALSE)`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestPOISSON_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "POISSON.DIST(2,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("POISSON.DIST(2,5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "POISSON.DIST(2,5,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("POISSON.DIST(2,5,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(POISSON.DIST(2,5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(POISSON.DIST(2,5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// EXPON.DIST
+// ---------------------------------------------------------------------------
+
+func TestEXPON_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// PDF tests
+		{"pdf_basic", "EXPON.DIST(0.2,10,FALSE)", 1.353352832, false, 0},
+		{"pdf_x0", "EXPON.DIST(0,10,FALSE)", 10, false, 0},
+		{"pdf_lambda1_x1", "EXPON.DIST(1,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_large_x", "EXPON.DIST(10,1,FALSE)", 0.0000453999, false, 0},
+		{"pdf_small_lambda", "EXPON.DIST(1,0.1,FALSE)", 0.090483742, false, 0},
+		{"pdf_large_lambda", "EXPON.DIST(0.01,100,FALSE)", 36.78794412, false, 0},
+		{"pdf_x05_lambda2", "EXPON.DIST(0.5,2,FALSE)", 0.735758882, false, 0},
+		{"pdf_x1_lambda05", "EXPON.DIST(1,0.5,FALSE)", 0.303265330, false, 0},
+		{"pdf_x2_lambda3", "EXPON.DIST(2,3,FALSE)", 0.007436478, false, 0},
+		{"pdf_x001_lambda1", "EXPON.DIST(0.01,1,FALSE)", 0.990049834, false, 0},
+
+		// CDF tests
+		{"cdf_basic", "EXPON.DIST(0.2,10,TRUE)", 0.864664717, false, 0},
+		{"cdf_x0", "EXPON.DIST(0,10,TRUE)", 0, false, 0},
+		{"cdf_lambda1_x1", "EXPON.DIST(1,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_large_x", "EXPON.DIST(10,1,TRUE)", 0.999954600, false, 0},
+		{"cdf_small_lambda", "EXPON.DIST(1,0.1,TRUE)", 0.095162582, false, 0},
+		{"cdf_large_lambda", "EXPON.DIST(0.01,100,TRUE)", 0.632120559, false, 0},
+		{"cdf_x05_lambda2", "EXPON.DIST(0.5,2,TRUE)", 0.632120559, false, 0},
+		{"cdf_x1_lambda05", "EXPON.DIST(1,0.5,TRUE)", 0.393469340, false, 0},
+		{"cdf_x5_lambda1", "EXPON.DIST(5,1,TRUE)", 0.993262053, false, 0},
+		{"cdf_x001_lambda1", "EXPON.DIST(0.01,1,TRUE)", 0.009950166, false, 0},
+
+		// Error cases
+		{"err_neg_x", "EXPON.DIST(-1,10,FALSE)", 0, true, ErrValNUM},
+		{"err_lambda_zero", "EXPON.DIST(1,0,FALSE)", 0, true, ErrValNUM},
+		{"err_lambda_neg", "EXPON.DIST(1,-1,FALSE)", 0, true, ErrValNUM},
+		{"err_non_numeric_x", `EXPON.DIST("abc",10,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_lambda", `EXPON.DIST(1,"abc",FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `EXPON.DIST(1,10,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestEXPON_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "EXPON.DIST(0.2,10)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("EXPON.DIST(0.2,10) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "EXPON.DIST(0.2,10,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("EXPON.DIST(0.2,10,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(EXPON.DIST(0.2,10),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(EXPON.DIST(0.2,10),"err") = %v, want string "err"`, got)
+	}
+}
+
+// WEIBULL.DIST
+// ---------------------------------------------------------------------------
+
+func TestWEIBULL_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// PDF tests
+		{"pdf_basic", "WEIBULL.DIST(105,20,100,FALSE)", 0.035589, false, 0},
+		{"pdf_alpha1_beta1_x1", "WEIBULL.DIST(1,1,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha2_beta1_x1", "WEIBULL.DIST(1,2,1,FALSE)", 0.735758882, false, 0},
+		{"pdf_alpha1_beta2_x1", "WEIBULL.DIST(1,1,2,FALSE)", 0.303265330, false, 0},
+		{"pdf_alpha3_beta1_x05", "WEIBULL.DIST(0.5,3,1,FALSE)", 0.661873, false, 0},
+		{"pdf_alpha05_beta1_x1", "WEIBULL.DIST(1,0.5,1,FALSE)", 0.183939721, false, 0},
+		{"pdf_alpha10_beta5_x5", "WEIBULL.DIST(5,10,5,FALSE)", 0.735758882, false, 0},
+		{"pdf_large_alpha", "WEIBULL.DIST(1,10,1,FALSE)", 3.678794412, false, 0},
+
+		// PDF x=0 edge cases
+		{"pdf_x0_alpha1", "WEIBULL.DIST(0,1,2,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha2", "WEIBULL.DIST(0,2,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha3", "WEIBULL.DIST(0,3,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha05", "WEIBULL.DIST(0,0.5,1,FALSE)", 0, false, 0},
+
+		// CDF tests
+		{"cdf_basic", "WEIBULL.DIST(105,20,100,TRUE)", 0.929581, false, 0},
+		{"cdf_alpha1_beta1_x1", "WEIBULL.DIST(1,1,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha2_beta1_x1", "WEIBULL.DIST(1,2,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha1_beta2_x1", "WEIBULL.DIST(1,1,2,TRUE)", 0.393469340, false, 0},
+		{"cdf_x0", "WEIBULL.DIST(0,2,1,TRUE)", 0, false, 0},
+		{"cdf_x0_alpha1", "WEIBULL.DIST(0,1,1,TRUE)", 0, false, 0},
+		{"cdf_large_x", "WEIBULL.DIST(10,1,1,TRUE)", 0.999954600, false, 0},
+		{"cdf_small_x", "WEIBULL.DIST(0.01,1,1,TRUE)", 0.009950166, false, 0},
+		{"cdf_alpha10_beta5_x5", "WEIBULL.DIST(5,10,5,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha05_beta2_x3", "WEIBULL.DIST(3,0.5,2,TRUE)", 0.706167, false, 0},
+
+		// Error cases
+		{"err_neg_x", "WEIBULL.DIST(-1,1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_zero", "WEIBULL.DIST(1,0,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "WEIBULL.DIST(1,-1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_zero", "WEIBULL.DIST(1,1,0,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg", "WEIBULL.DIST(1,1,-1,FALSE)", 0, true, ErrValNUM},
+		{"err_non_numeric_x", `WEIBULL.DIST("abc",1,1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `WEIBULL.DIST(1,"abc",1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `WEIBULL.DIST(1,1,"abc",FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `WEIBULL.DIST(1,1,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestWEIBULL_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "WEIBULL.DIST(1,1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("WEIBULL.DIST(1,1,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "WEIBULL.DIST(1,1,1,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("WEIBULL.DIST(1,1,1,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(WEIBULL.DIST(1,1,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(WEIBULL.DIST(1,1,1),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// LOGNORM.DIST
+// ---------------------------------------------------------------------------
+
+func TestLOGNORMDIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		want      float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// CDF tests
+		{"cdf_excel_example", "LOGNORM.DIST(4,3.5,1.2,TRUE)", 0.0390836, false, 0},
+		{"cdf_x1_mean0_sd1", "LOGNORM.DIST(1,0,1,TRUE)", 0.5, false, 0},
+		{"cdf_x1_mean0_sd05", "LOGNORM.DIST(1,0,0.5,TRUE)", 0.5, false, 0},
+		{"cdf_large_x", "LOGNORM.DIST(1000,0,1,TRUE)", 1.0, false, 0},
+		{"cdf_small_x", "LOGNORM.DIST(0.001,0,1,TRUE)", 0.0, false, 0},
+		{"cdf_neg_mean", "LOGNORM.DIST(1,-1,1,TRUE)", 0.841345, false, 0},
+		{"cdf_large_mean", "LOGNORM.DIST(10,5,2,TRUE)", 0.088715, false, 0},
+		{"cdf_small_sd", "LOGNORM.DIST(2.7183,1,0.01,TRUE)", 0.500267, false, 0},
+		{"cdf_x_exp_mean", "LOGNORM.DIST(7.389056,2,1,TRUE)", 0.5, false, 0},
+		{"cdf_mean2_sd05", "LOGNORM.DIST(10,2,0.5,TRUE)", 0.727467, false, 0},
+
+		// PDF tests
+		{"pdf_excel_example", "LOGNORM.DIST(4,3.5,1.2,FALSE)", 0.0176176, false, 0},
+		{"pdf_x1_mean0_sd1", "LOGNORM.DIST(1,0,1,FALSE)", 0.398942, false, 0},
+		{"pdf_x1_mean0_sd05", "LOGNORM.DIST(1,0,0.5,FALSE)", 0.797885, false, 0},
+		{"pdf_neg_mean", "LOGNORM.DIST(1,-1,1,FALSE)", 0.241971, false, 0},
+		{"pdf_x2_mean0_sd1", "LOGNORM.DIST(2,0,1,FALSE)", 0.156874, false, 0},
+		{"pdf_x05_mean0_sd1", "LOGNORM.DIST(0.5,0,1,FALSE)", 0.627496, false, 0},
+		{"pdf_large_x", "LOGNORM.DIST(100,0,1,FALSE)", 0.0000000990, false, 0},
+		{"pdf_small_x", "LOGNORM.DIST(0.01,0,1,FALSE)", 0.0009902387, false, 0},
+		{"pdf_mean2_sd05", "LOGNORM.DIST(10,2,0.5,FALSE)", 0.0664376, false, 0},
+
+		// Error cases
+		{"err_x_zero", "LOGNORM.DIST(0,0,1,TRUE)", 0, true, ErrValNUM},
+		{"err_x_neg", "LOGNORM.DIST(-1,0,1,TRUE)", 0, true, ErrValNUM},
+		{"err_stdev_zero", "LOGNORM.DIST(1,0,0,TRUE)", 0, true, ErrValNUM},
+		{"err_stdev_neg", "LOGNORM.DIST(1,0,-1,TRUE)", 0, true, ErrValNUM},
+		{"err_non_numeric_x", `LOGNORM.DIST("abc",0,1,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_mean", `LOGNORM.DIST(1,"abc",1,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_stdev", `LOGNORM.DIST(1,0,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `LOGNORM.DIST(1,0,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error %d", tt.formula, got, tt.wantErr)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s error = %d, want %d", tt.formula, got.Err, tt.wantErr)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number", tt.formula, got, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestLOGNORMDIST_ArgCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "LOGNORM.DIST(4,3.5,1.2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("LOGNORM.DIST(4,3.5,1.2) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "LOGNORM.DIST(4,3.5,1.2,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("LOGNORM.DIST(4,3.5,1.2,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(LOGNORM.DIST(4,3.5,1.2),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(LOGNORM.DIST(4,3.5,1.2),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestLOGNORMDIST_CDFPDFRelation(t *testing.T) {
+	// Verify that CDF at x=1, mean=0, stddev=1 is exactly 0.5
+	// since ln(1) = 0, so z = (0-0)/1 = 0, and Φ(0) = 0.5
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "LOGNORM.DIST(1,0,1,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("expected number, got type %d", got.Type)
+	}
+	if got.Num != 0.5 {
+		t.Errorf("LOGNORM.DIST(1,0,1,TRUE) = %g, want exactly 0.5", got.Num)
+	}
+
+	// For any mean μ, LOGNORM.DIST(exp(μ), μ, σ, TRUE) should be 0.5
+	// because ln(exp(μ)) = μ, so z = (μ-μ)/σ = 0, Φ(0) = 0.5
+	cases := []struct {
+		mean  float64
+		stdev float64
+	}{
+		{0, 1},
+		{1, 2},
+		{-1, 0.5},
+		{5, 3},
+		{0.5, 0.1},
+	}
+	for _, tc := range cases {
+		x := math.Exp(tc.mean)
+		formula := fmt.Sprintf("LOGNORM.DIST(%g,%g,%g,TRUE)", x, tc.mean, tc.stdev)
+		t.Run(fmt.Sprintf("cdf_half_mean%g_sd%g", tc.mean, tc.stdev), func(t *testing.T) {
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("expected number, got type %d", got.Type)
+			}
+			if math.Abs(got.Num-0.5) > 1e-10 {
+				t.Errorf("%s = %g, want 0.5", formula, got.Num)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// LOGNORM.INV
+// ---------------------------------------------------------------------------
+
+func TestLOGNORMINV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		want      float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic cases
+		{"excel_example", "LOGNORM.INV(0.039084,3.5,1.2)", 4.0000252, false, 0},
+		{"median_mean0_sd1", "LOGNORM.INV(0.5,0,1)", 1.0, false, 0},
+		{"median_mean1_sd1", "LOGNORM.INV(0.5,1,1)", 2.718282, false, 0},
+		{"median_mean2_sd1", "LOGNORM.INV(0.5,2,1)", 7.389056, false, 0},
+		{"median_mean0_sd05", "LOGNORM.INV(0.5,0,0.5)", 1.0, false, 0},
+		{"neg_mean", "LOGNORM.INV(0.5,-1,1)", 0.367879, false, 0},
+		{"large_stddev", "LOGNORM.INV(0.5,0,5)", 1.0, false, 0},
+
+		// Small and large probabilities
+		{"small_p_0.01", "LOGNORM.INV(0.01,0,1)", 0.097652, false, 0},
+		{"large_p_0.99", "LOGNORM.INV(0.99,0,1)", 10.24047, false, 0},
+		{"small_p_0.001", "LOGNORM.INV(0.001,0,1)", 0.045491, false, 0},
+		{"large_p_0.999", "LOGNORM.INV(0.999,0,1)", 21.98218, false, 0},
+		{"p_0.1", "LOGNORM.INV(0.1,0,1)", 0.277606, false, 0},
+		{"p_0.9", "LOGNORM.INV(0.9,0,1)", 3.602224, false, 0},
+		{"p_0.25", "LOGNORM.INV(0.25,0,1)", 0.509416, false, 0},
+		{"p_0.75", "LOGNORM.INV(0.75,0,1)", 1.963031, false, 0},
+
+		// Various mean/stdev combinations
+		{"mean3_sd2", "LOGNORM.INV(0.5,3,2)", 20.08554, false, 0},
+		{"mean5_sd05", "LOGNORM.INV(0.5,5,0.5)", 148.41316, false, 0},
+		{"neg_mean2", "LOGNORM.INV(0.5,-2,1)", 0.135335, false, 0},
+		{"mean0_sd01", "LOGNORM.INV(0.5,0,0.1)", 1.0, false, 0},
+
+		// Error cases
+		{"err_p_zero", "LOGNORM.INV(0,0,1)", 0, true, ErrValNUM},
+		{"err_p_one", "LOGNORM.INV(1,0,1)", 0, true, ErrValNUM},
+		{"err_p_neg", "LOGNORM.INV(-0.5,0,1)", 0, true, ErrValNUM},
+		{"err_p_gt1", "LOGNORM.INV(1.5,0,1)", 0, true, ErrValNUM},
+		{"err_stdev_zero", "LOGNORM.INV(0.5,0,0)", 0, true, ErrValNUM},
+		{"err_stdev_neg", "LOGNORM.INV(0.5,0,-1)", 0, true, ErrValNUM},
+		{"err_non_numeric_p", `LOGNORM.INV("abc",0,1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_mean", `LOGNORM.INV(0.5,"abc",1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_stdev", `LOGNORM.INV(0.5,0,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error %d", tt.formula, got, tt.wantErr)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s error = %d, want %d", tt.formula, got.Err, tt.wantErr)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number", tt.formula, got, got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestLOGNORMINV_ArgCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "LOGNORM.INV(0.5,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("LOGNORM.INV(0.5,0) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "LOGNORM.INV(0.5,0,1,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("LOGNORM.INV(0.5,0,1,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(LOGNORM.INV(0.5,0),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(LOGNORM.INV(0.5,0),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestLOGNORMINV_RoundTrip(t *testing.T) {
+	// Verify LOGNORM.INV(LOGNORM.DIST(x, μ, σ, TRUE), μ, σ) ≈ x
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x, mean, stdev float64
+	}{
+		{4, 3.5, 1.2},
+		{1, 0, 1},
+		{10, 2, 0.5},
+		{0.5, -1, 2},
+		{100, 5, 1},
+	}
+
+	for _, tc := range cases {
+		formula := fmt.Sprintf("LOGNORM.INV(LOGNORM.DIST(%g,%g,%g,TRUE),%g,%g)",
+			tc.x, tc.mean, tc.stdev, tc.mean, tc.stdev)
+		t.Run(fmt.Sprintf("x%g_mean%g_sd%g", tc.x, tc.mean, tc.stdev), func(t *testing.T) {
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("expected number, got type %d", got.Type)
+			}
+			if math.Abs(got.Num-tc.x) > 1e-4 {
+				t.Errorf("%s = %g, want %g", formula, got.Num, tc.x)
+			}
+		})
+	}
+}
+
+// GAMMA.DIST
+// ---------------------------------------------------------------------------
+
+func TestGAMMA_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// PDF tests
+		{"pdf_basic", "GAMMA.DIST(10.00001131,9,2,FALSE)", 0.032639, false, 0},
+		{"pdf_x0_alpha1", "GAMMA.DIST(0,1,1,FALSE)", 0, true, ErrValNUM},
+		{"pdf_x0_alpha2", "GAMMA.DIST(0,2,1,FALSE)", 0, false, 0},
+		{"pdf_x0_alpha1_beta2", "GAMMA.DIST(0,1,2,FALSE)", 0, true, ErrValNUM},
+		{"pdf_exponential", "GAMMA.DIST(1,1,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha2_beta1", "GAMMA.DIST(1,2,1,FALSE)", 0.367879441, false, 0},
+		{"pdf_alpha3_beta1", "GAMMA.DIST(2,3,1,FALSE)", 0.270670566, false, 0},
+		{"pdf_alpha_half", "GAMMA.DIST(1,0.5,1,FALSE)", 0.207553749, false, 0},
+		{"pdf_alpha2_beta3", "GAMMA.DIST(5,2,3,FALSE)", 0.104930890, false, 0},
+		{"pdf_large_x", "GAMMA.DIST(20,5,2,FALSE)", 0.009458319, false, 0},
+		{"pdf_small_x", "GAMMA.DIST(0.1,2,1,FALSE)", 0.090483742, false, 0},
+		{"pdf_alpha05_beta2", "GAMMA.DIST(0.5,0.5,2,FALSE)", 0.439391289, false, 0},
+
+		// CDF tests
+		{"cdf_basic", "GAMMA.DIST(10.00001131,9,2,TRUE)", 0.068094, false, 0},
+		{"cdf_x0", "GAMMA.DIST(0,2,1,TRUE)", 0, false, 0},
+		{"cdf_exponential", "GAMMA.DIST(1,1,1,TRUE)", 0.632120559, false, 0},
+		{"cdf_alpha2_beta1", "GAMMA.DIST(1,2,1,TRUE)", 0.264241118, false, 0},
+		{"cdf_alpha3_beta1", "GAMMA.DIST(2,3,1,TRUE)", 0.323323584, false, 0},
+		{"cdf_standard_gamma", "GAMMA.DIST(2,3,1,TRUE)", 0.323323584, false, 0},
+		{"cdf_alpha2_beta3", "GAMMA.DIST(5,2,3,TRUE)", 0.496331726, false, 0},
+		{"cdf_large_x", "GAMMA.DIST(50,5,2,TRUE)", 0.999999733, false, 0},
+		{"cdf_alpha_half", "GAMMA.DIST(1,0.5,1,TRUE)", 0.842700793, false, 0},
+		{"cdf_alpha1_beta1_x2", "GAMMA.DIST(2,1,1,TRUE)", 0.864664717, false, 0},
+		{"cdf_alpha05_beta2", "GAMMA.DIST(0.5,0.5,2,TRUE)", 0.520499878, false, 0},
+		{"cdf_alpha10_beta05", "GAMMA.DIST(3,10,0.5,TRUE)", 0.083924017, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "GAMMA.DIST(-1,9,2,FALSE)", 0, true, ErrValNUM},
+		{"err_neg_x_cdf", "GAMMA.DIST(-0.001,1,1,TRUE)", 0, true, ErrValNUM},
+
+		// Error: alpha <= 0
+		{"err_alpha_zero", "GAMMA.DIST(1,0,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "GAMMA.DIST(1,-1,1,FALSE)", 0, true, ErrValNUM},
+		{"err_alpha_neg2", "GAMMA.DIST(1,-0.5,1,TRUE)", 0, true, ErrValNUM},
+
+		// Error: beta <= 0
+		{"err_beta_zero", "GAMMA.DIST(1,1,0,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg", "GAMMA.DIST(1,1,-1,FALSE)", 0, true, ErrValNUM},
+		{"err_beta_neg2", "GAMMA.DIST(1,1,-0.5,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `GAMMA.DIST("abc",1,1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `GAMMA.DIST(1,"abc",1,FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `GAMMA.DIST(1,1,"abc",FALSE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `GAMMA.DIST(1,1,1,"abc")`, 0, true, ErrValVALUE},
+
+		// x=0 with alpha < 1 (PDF diverges)
+		{"err_x0_alpha_lt1_pdf", "GAMMA.DIST(0,0.5,1,FALSE)", 0, true, ErrValNUM},
+
+		// x=0 CDF always 0
+		{"cdf_x0_alpha1", "GAMMA.DIST(0,1,1,TRUE)", 0, false, 0},
+		{"cdf_x0_alpha05", "GAMMA.DIST(0,0.5,1,TRUE)", 0, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestGAMMA_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "GAMMA.DIST(1,1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.DIST(1,1,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "GAMMA.DIST(1,1,1,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.DIST(1,1,1,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(GAMMA.DIST(1,1,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(GAMMA.DIST(1,1,1),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GAMMA.INV
+// ---------------------------------------------------------------------------
+
+func TestGAMMA_INV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic case from spec
+		{"basic", "GAMMA.INV(0.068094,9,2)", 10.0000112, false, 0},
+
+		// Exponential distribution (alpha=1): median = ln(2) ≈ 0.693147
+		{"exp_median", "GAMMA.INV(0.5,1,1)", 0.693147, false, 0},
+
+		// Gamma(2,1): median ≈ 1.678347
+		{"gamma2_1_median", "GAMMA.INV(0.5,2,1)", 1.678347, false, 0},
+
+		// Gamma(5,2): median
+		{"gamma5_2_median", "GAMMA.INV(0.5,5,2)", 9.341818, false, 0},
+
+		// Probability 0 → returns 0
+		{"p_zero", "GAMMA.INV(0,2,1)", 0, false, 0},
+
+		// Small probability
+		{"small_p", "GAMMA.INV(0.01,1,1)", 0.010050, false, 0},
+
+		// Large probability
+		{"large_p", "GAMMA.INV(0.99,1,1)", 4.605170, false, 0},
+
+		// Alpha=1 (exponential): GAMMA.INV(1 - e^(-1), 1, 1) ≈ 1
+		{"exp_at_1", "GAMMA.INV(0.632121,1,1)", 1.000001, false, 0},
+
+		// Beta scaling: GAMMA.INV(p, a, b) = b * GAMMA.INV(p, a, 1)
+		{"beta_scale", "GAMMA.INV(0.5,2,3)", 5.035042, false, 0},
+
+		// Standard gamma (beta=1) various alpha values
+		{"std_alpha3", "GAMMA.INV(0.5,3,1)", 2.674060, false, 0},
+		{"std_alpha10", "GAMMA.INV(0.5,10,1)", 9.668715, false, 0},
+		{"std_alpha05", "GAMMA.INV(0.5,0.5,1)", 0.227468, false, 0},
+
+		// Small alpha
+		{"small_alpha", "GAMMA.INV(0.5,0.1,1)", 0.000593, false, 0},
+
+		// Large alpha
+		{"large_alpha", "GAMMA.INV(0.5,100,1)", 99.666865, false, 0},
+
+		// Large beta
+		{"large_beta", "GAMMA.INV(0.5,2,100)", 167.834699, false, 0},
+
+		// Various probabilities with alpha=3, beta=2
+		{"a3b2_p01", "GAMMA.INV(0.1,3,2)", 2.204133, false, 0},
+		{"a3b2_p025", "GAMMA.INV(0.25,3,2)", 3.454599, false, 0},
+		{"a3b2_p075", "GAMMA.INV(0.75,3,2)", 7.840804, false, 0},
+		{"a3b2_p09", "GAMMA.INV(0.9,3,2)", 10.644644, false, 0},
+
+		// Very small probability
+		{"very_small_p", "GAMMA.INV(0.001,2,1)", 0.045402, false, 0},
+
+		// Very large probability
+		{"very_large_p", "GAMMA.INV(0.999,2,1)", 9.233413, false, 0},
+
+		// Error: probability < 0
+		{"err_p_neg", "GAMMA.INV(-0.1,2,1)", 0, true, ErrValNUM},
+
+		// Error: probability > 1
+		{"err_p_gt1", "GAMMA.INV(1.5,2,1)", 0, true, ErrValNUM},
+
+		// Error: probability = 1 (Excel returns #NUM!)
+		{"err_p_one", "GAMMA.INV(1,2,1)", 0, true, ErrValNUM},
+
+		// Error: alpha = 0
+		{"err_alpha_zero", "GAMMA.INV(0.5,0,1)", 0, true, ErrValNUM},
+
+		// Error: alpha < 0
+		{"err_alpha_neg", "GAMMA.INV(0.5,-1,1)", 0, true, ErrValNUM},
+
+		// Error: beta = 0
+		{"err_beta_zero", "GAMMA.INV(0.5,2,0)", 0, true, ErrValNUM},
+
+		// Error: beta < 0
+		{"err_beta_neg", "GAMMA.INV(0.5,2,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric arguments
+		{"err_non_numeric_p", `GAMMA.INV("abc",2,1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `GAMMA.INV(0.5,"abc",1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `GAMMA.INV(0.5,2,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestGAMMA_INV_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "GAMMA.INV(0.5,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.INV(0.5,2) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "GAMMA.INV(0.5,2,1,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("GAMMA.INV(0.5,2,1,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(GAMMA.INV(0.5,2),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(GAMMA.INV(0.5,2),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestGAMMA_INV_roundtrip(t *testing.T) {
+	// Verify GAMMA.INV(GAMMA.DIST(x, alpha, beta, TRUE), alpha, beta) ≈ x
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	cases := []struct {
+		x     float64
+		alpha float64
+		beta  float64
+	}{
+		{10, 9, 2},
+		{1, 1, 1},
+		{5, 2, 3},
+		{0.5, 0.5, 1},
+		{20, 5, 2},
+		{3, 10, 0.5},
+		{100, 50, 2},
+		{0.1, 2, 1},
+	}
+
+	for _, tc := range cases {
+		formula := fmt.Sprintf("GAMMA.INV(GAMMA.DIST(%g,%g,%g,TRUE),%g,%g)",
+			tc.x, tc.alpha, tc.beta, tc.alpha, tc.beta)
+		t.Run(fmt.Sprintf("x=%g_a=%g_b=%g", tc.x, tc.alpha, tc.beta), func(t *testing.T) {
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tc.x) > tol {
+				t.Errorf("%s = %g, want %g", formula, got.Num, tc.x)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.DIST
+// ---------------------------------------------------------------------------
+
+func TestCHISQ_DIST(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// CDF tests
+		{"cdf_basic", "CHISQ.DIST(0.5,1,TRUE)", 0.52049988, false, 0},
+		{"cdf_df2", "CHISQ.DIST(2,2,TRUE)", 0.63212056, false, 0},
+		{"cdf_df3", "CHISQ.DIST(3,3,TRUE)", 0.60837482, false, 0},
+		{"cdf_df5", "CHISQ.DIST(5,5,TRUE)", 0.58411981, false, 0},
+		{"cdf_x0", "CHISQ.DIST(0,5,TRUE)", 0, false, 0},
+		{"cdf_x0_df1", "CHISQ.DIST(0,1,TRUE)", 0, false, 0},
+		{"cdf_x0_df2", "CHISQ.DIST(0,2,TRUE)", 0, false, 0},
+		{"cdf_df1_p95", "CHISQ.DIST(3.841,1,TRUE)", 0.94998632, false, 0},
+		{"cdf_df2_p95", "CHISQ.DIST(5.991,2,TRUE)", 0.94998838, false, 0},
+		{"cdf_df10", "CHISQ.DIST(10,10,TRUE)", 0.55950671, false, 0},
+		{"cdf_large_x", "CHISQ.DIST(100,5,TRUE)", 1.0, false, 0},
+		{"cdf_df20", "CHISQ.DIST(20,20,TRUE)", 0.54207029, false, 0},
+		{"cdf_small_x", "CHISQ.DIST(0.01,1,TRUE)", 0.07965567, false, 0},
+		{"cdf_df1_x1", "CHISQ.DIST(1,1,TRUE)", 0.68268949, false, 0},
+
+		// PDF tests
+		{"pdf_basic", "CHISQ.DIST(2,3,FALSE)", 0.20755375, false, 0},
+		{"pdf_df1", "CHISQ.DIST(1,1,FALSE)", 0.24197072, false, 0},
+		{"pdf_df2", "CHISQ.DIST(2,2,FALSE)", 0.18393972, false, 0},
+		{"pdf_df5", "CHISQ.DIST(4,5,FALSE)", 0.14397591, false, 0},
+		{"pdf_df10", "CHISQ.DIST(10,10,FALSE)", 0.08773368, false, 0},
+		{"pdf_small_x", "CHISQ.DIST(0.1,2,FALSE)", 0.47561471, false, 0},
+		{"pdf_x0_df2", "CHISQ.DIST(0,2,FALSE)", 0.5, false, 0},
+		{"pdf_x0_df3", "CHISQ.DIST(0,3,FALSE)", 0, false, 0},
+		{"pdf_x0_df4", "CHISQ.DIST(0,4,FALSE)", 0, false, 0},
+		{"pdf_x0_df10", "CHISQ.DIST(0,10,FALSE)", 0, false, 0},
+		{"pdf_large_x", "CHISQ.DIST(20,5,FALSE)", 0.00053999, false, 0},
+
+		// Truncation: 3.7 → 3
+		{"trunc_pdf", "CHISQ.DIST(2,3.7,FALSE)", 0.20755375, false, 0},
+		{"trunc_cdf", "CHISQ.DIST(0.5,1.9,TRUE)", 0.52049988, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "CHISQ.DIST(-1,3,TRUE)", 0, true, ErrValNUM},
+		{"err_neg_x_pdf", "CHISQ.DIST(-0.001,1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "CHISQ.DIST(1,0,TRUE)", 0, true, ErrValNUM},
+		{"err_df_neg", "CHISQ.DIST(1,-1,TRUE)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "CHISQ.DIST(1,0.9,TRUE)", 0, true, ErrValNUM},
+
+		// Error: df > 10^10
+		{"err_df_too_large", "CHISQ.DIST(1,10000000001,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `CHISQ.DIST("abc",1,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.DIST(1,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `CHISQ.DIST(1,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_DIST_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "CHISQ.DIST(1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CHISQ.DIST(1,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "CHISQ.DIST(1,1,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CHISQ.DIST(1,1,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CHISQ.DIST(1,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CHISQ.DIST(1,1),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestCHISQ_DIST_x0_df1_pdf(t *testing.T) {
+	// df=1 ⇒ alpha=0.5, PDF diverges at x=0 (Excel returns +Inf)
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "CHISQ.DIST(0,1,FALSE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("CHISQ.DIST(0,1,FALSE): want number, got type=%d err=%v", got.Type, got.Err)
+	}
+	if !math.IsInf(got.Num, 1) {
+		t.Errorf("CHISQ.DIST(0,1,FALSE) = %g, want +Inf", got.Num)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.INV
+// ---------------------------------------------------------------------------
+
+func TestCHISQ_INV(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases from spec
+		{"basic_1", "CHISQ.INV(0.93,1)", 3.283020286, false, 0},
+		{"basic_2", "CHISQ.INV(0.6,2)", 1.832581464, false, 0},
+
+		// p=0 returns 0
+		{"p_zero", "CHISQ.INV(0,5)", 0, false, 0},
+		{"p_zero_df1", "CHISQ.INV(0,1)", 0, false, 0},
+
+		// p=0.5 with df=1
+		{"p05_df1", "CHISQ.INV(0.5,1)", 0.454937, false, 0},
+
+		// Critical values (commonly used in statistics)
+		{"crit_95_df1", "CHISQ.INV(0.95,1)", 3.841459, false, 0},
+		{"crit_95_df2", "CHISQ.INV(0.95,2)", 5.991465, false, 0},
+		{"crit_95_df5", "CHISQ.INV(0.95,5)", 11.070498, false, 0},
+		{"crit_95_df10", "CHISQ.INV(0.95,10)", 18.307038, false, 0},
+		{"crit_99_df1", "CHISQ.INV(0.99,1)", 6.634897, false, 0},
+		{"crit_99_df5", "CHISQ.INV(0.99,5)", 15.086272, false, 0},
+
+		// Large df
+		{"large_df_50", "CHISQ.INV(0.5,50)", 49.334937, false, 0},
+		{"large_df_100", "CHISQ.INV(0.5,100)", 99.334127, false, 0},
+
+		// Small p
+		{"small_p", "CHISQ.INV(0.01,5)", 0.554300, false, 0},
+		{"small_p_df1", "CHISQ.INV(0.01,1)", 0.000157, false, 0},
+
+		// Large p
+		{"large_p_df5", "CHISQ.INV(0.99,5)", 15.086272, false, 0},
+		{"large_p_df10", "CHISQ.INV(0.99,10)", 23.209251, false, 0},
+
+		// Various df values at p=0.5
+		{"p05_df2", "CHISQ.INV(0.5,2)", 1.386294, false, 0},
+		{"p05_df3", "CHISQ.INV(0.5,3)", 2.365974, false, 0},
+		{"p05_df5", "CHISQ.INV(0.5,5)", 4.351460, false, 0},
+		{"p05_df10", "CHISQ.INV(0.5,10)", 9.341818, false, 0},
+		{"p05_df20", "CHISQ.INV(0.5,20)", 19.337430, false, 0},
+
+		// Truncation: 3.7 truncates to 3, same as df=3
+		{"trunc_37", "CHISQ.INV(0.5,3.7)", 2.365974, false, 0},
+		{"trunc_19", "CHISQ.INV(0.5,1.9)", 0.454937, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "CHISQ.INV(-0.1,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "CHISQ.INV(1.5,5)", 0, true, ErrValNUM},
+
+		// Error: p = 1
+		{"err_p_one", "CHISQ.INV(1,5)", 0, true, ErrValNUM},
+
+		// Error: df = 0
+		{"err_df_zero", "CHISQ.INV(0.5,0)", 0, true, ErrValNUM},
+
+		// Error: df < 0
+		{"err_df_neg", "CHISQ.INV(0.5,-1)", 0, true, ErrValNUM},
+
+		// Error: df < 1 after truncation
+		{"err_df_frac_below1", "CHISQ.INV(0.5,0.9)", 0, true, ErrValNUM},
+
+		// Error: df > 10^10
+		{"err_df_too_large", "CHISQ.INV(0.5,10000000001)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `CHISQ.INV("abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.INV(0.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_INV_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "CHISQ.INV(0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CHISQ.INV(0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "CHISQ.INV(0.5,5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CHISQ.INV(0.5,5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CHISQ.INV(0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CHISQ.INV(0.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestCHISQ_INV_roundtrip(t *testing.T) {
+	// Verify CHISQ.INV(CHISQ.DIST(x, df, TRUE), df) ≈ x
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{5, 3},
+		{1, 1},
+		{10, 5},
+		{2, 2},
+		{15, 10},
+		{0.5, 1},
+		{20, 20},
+		{3, 7},
+	}
+
+	for _, tc := range cases {
+		formula := fmt.Sprintf("CHISQ.INV(CHISQ.DIST(%g,%d,TRUE),%d)",
+			tc.x, tc.df, tc.df)
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tc.x) > tol {
+				t.Errorf("%s = %g, want %g", formula, got.Num, tc.x)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// T.DIST
+// ---------------------------------------------------------------------------
+
+func TestT_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// CDF tests
+		{"cdf_60_1", "T.DIST(60,1,TRUE)", 0.99469533, false, 0},
+		{"cdf_zero_symmetric", "T.DIST(0,5,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df1", "T.DIST(0,1,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df10", "T.DIST(0,10,TRUE)", 0.5, false, 0},
+		{"cdf_zero_df100", "T.DIST(0,100,TRUE)", 0.5, false, 0},
+		{"cdf_neg2_df10", "T.DIST(-2,10,TRUE)", 0.03669402, false, 0},
+		{"cdf_pos2_df10", "T.DIST(2,10,TRUE)", 0.96330598, false, 0},
+		{"cdf_large_df_normal_approx", "T.DIST(1.96,1000,TRUE)", 0.97486341, false, 0},
+		{"cdf_cauchy_1", "T.DIST(1,1,TRUE)", 0.75, false, 0},
+		{"cdf_cauchy_neg1", "T.DIST(-1,1,TRUE)", 0.25, false, 0},
+		{"cdf_2571_df5", "T.DIST(2.571,5,TRUE)", 0.97501268, false, 0},
+		{"cdf_neg3_df5", "T.DIST(-3,5,TRUE)", 0.01504962, false, 0},
+		{"cdf_3_df5", "T.DIST(3,5,TRUE)", 0.98495038, false, 0},
+		{"cdf_1_df2", "T.DIST(1,2,TRUE)", 0.78867513, false, 0},
+		{"cdf_neg1_df2", "T.DIST(-1,2,TRUE)", 0.21132487, false, 0},
+		{"cdf_large_x_df5", "T.DIST(100,5,TRUE)", 1.0, false, 0},
+		{"cdf_neg_large_x_df5", "T.DIST(-100,5,TRUE)", 0.0, false, 0},
+		{"cdf_05_df30", "T.DIST(0.5,30,TRUE)", 0.68963850, false, 0},
+
+		// PDF tests
+		{"pdf_8_3", "T.DIST(8,3,FALSE)", 0.00073691, false, 0},
+		{"pdf_zero_df5", "T.DIST(0,5,FALSE)", 0.37960669, false, 0},
+		{"pdf_zero_df1_cauchy", "T.DIST(0,1,FALSE)", 0.31830989, false, 0},
+		{"pdf_large_df_normal", "T.DIST(0,100,FALSE)", 0.39794974, false, 0},
+		{"pdf_very_large_df", "T.DIST(0,10000,FALSE)", 0.39894216, false, 0},
+		{"pdf_neg3_df5", "T.DIST(-3,5,FALSE)", 0.01729258, false, 0},
+		{"pdf_pos3_df5", "T.DIST(3,5,FALSE)", 0.01729258, false, 0},
+		{"pdf_1_df1", "T.DIST(1,1,FALSE)", 0.15915494, false, 0},
+		{"pdf_neg1_df1", "T.DIST(-1,1,FALSE)", 0.15915494, false, 0},
+		{"pdf_2_df10", "T.DIST(2,10,FALSE)", 0.06114577, false, 0},
+		{"pdf_neg2_df10", "T.DIST(-2,10,FALSE)", 0.06114577, false, 0},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST(1,0,TRUE)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST(1,-1,TRUE)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.DIST(1,0.9,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST("abc",5,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST(1,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `T.DIST(1,5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestT_DIST_symmetry(t *testing.T) {
+	// CDF(-x) + CDF(x) should equal 1 for the t-distribution.
+	const tol = 1e-10
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{2, 10},
+		{1, 1},
+		{3, 5},
+		{0.5, 30},
+		{1.96, 1000},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			fPos := fmt.Sprintf("T.DIST(%g,%d,TRUE)", tc.x, tc.df)
+			fNeg := fmt.Sprintf("T.DIST(%g,%d,TRUE)", -tc.x, tc.df)
+
+			cfPos := evalCompile(t, fPos)
+			gotPos, err := Eval(cfPos, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfNeg := evalCompile(t, fNeg)
+			gotNeg, err := Eval(cfNeg, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotPos.Type != ValueNumber || gotNeg.Type != ValueNumber {
+				t.Fatalf("expected numbers, got pos=%d neg=%d", gotPos.Type, gotNeg.Type)
+			}
+
+			sum := gotPos.Num + gotNeg.Num
+			if math.Abs(sum-1.0) > tol {
+				t.Errorf("CDF(%g) + CDF(%g) = %g + %g = %g, want 1.0",
+					tc.x, -tc.x, gotPos.Num, gotNeg.Num, sum)
+			}
+		})
+	}
+}
+
+func TestT_DIST_pdf_symmetry(t *testing.T) {
+	// PDF(-x) should equal PDF(x) for the t-distribution.
+	const tol = 1e-12
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{3, 5},
+		{1, 1},
+		{2, 10},
+		{0.5, 30},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			fPos := fmt.Sprintf("T.DIST(%g,%d,FALSE)", tc.x, tc.df)
+			fNeg := fmt.Sprintf("T.DIST(%g,%d,FALSE)", -tc.x, tc.df)
+
+			cfPos := evalCompile(t, fPos)
+			gotPos, err := Eval(cfPos, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfNeg := evalCompile(t, fNeg)
+			gotNeg, err := Eval(cfNeg, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotPos.Type != ValueNumber || gotNeg.Type != ValueNumber {
+				t.Fatalf("expected numbers, got pos=%d neg=%d", gotPos.Type, gotNeg.Type)
+			}
+
+			if math.Abs(gotPos.Num-gotNeg.Num) > tol {
+				t.Errorf("PDF(%g) = %g != PDF(%g) = %g", tc.x, gotPos.Num, -tc.x, gotNeg.Num)
+			}
+		})
+	}
+}
+
+func TestT_DIST_truncation(t *testing.T) {
+	// T.DIST(1, 5.7, ...) should equal T.DIST(1, 5, ...)
+	const tol = 1e-12
+	resolver := &mockResolver{}
+
+	// CDF
+	cfTrunc := evalCompile(t, "T.DIST(1,5.7,TRUE)")
+	gotTrunc, err := Eval(cfTrunc, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	cfInt := evalCompile(t, "T.DIST(1,5,TRUE)")
+	gotInt, err := Eval(cfInt, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if gotTrunc.Type != ValueNumber || gotInt.Type != ValueNumber {
+		t.Fatalf("expected numbers, got trunc=%d int=%d", gotTrunc.Type, gotInt.Type)
+	}
+	if math.Abs(gotTrunc.Num-gotInt.Num) > tol {
+		t.Errorf("T.DIST(1,5.7,TRUE) = %g, T.DIST(1,5,TRUE) = %g; want equal", gotTrunc.Num, gotInt.Num)
+	}
+
+	// PDF
+	cfTrunc = evalCompile(t, "T.DIST(1,5.7,FALSE)")
+	gotTrunc, err = Eval(cfTrunc, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	cfInt = evalCompile(t, "T.DIST(1,5,FALSE)")
+	gotInt, err = Eval(cfInt, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if gotTrunc.Type != ValueNumber || gotInt.Type != ValueNumber {
+		t.Fatalf("expected numbers, got trunc=%d int=%d", gotTrunc.Type, gotInt.Type)
+	}
+	if math.Abs(gotTrunc.Num-gotInt.Num) > tol {
+		t.Errorf("T.DIST(1,5.7,FALSE) = %g, T.DIST(1,5,FALSE) = %g; want equal", gotTrunc.Num, gotInt.Num)
+	}
+}
+
+func TestT_DIST_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "T.DIST(1,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.DIST(1,5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "T.DIST(1,5,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.DIST(1,5,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(T.DIST(1,5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(T.DIST(1,5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// T.INV
+// ---------------------------------------------------------------------------
+
+func TestT_INV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values
+		{"basic_075_df2", "T.INV(0.75,2)", 0.8164966, false, 0},
+		{"p05_df5_zero", "T.INV(0.5,5)", 0, false, 0},
+		{"p05_df1_zero", "T.INV(0.5,1)", 0, false, 0},
+		{"p05_df100_zero", "T.INV(0.5,100)", 0, false, 0},
+
+		// Critical values (well-known from t-tables)
+		{"p0975_df10", "T.INV(0.975,10)", 2.228139, false, 0},
+		{"p0025_df10", "T.INV(0.025,10)", -2.228139, false, 0},
+		{"p095_df1", "T.INV(0.95,1)", 6.313752, false, 0},
+		{"p095_df2", "T.INV(0.95,2)", 2.919986, false, 0},
+		{"p095_df5", "T.INV(0.95,5)", 2.015048, false, 0},
+		{"p095_df30", "T.INV(0.95,30)", 1.697261, false, 0},
+
+		// Large df approaches normal
+		{"p0975_df1000", "T.INV(0.975,1000)", 1.962339, false, 0},
+
+		// Small and large p
+		{"p001_df5", "T.INV(0.01,5)", -3.364930, false, 0},
+		{"p099_df5", "T.INV(0.99,5)", 3.364930, false, 0},
+
+		// Cauchy distribution (df=1)
+		{"cauchy_p075", "T.INV(0.75,1)", 1.0, false, 0},
+		{"cauchy_p025", "T.INV(0.25,1)", -1.0, false, 0},
+		{"cauchy_p09", "T.INV(0.9,1)", 3.077684, false, 0},
+
+		// df truncation: T.INV(0.75, 2.9) should equal T.INV(0.75, 2)
+		{"df_truncation", "T.INV(0.75,2.9)", 0.8164966, false, 0},
+
+		// Extreme p values
+		{"p0001_df10", "T.INV(0.001,10)", -4.143700, false, 0},
+		{"p0999_df10", "T.INV(0.999,10)", 4.143700, false, 0},
+
+		// Various df values
+		{"p09_df3", "T.INV(0.9,3)", 1.637744, false, 0},
+		{"p01_df3", "T.INV(0.1,3)", -1.637744, false, 0},
+
+		// Error: p = 0
+		{"err_p_zero", "T.INV(0,5)", 0, true, ErrValNUM},
+		// Error: p < 0
+		{"err_p_neg", "T.INV(-0.1,5)", 0, true, ErrValNUM},
+		// Error: p = 1
+		{"err_p_one", "T.INV(1,5)", 0, true, ErrValNUM},
+		// Error: p > 1
+		{"err_p_gt1", "T.INV(1.5,5)", 0, true, ErrValNUM},
+		// Error: df = 0
+		{"err_df_zero", "T.INV(0.5,0)", 0, true, ErrValNUM},
+		// Error: df < 1
+		{"err_df_neg", "T.INV(0.5,-1)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.INV(0.5,0.9)", 0, true, ErrValNUM},
+		// Error: non-numeric
+		{"err_non_numeric_p", `T.INV("abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.INV(0.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestT_INV_roundTrip(t *testing.T) {
+	// T.INV(T.DIST(x, df, TRUE), df) should ≈ x
+	const tol = 1e-6
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		x  float64
+		df int
+	}{
+		{2, 5},
+		{-1.5, 10},
+		{0, 3},
+		{3.5, 20},
+		{-0.5, 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("x=%g_df=%d", tc.x, tc.df), func(t *testing.T) {
+			formula := fmt.Sprintf("T.INV(T.DIST(%g,%d,TRUE),%d)", tc.x, tc.df, tc.df)
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tc.x) > tol {
+				t.Errorf("T.INV(T.DIST(%g,%d,TRUE),%d) = %g, want %g", tc.x, tc.df, tc.df, got.Num, tc.x)
+			}
+		})
+	}
+}
+
+func TestT_INV_symmetry(t *testing.T) {
+	// T.INV(p, df) = -T.INV(1-p, df)
+	const tol = 1e-8
+	resolver := &mockResolver{}
+
+	cases := []struct {
+		p  float64
+		df int
+	}{
+		{0.025, 10},
+		{0.1, 5},
+		{0.9, 30},
+		{0.75, 1},
+		{0.99, 20},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("p=%g_df=%d", tc.p, tc.df), func(t *testing.T) {
+			fP := fmt.Sprintf("T.INV(%g,%d)", tc.p, tc.df)
+			fQ := fmt.Sprintf("T.INV(%g,%d)", 1-tc.p, tc.df)
+
+			cfP := evalCompile(t, fP)
+			gotP, err := Eval(cfP, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			cfQ := evalCompile(t, fQ)
+			gotQ, err := Eval(cfQ, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if gotP.Type != ValueNumber || gotQ.Type != ValueNumber {
+				t.Fatalf("want numbers, got P type=%d, Q type=%d", gotP.Type, gotQ.Type)
+			}
+
+			sum := gotP.Num + gotQ.Num
+			if math.Abs(sum) > tol {
+				t.Errorf("T.INV(%g,%d) + T.INV(%g,%d) = %g + %g = %g, want 0",
+					tc.p, tc.df, 1-tc.p, tc.df, gotP.Num, gotQ.Num, sum)
+			}
+		})
+	}
+}
+
+func TestT_INV_argCount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "T.INV(0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.INV(0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "T.INV(0.5,5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("T.INV(0.5,5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch
+	cf = evalCompile(t, `IFERROR(T.INV(0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(T.INV(0.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// F.DIST
+// ---------------------------------------------------------------------------
+
+func TestF_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// CDF tests
+		{"cdf_basic", "F.DIST(15.2069,6,4,TRUE)", 0.9900000430, false, 0},
+		{"cdf_x0", "F.DIST(0,5,5,TRUE)", 0, false, 0},
+		{"cdf_x0_df1_1", "F.DIST(0,1,5,TRUE)", 0, false, 0},
+		{"cdf_x1_equal_df", "F.DIST(1,5,5,TRUE)", 0.5, false, 0},
+		{"cdf_x1_df10_10", "F.DIST(1,10,10,TRUE)", 0.5, false, 0},
+		{"cdf_large_x", "F.DIST(100,5,5,TRUE)", 0.9999475709, false, 0},
+		{"cdf_small_x", "F.DIST(0.01,5,5,TRUE)", 0.0000524291, false, 0},
+		{"cdf_df_1_1", "F.DIST(1,1,1,TRUE)", 0.5, false, 0},
+		{"cdf_df_2_3", "F.DIST(2,2,3,TRUE)", 0.7194341411, false, 0},
+		{"cdf_df_5_10", "F.DIST(2,5,10,TRUE)", 0.8358050491, false, 0},
+		{"cdf_df_10_20", "F.DIST(1.5,10,20,TRUE)", 0.7890535375, false, 0},
+		{"cdf_df_1_100", "F.DIST(3.84,1,100,TRUE)", 0.9471726649, false, 0},
+		{"cdf_truncation", "F.DIST(1,5.7,5.7,TRUE)", 0.5, false, 0},
+		{"cdf_truncation2", "F.DIST(2,2.9,3.9,TRUE)", 0.7194341411, false, 0},
+		{"cdf_small_df", "F.DIST(5,1,1,TRUE)", 0.7322795272, false, 0},
+		{"cdf_large_df", "F.DIST(1,100,100,TRUE)", 0.5, false, 0},
+
+		// PDF tests
+		{"pdf_basic", "F.DIST(15.2069,6,4,FALSE)", 0.0012237917, false, 0},
+		{"pdf_x0_df1_2", "F.DIST(0,2,5,FALSE)", 1, false, 0},
+		{"pdf_x0_df1_gt2", "F.DIST(0,3,5,FALSE)", 0, false, 0},
+		{"pdf_x0_df1_4", "F.DIST(0,4,10,FALSE)", 0, false, 0},
+		{"pdf_x1_df10_10", "F.DIST(1,10,10,FALSE)", 0.6152343750, false, 0},
+		{"pdf_df_1_1", "F.DIST(1,1,1,FALSE)", 0.1591549431, false, 0},
+		{"pdf_df_2_3", "F.DIST(1,2,3,FALSE)", 0.2788548009, false, 0},
+		{"pdf_df_5_10", "F.DIST(2,5,10,FALSE)", 0.1620057422, false, 0},
+		{"pdf_df_10_20", "F.DIST(1.5,10,20,FALSE)", 0.3581610917, false, 0},
+		{"pdf_large_x", "F.DIST(10,5,5,FALSE)", 0.0026667077, false, 0},
+		{"pdf_small_x", "F.DIST(0.1,5,5,FALSE)", 0.2666707709, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "F.DIST(-1,5,5,TRUE)", 0, true, ErrValNUM},
+		{"err_neg_x_pdf", "F.DIST(-0.001,5,5,FALSE)", 0, true, ErrValNUM},
+
+		// Error: df1 < 1
+		{"err_df1_zero", "F.DIST(1,0,5,TRUE)", 0, true, ErrValNUM},
+		{"err_df1_neg", "F.DIST(1,-1,5,TRUE)", 0, true, ErrValNUM},
+		{"err_df1_frac_lt1", "F.DIST(1,0.9,5,TRUE)", 0, true, ErrValNUM},
+
+		// Error: df2 < 1
+		{"err_df2_zero", "F.DIST(1,5,0,TRUE)", 0, true, ErrValNUM},
+		{"err_df2_neg", "F.DIST(1,5,-1,TRUE)", 0, true, ErrValNUM},
+		{"err_df2_frac_lt1", "F.DIST(1,5,0.5,TRUE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `F.DIST("abc",5,5,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.DIST(1,"abc",5,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.DIST(1,5,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `F.DIST(1,5,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: x=0 with df1=1 (PDF diverges)
+		{"err_x0_df1_1_pdf", "F.DIST(0,1,5,FALSE)", 0, true, ErrValNUM},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number", tt.formula, got, got.Type)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestF_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "F.DIST(1,5,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("F.DIST(1,5,5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "F.DIST(1,5,5,TRUE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("F.DIST(1,5,5,TRUE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(F.DIST(1,5,5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(F.DIST(1,5,5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// F.INV
+// ---------------------------------------------------------------------------
+
+func TestF_INV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic tests
+		{"basic_001_6_4", "F.INV(0.01,6,4)", 0.10930991, false, 0},
+		{"basic_099_6_4", "F.INV(0.99,6,4)", 15.2069, false, 0},
+		{"basic_05_5_5", "F.INV(0.5,5,5)", 1.0, false, 0},
+		{"basic_05_10_10", "F.INV(0.5,10,10)", 1.0, false, 0},
+		{"basic_05_1_1", "F.INV(0.5,1,1)", 1.0, false, 0},
+
+		// p=0 edge case
+		{"p_zero", "F.INV(0,5,5)", 0, false, 0},
+
+		// Various critical values at p=0.95
+		{"p095_1_1", "F.INV(0.95,1,1)", 161.4476, false, 0},
+		{"p095_2_3", "F.INV(0.95,2,3)", 9.552094, false, 0},
+		{"p095_5_10", "F.INV(0.95,5,10)", 3.325835, false, 0},
+		{"p095_10_20", "F.INV(0.95,10,20)", 2.347878, false, 0},
+
+		// Small probability
+		{"small_p_001_5_5", "F.INV(0.001,5,5)", 0.0336107355, false, 0},
+
+		// Large probability
+		{"large_p_999_5_5", "F.INV(0.999,5,5)", 29.7523985773, false, 0},
+
+		// Various df combinations
+		{"df_2_5", "F.INV(0.5,2,5)", 0.7987697769, false, 0},
+		{"df_10_20", "F.INV(0.5,10,20)", 0.9662638886, false, 0},
+		{"df_5_100", "F.INV(0.5,5,100)", 0.8761990472, false, 0},
+		{"df_1_100", "F.INV(0.5,1,100)", 0.4582627146, false, 0},
+
+		// Truncation: F.INV(0.5, 5.7, 5.7) == F.INV(0.5, 5, 5)
+		{"df_truncation", "F.INV(0.5,5.7,5.7)", 1.0, false, 0},
+
+		// More diverse probabilities
+		{"p010_5_10", "F.INV(0.10,5,10)", 0.3032690890, false, 0},
+		{"p025_5_10", "F.INV(0.25,5,10)", 0.5291416856, false, 0},
+		{"p075_5_10", "F.INV(0.75,5,10)", 1.5853232594, false, 0},
+		{"p090_5_10", "F.INV(0.90,5,10)", 2.5216406862, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "F.INV(-0.1,5,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "F.INV(1.5,5,5)", 0, true, ErrValNUM},
+
+		// Error: p = 1
+		{"err_p_one", "F.INV(1,5,5)", 0, true, ErrValNUM},
+
+		// Error: df1 < 1
+		{"err_df1_zero", "F.INV(0.5,0,5)", 0, true, ErrValNUM},
+		{"err_df1_neg", "F.INV(0.5,-1,5)", 0, true, ErrValNUM},
+		{"err_df1_frac_lt1", "F.INV(0.5,0.9,5)", 0, true, ErrValNUM},
+
+		// Error: df2 < 1
+		{"err_df2_zero", "F.INV(0.5,5,0)", 0, true, ErrValNUM},
+		{"err_df2_neg", "F.INV(0.5,5,-1)", 0, true, ErrValNUM},
+		{"err_df2_frac_lt1", "F.INV(0.5,5,0.5)", 0, true, ErrValNUM},
+
+		// Error: non-numeric arguments
+		{"err_non_numeric_p", `F.INV("abc",5,5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.INV(0.5,"abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.INV(0.5,5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number", tt.formula, got, got.Type)
+			}
+			if tt.wantNum == 0 {
+				if math.Abs(got.Num) > tol {
+					t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+				}
+			} else {
+				relErr := math.Abs(got.Num-tt.wantNum) / math.Abs(tt.wantNum)
+				if relErr > 1e-4 {
+					t.Errorf("%s = %g, want %g (relErr=%g)", tt.formula, got.Num, tt.wantNum, relErr)
+				}
+			}
+		})
+	}
+}
+
+func TestF_INV_roundtrip(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-6
+
+	// F.INV(F.DIST(x, df1, df2, TRUE), df1, df2) should ≈ x
+	cases := []struct {
+		x   float64
+		df1 int
+		df2 int
+	}{
+		{5, 3, 7},
+		{1, 5, 5},
+		{2, 2, 3},
+		{0.5, 10, 20},
+		{3, 1, 100},
+		{10, 5, 5},
+		{0.1, 5, 10},
+	}
+
+	for _, tc := range cases {
+		formula := fmt.Sprintf("F.INV(F.DIST(%g,%d,%d,TRUE),%d,%d)", tc.x, tc.df1, tc.df2, tc.df1, tc.df2)
+		t.Run(formula, func(t *testing.T) {
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", formula, got)
+			}
+			relErr := math.Abs(got.Num-tc.x) / math.Abs(tc.x)
+			if relErr > tol {
+				t.Errorf("%s = %g, want %g (relErr=%g)", formula, got.Num, tc.x, relErr)
+			}
+		})
+	}
+}
+
+func TestF_INV_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "F.INV(0.5,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("F.INV(0.5,5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "F.INV(0.5,5,5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("F.INV(0.5,5,5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(F.INV(0.5,5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(F.INV(0.5,5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.NORM
+// ---------------------------------------------------------------------------
+
+func TestCONFIDENCE_NORM(t *testing.T) {
+	const tol = 1e-4
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values verified against Excel
+		{"basic_005_25_50", "CONFIDENCE.NORM(0.05,2.5,50)", 0.692952, false, 0},
+		{"basic_005_1_100", "CONFIDENCE.NORM(0.05,1,100)", 0.196, false, 0},
+		{"basic_001_25_50", "CONFIDENCE.NORM(0.01,2.5,50)", 0.910693, false, 0},
+		{"basic_01_1_25", "CONFIDENCE.NORM(0.1,1,25)", 0.328971, false, 0},
+		{"basic_005_1_30", "CONFIDENCE.NORM(0.05,1,30)", 0.357886, false, 0},
+		{"basic_01_5_200", "CONFIDENCE.NORM(0.1,5,200)", 0.581508, false, 0},
+
+		// Large sample size
+		{"large_sample", "CONFIDENCE.NORM(0.05,1,10000)", 0.0196, false, 0},
+
+		// Small alpha (high confidence)
+		{"small_alpha", "CONFIDENCE.NORM(0.001,1,100)", 0.329053, false, 0},
+
+		// Large stddev
+		{"large_stddev", "CONFIDENCE.NORM(0.05,100,50)", 27.718, false, 0},
+
+		// Fractional size should be truncated
+		{"size_truncation_29", "CONFIDENCE.NORM(0.05,2.5,50.9)", 0.692952, false, 0},
+		{"size_truncation_11", "CONFIDENCE.NORM(0.05,1,1.9)", 1.959964, false, 0},
+
+		// Error: alpha = 0
+		{"err_alpha_zero", "CONFIDENCE.NORM(0,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha = 1
+		{"err_alpha_one", "CONFIDENCE.NORM(1,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha < 0
+		{"err_alpha_neg", "CONFIDENCE.NORM(-0.05,2.5,50)", 0, true, ErrValNUM},
+		// Error: alpha > 1
+		{"err_alpha_gt1", "CONFIDENCE.NORM(1.5,2.5,50)", 0, true, ErrValNUM},
+		// Error: stddev = 0
+		{"err_stddev_zero", "CONFIDENCE.NORM(0.05,0,50)", 0, true, ErrValNUM},
+		// Error: stddev < 0
+		{"err_stddev_neg", "CONFIDENCE.NORM(0.05,-1,50)", 0, true, ErrValNUM},
+		// Error: size = 0
+		{"err_size_zero", "CONFIDENCE.NORM(0.05,2.5,0)", 0, true, ErrValNUM},
+		// Error: size < 1 (fractional truncates to 0)
+		{"err_size_frac", "CONFIDENCE.NORM(0.05,2.5,0.9)", 0, true, ErrValNUM},
+		// Error: size negative
+		{"err_size_neg", "CONFIDENCE.NORM(0.05,2.5,-5)", 0, true, ErrValNUM},
+		// Error: non-numeric alpha
+		{"err_nonnumeric_alpha", `CONFIDENCE.NORM("abc",2.5,50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric stddev
+		{"err_nonnumeric_stddev", `CONFIDENCE.NORM(0.05,"abc",50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric size
+		{"err_nonnumeric_size", `CONFIDENCE.NORM(0.05,2.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestCONFIDENCE_NORM_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few arguments
+	cf := evalCompile(t, "CONFIDENCE.NORM(0.05,2.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.NORM(0.05,2.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many arguments
+	cf = evalCompile(t, "CONFIDENCE.NORM(0.05,2.5,50,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.NORM(0.05,2.5,50,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CONFIDENCE.NORM(0.05,2.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CONFIDENCE.NORM(0.05,2.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CONFIDENCE.T
+// ---------------------------------------------------------------------------
+
+func TestCONFIDENCE_T(t *testing.T) {
+	const tol = 1e-4
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic values verified against Excel
+		{"basic_005_1_50", "CONFIDENCE.T(0.05,1,50)", 0.284196, false, 0},
+		{"basic_005_25_50", "CONFIDENCE.T(0.05,2.5,50)", 0.710492, false, 0},
+		{"basic_001_1_30", "CONFIDENCE.T(0.01,1,30)", 0.503245, false, 0},
+		{"basic_01_1_25", "CONFIDENCE.T(0.1,1,25)", 0.342176, false, 0},
+		{"basic_005_1_100", "CONFIDENCE.T(0.05,1,100)", 0.198422, false, 0},
+		{"basic_01_5_200", "CONFIDENCE.T(0.1,5,200)", 0.584264, false, 0},
+
+		// Small sample (df=1 for size=2)
+		{"small_sample_2", "CONFIDENCE.T(0.05,1,2)", 8.984644, false, 0},
+		// Small sample (df=2 for size=3)
+		{"small_sample_3", "CONFIDENCE.T(0.05,1,3)", 2.484159, false, 0},
+		// Small sample (df=4 for size=5)
+		{"small_sample_5", "CONFIDENCE.T(0.05,1,5)", 1.241617, false, 0},
+
+		// Large sample — should approach CONFIDENCE.NORM
+		{"large_sample", "CONFIDENCE.T(0.05,1,10000)", 0.019600, false, 0},
+
+		// Fractional size should be truncated
+		{"size_truncation", "CONFIDENCE.T(0.05,1,50.9)", 0.284196, false, 0},
+		{"size_truncation_2", "CONFIDENCE.T(0.05,2.5,50.1)", 0.710492, false, 0},
+
+		// Error: size = 1 → #DIV/0! (df=0)
+		{"err_size_one", "CONFIDENCE.T(0.05,1,1)", 0, true, ErrValDIV0},
+		// Error: size = 1 with fractional (truncates to 1)
+		{"err_size_one_frac", "CONFIDENCE.T(0.05,1,1.9)", 0, true, ErrValDIV0},
+		// Error: alpha = 0
+		{"err_alpha_zero", "CONFIDENCE.T(0,1,50)", 0, true, ErrValNUM},
+		// Error: alpha = 1
+		{"err_alpha_one", "CONFIDENCE.T(1,1,50)", 0, true, ErrValNUM},
+		// Error: alpha < 0
+		{"err_alpha_neg", "CONFIDENCE.T(-0.05,1,50)", 0, true, ErrValNUM},
+		// Error: alpha > 1
+		{"err_alpha_gt1", "CONFIDENCE.T(1.5,1,50)", 0, true, ErrValNUM},
+		// Error: stddev = 0
+		{"err_stddev_zero", "CONFIDENCE.T(0.05,0,50)", 0, true, ErrValNUM},
+		// Error: stddev < 0
+		{"err_stddev_neg", "CONFIDENCE.T(0.05,-1,50)", 0, true, ErrValNUM},
+		// Error: size = 0
+		{"err_size_zero", "CONFIDENCE.T(0.05,1,0)", 0, true, ErrValNUM},
+		// Error: size < 1 (fractional truncates to 0)
+		{"err_size_frac_below1", "CONFIDENCE.T(0.05,1,0.5)", 0, true, ErrValNUM},
+		// Error: size negative
+		{"err_size_neg", "CONFIDENCE.T(0.05,1,-5)", 0, true, ErrValNUM},
+		// Error: non-numeric alpha
+		{"err_nonnumeric_alpha", `CONFIDENCE.T("abc",1,50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric stddev
+		{"err_nonnumeric_stddev", `CONFIDENCE.T(0.05,"abc",50)`, 0, true, ErrValVALUE},
+		// Error: non-numeric size
+		{"err_nonnumeric_size", `CONFIDENCE.T(0.05,1,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestCONFIDENCE_T_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few arguments
+	cf := evalCompile(t, "CONFIDENCE.T(0.05,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.T(0.05,1) should error, got type=%d", got.Type)
+	}
+
+	// Too many arguments
+	cf = evalCompile(t, "CONFIDENCE.T(0.05,1,50,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("CONFIDENCE.T(0.05,1,50,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(CONFIDENCE.T(0.05,1),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(CONFIDENCE.T(0.05,1),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestCONFIDENCE_T_convergesToNorm(t *testing.T) {
+	// For very large sample sizes, CONFIDENCE.T should converge to CONFIDENCE.NORM
+	const tol = 1e-3
+	resolver := &mockResolver{}
+
+	formula := "CONFIDENCE.T(0.05,1,100000)-CONFIDENCE.NORM(0.05,1,100000)"
+	cf := evalCompile(t, formula)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("%s: want number, got type=%d err=%v", formula, got.Type, got.Err)
+	}
+	if math.Abs(got.Num) > tol {
+		t.Errorf("CONFIDENCE.T and CONFIDENCE.NORM should converge for large n, diff = %g", got.Num)
+	}
+}
+
+func TestPERCENTILE_INC(t *testing.T) {
+	// PERCENTILE.INC is an alias for PERCENTILE — verify it works identically
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4),
+		},
+	}
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		{"basic", "PERCENTILE.INC(A1:A4,0.3)", 1.9},
+		{"min", "PERCENTILE.INC(A1:A4,0)", 1},
+		{"max", "PERCENTILE.INC(A1:A4,1)", 4},
+		{"median", "PERCENTILE.INC(A1:A4,0.5)", 2.5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || math.Abs(got.Num-tt.want) > 1e-9 {
+				t.Errorf("%s = %v, want %g", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQUARTILE_INC(t *testing.T) {
+	// QUARTILE.INC is an alias for QUARTILE — verify it works identically
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4),
+		},
+	}
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		{"q0", "QUARTILE.INC(A1:A4,0)", 1},
+		{"q1", "QUARTILE.INC(A1:A4,1)", 1.75},
+		{"q2", "QUARTILE.INC(A1:A4,2)", 2.5},
+		{"q3", "QUARTILE.INC(A1:A4,3)", 3.25},
+		{"q4", "QUARTILE.INC(A1:A4,4)", 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || math.Abs(got.Num-tt.want) > 1e-9 {
+				t.Errorf("%s = %v, want %g", tt.formula, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BETA.DIST
+// ---------------------------------------------------------------------------
+
+func TestBETA_DIST(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// CDF with custom bounds (Excel documentation example)
+		{"cdf_custom_bounds", "BETA.DIST(2,8,10,TRUE,1,3)", 0.6854706, false, 0},
+		// PDF with custom bounds (Excel documentation example)
+		{"pdf_custom_bounds", "BETA.DIST(2,8,10,FALSE,1,3)", 1.4837646, false, 0},
+
+		// Standard beta CDF
+		{"cdf_standard_basic", "BETA.DIST(0.5,2,3,TRUE)", 0.6875, false, 0},
+		{"cdf_standard_alpha3_beta3", "BETA.DIST(0.5,3,3,TRUE)", 0.5, false, 0},
+		{"cdf_standard_alpha1_beta1", "BETA.DIST(0.5,1,1,TRUE)", 0.5, false, 0},
+		{"cdf_standard_alpha05_beta05", "BETA.DIST(0.5,0.5,0.5,TRUE)", 0.5, false, 0},
+		{"cdf_near_zero", "BETA.DIST(0.1,2,5,TRUE)", 0.114265, false, 0},
+		{"cdf_near_one", "BETA.DIST(0.9,2,5,TRUE)", 0.999945, false, 0},
+		{"cdf_alpha5_beta1", "BETA.DIST(0.5,5,1,TRUE)", 0.03125, false, 0},
+		{"cdf_alpha1_beta5", "BETA.DIST(0.5,1,5,TRUE)", 0.96875, false, 0},
+
+		// CDF boundary values
+		{"cdf_x_equals_A", "BETA.DIST(0,2,3,TRUE)", 0, false, 0},
+		{"cdf_x_equals_B", "BETA.DIST(1,2,3,TRUE)", 1, false, 0},
+
+		// Standard beta PDF
+		{"pdf_standard_basic", "BETA.DIST(0.5,2,3,FALSE)", 1.5, false, 0},
+		{"pdf_uniform", "BETA.DIST(0.5,1,1,FALSE)", 1, false, 0},
+		{"pdf_symmetric", "BETA.DIST(0.5,3,3,FALSE)", 1.875, false, 0},
+		{"pdf_alpha5_beta2", "BETA.DIST(0.8,5,2,FALSE)", 2.4576, false, 0},
+		{"pdf_alpha2_beta5", "BETA.DIST(0.2,2,5,FALSE)", 2.4576, false, 0},
+
+		// PDF boundary values
+		{"pdf_x0_alpha1", "BETA.DIST(0,1,3,FALSE)", 3, false, 0},
+		{"pdf_x0_alpha_gt1", "BETA.DIST(0,2,3,FALSE)", 0, false, 0},
+		{"pdf_x1_beta1", "BETA.DIST(1,3,1,FALSE)", 3, false, 0},
+		{"pdf_x1_beta_gt1", "BETA.DIST(1,3,2,FALSE)", 0, false, 0},
+
+		// Custom bounds CDF
+		{"cdf_custom_bounds_2", "BETA.DIST(5,2,3,TRUE,0,10)", 0.6875, false, 0},
+		{"cdf_custom_neg_bounds", "BETA.DIST(0,2,3,TRUE,-5,5)", 0.6875, false, 0},
+
+		// Custom bounds PDF
+		{"pdf_custom_bounds_scaled", "BETA.DIST(5,2,3,FALSE,0,10)", 0.15, false, 0},
+
+		// Error: alpha <= 0
+		{"err_alpha_zero", "BETA.DIST(0.5,0,3,TRUE)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "BETA.DIST(0.5,-1,3,TRUE)", 0, true, ErrValNUM},
+
+		// Error: beta <= 0
+		{"err_beta_zero", "BETA.DIST(0.5,2,0,TRUE)", 0, true, ErrValNUM},
+		{"err_beta_neg", "BETA.DIST(0.5,2,-1,TRUE)", 0, true, ErrValNUM},
+
+		// Error: x < A
+		{"err_x_lt_A", "BETA.DIST(-0.1,2,3,TRUE)", 0, true, ErrValNUM},
+		{"err_x_lt_A_custom", "BETA.DIST(0,2,3,TRUE,1,3)", 0, true, ErrValNUM},
+
+		// Error: x > B
+		{"err_x_gt_B", "BETA.DIST(1.1,2,3,TRUE)", 0, true, ErrValNUM},
+		{"err_x_gt_B_custom", "BETA.DIST(4,2,3,TRUE,1,3)", 0, true, ErrValNUM},
+
+		// Error: A = B
+		{"err_A_eq_B", "BETA.DIST(1,2,3,TRUE,1,1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `BETA.DIST("abc",2,3,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `BETA.DIST(0.5,"abc",3,TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `BETA.DIST(0.5,2,"abc",TRUE)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_cum", `BETA.DIST(0.5,2,3,"abc")`, 0, true, ErrValVALUE},
+		{"err_non_numeric_A", `BETA.DIST(0.5,2,3,TRUE,"abc")`, 0, true, ErrValVALUE},
+		{"err_non_numeric_B", `BETA.DIST(0.5,2,3,TRUE,0,"abc")`, 0, true, ErrValVALUE},
+
+		// PDF with x=0 and alpha < 1 (diverges)
+		{"err_pdf_x0_alpha_lt1", "BETA.DIST(0,0.5,3,FALSE)", 0, true, ErrValNUM},
+		// PDF with x=1 and beta < 1 (diverges)
+		{"err_pdf_x1_beta_lt1", "BETA.DIST(1,3,0.5,FALSE)", 0, true, ErrValNUM},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBETA_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "BETA.DIST(0.5,2,3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BETA.DIST(0.5,2,3) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "BETA.DIST(0.5,2,3,TRUE,0,1,99)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BETA.DIST(0.5,2,3,TRUE,0,1,99) should error, got type=%d", got.Type)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BETA.INV
+// ---------------------------------------------------------------------------
+
+func TestBETA_INV(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Excel documentation example
+		{"excel_example", "BETA.INV(0.685470581,8,10,1,3)", 2, false, 0},
+
+		// Symmetric distribution: BETA.INV(0.5, 2, 2) = 0.5
+		{"symmetric_2_2", "BETA.INV(0.5,2,2)", 0.5, false, 0},
+
+		// Uniform distribution: BETA.INV(0.5, 1, 1) = 0.5
+		{"uniform_1_1", "BETA.INV(0.5,1,1)", 0.5, false, 0},
+
+		// Symmetric alpha=beta=3
+		{"symmetric_3_3", "BETA.INV(0.5,3,3)", 0.5, false, 0},
+
+		// Symmetric alpha=beta=0.5
+		{"symmetric_05_05", "BETA.INV(0.5,0.5,0.5)", 0.5, false, 0},
+
+		// p=0 → returns A (lower bound)
+		{"p_zero", "BETA.INV(0,2,3)", 0, false, 0},
+
+		// p=1 → returns B (upper bound)
+		{"p_one", "BETA.INV(1,2,3)", 1, false, 0},
+
+		// Round-trip from BETA.DIST: BETA.DIST(0.5, 2, 3, TRUE) = 0.6875
+		{"round_trip_05_2_3", "BETA.INV(0.6875,2,3)", 0.5, false, 0},
+
+		// Round-trip from BETA.DIST: BETA.DIST(0.1, 2, 5, TRUE) ≈ 0.114265
+		{"round_trip_01_2_5", "BETA.INV(0.114265,2,5)", 0.1, false, 0},
+
+		// Round-trip from BETA.DIST: BETA.DIST(0.9, 2, 5, TRUE) ≈ 0.999945
+		{"round_trip_09_2_5", "BETA.INV(0.999945,2,5)", 0.9, false, 0},
+
+		// Skewed left (alpha=5, beta=1)
+		{"skewed_left", "BETA.INV(0.03125,5,1)", 0.5, false, 0},
+
+		// Skewed right (alpha=1, beta=5)
+		{"skewed_right", "BETA.INV(0.96875,1,5)", 0.5, false, 0},
+
+		// Custom bounds: BETA.INV(0.5, 2, 2, 10, 20) = 15
+		{"custom_bounds_symmetric", "BETA.INV(0.5,2,2,10,20)", 15, false, 0},
+
+		// Custom bounds with negative range
+		{"custom_bounds_neg", "BETA.INV(0.5,2,2,-5,5)", 0, false, 0},
+
+		// Custom bounds: p=0 returns A
+		{"custom_bounds_p0", "BETA.INV(0,2,3,1,3)", 1, false, 0},
+
+		// Custom bounds: p=1 returns B
+		{"custom_bounds_p1", "BETA.INV(1,2,3,1,3)", 3, false, 0},
+
+		// Small alpha, large beta → distribution concentrated near 0
+		{"small_alpha_large_beta", "BETA.INV(0.5,0.5,5)", 0.0466872, false, 0},
+
+		// Large alpha, small beta → distribution concentrated near 1
+		{"large_alpha_small_beta", "BETA.INV(0.5,5,0.5)", 0.9533128, false, 0},
+
+		// Near p=1
+		{"near_p_one", "BETA.INV(0.99,2,3)", 0.8591325, false, 0},
+
+		// Near p=0 (but positive)
+		{"near_p_zero", "BETA.INV(0.01,2,3)", 0.0419986, false, 0},
+
+		// Fractional alpha and beta
+		{"fractional_params", "BETA.INV(0.5,1.5,2.5)", 0.3524523, false, 0},
+
+		// Large parameters
+		{"large_params", "BETA.INV(0.5,100,100)", 0.5, false, 0},
+
+		// Error: probability < 0
+		{"err_p_neg", "BETA.INV(-0.1,2,3)", 0, true, ErrValNUM},
+
+		// Error: probability > 1
+		{"err_p_gt1", "BETA.INV(1.1,2,3)", 0, true, ErrValNUM},
+
+		// Error: alpha <= 0
+		{"err_alpha_zero", "BETA.INV(0.5,0,3)", 0, true, ErrValNUM},
+		{"err_alpha_neg", "BETA.INV(0.5,-1,3)", 0, true, ErrValNUM},
+
+		// Error: beta <= 0
+		{"err_beta_zero", "BETA.INV(0.5,2,0)", 0, true, ErrValNUM},
+		{"err_beta_neg", "BETA.INV(0.5,2,-1)", 0, true, ErrValNUM},
+
+		// Error: A >= B
+		{"err_A_eq_B", "BETA.INV(0.5,2,3,5,5)", 0, true, ErrValNUM},
+		{"err_A_gt_B", "BETA.INV(0.5,2,3,5,3)", 0, true, ErrValNUM},
+
+		// Error: non-numeric arguments
+		{"err_non_numeric_p", `BETA.INV("abc",2,3)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_alpha", `BETA.INV(0.5,"abc",3)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_beta", `BETA.INV(0.5,2,"abc")`, 0, true, ErrValVALUE},
+		{"err_non_numeric_A", `BETA.INV(0.5,2,3,"abc")`, 0, true, ErrValVALUE},
+		{"err_non_numeric_B", `BETA.INV(0.5,2,3,0,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBETA_INV_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args (2)
+	cf := evalCompile(t, "BETA.INV(0.5,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BETA.INV(0.5,2) should error, got type=%d", got.Type)
+	}
+
+	// Too many args (6)
+	cf = evalCompile(t, "BETA.INV(0.5,2,3,0,1,99)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BETA.INV(0.5,2,3,0,1,99) should error, got type=%d", got.Type)
+	}
+}
+
+func TestBETA_INV_round_trip(t *testing.T) {
+	const tol = 1e-5
+	resolver := &mockResolver{}
+
+	// BETA.INV(BETA.DIST(x, alpha, beta, TRUE), alpha, beta) ≈ x
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		{"rt_03_2_5", "BETA.INV(BETA.DIST(0.3,2,5,TRUE),2,5)", 0.3},
+		{"rt_07_3_2", "BETA.INV(BETA.DIST(0.7,3,2,TRUE),3,2)", 0.7},
+		{"rt_05_10_10", "BETA.INV(BETA.DIST(0.5,10,10,TRUE),10,10)", 0.5},
+		{"rt_02_1_3", "BETA.INV(BETA.DIST(0.2,1,3,TRUE),1,3)", 0.2},
+		{"rt_custom_bounds", "BETA.INV(BETA.DIST(5,2,3,TRUE,0,10),2,3,0,10)", 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestT_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic", "T.DIST.RT(2,10)", 0.03669402, false, 0},
+		{"zero", "T.DIST.RT(0,5)", 0.5, false, 0},
+		{"negative_x", "T.DIST.RT(-2,10)", 0.96330598, false, 0},
+		{"large_x", "T.DIST.RT(5,10)", 0.00026867, false, 0},
+		{"df1", "T.DIST.RT(1,1)", 0.25, false, 0},
+		{"df2", "T.DIST.RT(1,2)", 0.21132487, false, 0},
+		{"df30", "T.DIST.RT(1.96,30)", 0.02967116, false, 0},
+		{"df100", "T.DIST.RT(2.576,100)", 0.00572851, false, 0},
+		{"small_x", "T.DIST.RT(0.1,5)", 0.46211507, false, 0},
+		{"neg_large", "T.DIST.RT(-5,10)", 0.99973133, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.DIST.RT(2,10.7)", 0.03669402, false, 0},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST.RT(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST.RT(1,-1)", 0, true, ErrValNUM},
+		{"err_df_frac_below1", "T.DIST.RT(1,0.9)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST.RT("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST.RT(2,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.DIST.RT(2)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.DIST.RT(2,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestT_DIST_2T(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic", "T.DIST.2T(2,10)", 0.07338803, false, 0},
+		{"zero", "T.DIST.2T(0,5)", 1.0, false, 0},
+		{"large_x", "T.DIST.2T(5,10)", 0.00053733, false, 0},
+		{"df1", "T.DIST.2T(1,1)", 0.5, false, 0},
+		{"df2", "T.DIST.2T(1,2)", 0.42264973, false, 0},
+		{"df30", "T.DIST.2T(1.96,30)", 0.05934231, false, 0},
+		{"df100", "T.DIST.2T(2.576,100)", 0.01145702, false, 0},
+		{"small_x", "T.DIST.2T(0.1,5)", 0.92423014, false, 0},
+		{"df1_x2", "T.DIST.2T(2,1)", 0.29516724, false, 0},
+		{"df50", "T.DIST.2T(3,50)", 0.00420170, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.DIST.2T(2,10.7)", 0.07338803, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "T.DIST.2T(-1,10)", 0, true, ErrValNUM},
+		{"err_neg_x2", "T.DIST.2T(-0.001,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "T.DIST.2T(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.DIST.2T(1,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `T.DIST.2T("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.DIST.2T(2,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.DIST.2T(2)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.DIST.2T(2,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestT_INV_2T(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"basic_05_10", "T.INV.2T(0.05,10)", 2.22813885, false, 0},
+		{"p1_df5", "T.INV.2T(1,5)", 0, false, 0},
+		{"p01_df10", "T.INV.2T(0.01,10)", 3.16927267, false, 0},
+		{"p10_df20", "T.INV.2T(0.10,20)", 1.72471824, false, 0},
+		{"p05_df1", "T.INV.2T(0.05,1)", 12.7062047, false, 0},
+		{"p05_df2", "T.INV.2T(0.05,2)", 4.30265273, false, 0},
+		{"p05_df30", "T.INV.2T(0.05,30)", 2.04227246, false, 0},
+		{"p05_df100", "T.INV.2T(0.05,100)", 1.98397152, false, 0},
+		{"p50_df10", "T.INV.2T(0.5,10)", 0.69981200, false, 0},
+		{"p90_df10", "T.INV.2T(0.9,10)", 0.12891459, false, 0},
+
+		// Truncation: 10.7 → 10
+		{"trunc_df", "T.INV.2T(0.05,10.7)", 2.22813885, false, 0},
+
+		// Error: p <= 0
+		{"err_p_zero", "T.INV.2T(0,10)", 0, true, ErrValNUM},
+		{"err_p_neg", "T.INV.2T(-0.1,10)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "T.INV.2T(1.1,10)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "T.INV.2T(0.05,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "T.INV.2T(0.05,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `T.INV.2T("abc",10)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `T.INV.2T(0.05,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "T.INV.2T(0.05)", 0, true, ErrValVALUE},
+		{"err_too_many", "T.INV.2T(0.05,10,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-5
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_95", "CHISQ.DIST.RT(3.841,1)", 0.05001368, false, 0},
+		{"x0_df5", "CHISQ.DIST.RT(0,5)", 1.0, false, 0},
+		{"df2", "CHISQ.DIST.RT(5.991,2)", 0.05001162, false, 0},
+		{"df5", "CHISQ.DIST.RT(5,5)", 0.41588019, false, 0},
+		{"df10", "CHISQ.DIST.RT(10,10)", 0.44049329, false, 0},
+		{"df20", "CHISQ.DIST.RT(20,20)", 0.45792971, false, 0},
+		{"large_x", "CHISQ.DIST.RT(100,5)", 0, false, 0},
+		{"small_x", "CHISQ.DIST.RT(0.01,1)", 0.92034433, false, 0},
+		{"df1_x1", "CHISQ.DIST.RT(1,1)", 0.31731051, false, 0},
+		{"df3_x3", "CHISQ.DIST.RT(3,3)", 0.39162518, false, 0},
+
+		// Truncation: 3.7 → 3
+		{"trunc_df", "CHISQ.DIST.RT(3,3.7)", 0.39162518, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "CHISQ.DIST.RT(-1,3)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "CHISQ.DIST.RT(1,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "CHISQ.DIST.RT(1,-1)", 0, true, ErrValNUM},
+
+		// Error: df > 10^10
+		{"err_df_too_large", "CHISQ.DIST.RT(1,10000000001)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `CHISQ.DIST.RT("abc",1)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.DIST.RT(1,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "CHISQ.DIST.RT(1)", 0, true, ErrValVALUE},
+		{"err_too_many", "CHISQ.DIST.RT(1,3,TRUE)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestCHISQ_INV_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_05_1", "CHISQ.INV.RT(0.05,1)", 3.84145882, false, 0},
+		{"critical_05_2", "CHISQ.INV.RT(0.05,2)", 5.99146455, false, 0},
+		{"critical_05_5", "CHISQ.INV.RT(0.05,5)", 11.0704977, false, 0},
+		{"critical_05_10", "CHISQ.INV.RT(0.05,10)", 18.3070380, false, 0},
+		{"critical_01_1", "CHISQ.INV.RT(0.01,1)", 6.63489660, false, 0},
+		{"p50_df5", "CHISQ.INV.RT(0.5,5)", 4.35146163, false, 0},
+		{"p90_df5", "CHISQ.INV.RT(0.9,5)", 1.61031160, false, 0},
+		{"p1_df5", "CHISQ.INV.RT(1,5)", 0, false, 0},
+		{"p10_df20", "CHISQ.INV.RT(0.10,20)", 28.4119982, false, 0},
+		{"critical_05_30", "CHISQ.INV.RT(0.05,30)", 43.7729690, false, 0},
+
+		// Truncation: 5.9 → 5
+		{"trunc_df", "CHISQ.INV.RT(0.05,5.9)", 11.0704977, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "CHISQ.INV.RT(-0.1,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "CHISQ.INV.RT(1.1,5)", 0, true, ErrValNUM},
+
+		// Error: p = 0
+		{"err_p_zero", "CHISQ.INV.RT(0,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df_zero", "CHISQ.INV.RT(0.05,0)", 0, true, ErrValNUM},
+		{"err_df_neg", "CHISQ.INV.RT(0.05,-1)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `CHISQ.INV.RT("abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df", `CHISQ.INV.RT(0.05,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "CHISQ.INV.RT(0.05)", 0, true, ErrValVALUE},
+		{"err_too_many", "CHISQ.INV.RT(0.05,5,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestF_DIST_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_01", "F.DIST.RT(15.2069,6,4)", 0.01000, false, 0},
+		{"x0", "F.DIST.RT(0,5,5)", 1.0, false, 0},
+		{"basic1", "F.DIST.RT(1,5,5)", 0.50000, false, 0},
+		{"basic2", "F.DIST.RT(2,5,5)", 0.23251, false, 0},
+		{"basic3", "F.DIST.RT(5,2,3)", 0.11086, false, 0},
+		{"df1_1", "F.DIST.RT(1,1,1)", 0.50000, false, 0},
+		{"large_x", "F.DIST.RT(100,5,5)", 0.00001, false, 0},
+		{"small_x", "F.DIST.RT(0.1,5,5)", 0.98776, false, 0},
+		{"df10_10", "F.DIST.RT(2,10,10)", 0.14485, false, 0},
+		{"df30_30", "F.DIST.RT(1.5,30,30)", 0.13621, false, 0},
+
+		// Truncation: 6.9 → 6, 4.9 → 4
+		{"trunc_df", "F.DIST.RT(15.2069,6.9,4.9)", 0.01000, false, 0},
+
+		// Error: x < 0
+		{"err_neg_x", "F.DIST.RT(-1,5,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df1_zero", "F.DIST.RT(1,0,5)", 0, true, ErrValNUM},
+		{"err_df2_zero", "F.DIST.RT(1,5,0)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_x", `F.DIST.RT("abc",5,5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.DIST.RT(1,"abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.DIST.RT(1,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "F.DIST.RT(1,5)", 0, true, ErrValVALUE},
+		{"err_too_many", "F.DIST.RT(1,5,5,TRUE)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+func TestF_INV_RT(t *testing.T) {
+	resolver := &mockResolver{}
+	const tol = 1e-3
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+		errVal  ErrorValue
+	}{
+		// Basic cases
+		{"critical_01", "F.INV.RT(0.01,6,4)", 15.2069, false, 0},
+		{"p1_df5_5", "F.INV.RT(1,5,5)", 0, false, 0},
+		{"p50_df5_5", "F.INV.RT(0.5,5,5)", 1.0, false, 0},
+		{"p05_df5_5", "F.INV.RT(0.05,5,5)", 5.0503, false, 0},
+		{"p10_df2_3", "F.INV.RT(0.10,2,3)", 5.4624, false, 0},
+		{"p05_df1_1", "F.INV.RT(0.05,1,1)", 161.448, false, 0},
+		{"p05_df10_10", "F.INV.RT(0.05,10,10)", 2.9782, false, 0},
+		{"p05_df30_30", "F.INV.RT(0.05,30,30)", 1.8409, false, 0},
+		{"p90_df5_5", "F.INV.RT(0.9,5,5)", 0.2896, false, 0},
+		{"p25_df10_10", "F.INV.RT(0.25,10,10)", 1.5513, false, 0},
+
+		// Truncation: 6.9 → 6, 4.9 → 4
+		{"trunc_df", "F.INV.RT(0.01,6.9,4.9)", 15.2069, false, 0},
+
+		// Error: p < 0
+		{"err_p_neg", "F.INV.RT(-0.1,5,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "F.INV.RT(1.1,5,5)", 0, true, ErrValNUM},
+
+		// Error: p = 0
+		{"err_p_zero", "F.INV.RT(0,5,5)", 0, true, ErrValNUM},
+
+		// Error: df < 1
+		{"err_df1_zero", "F.INV.RT(0.05,0,5)", 0, true, ErrValNUM},
+		{"err_df2_zero", "F.INV.RT(0.05,5,0)", 0, true, ErrValNUM},
+
+		// Error: non-numeric
+		{"err_non_numeric_p", `F.INV.RT("abc",5,5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df1", `F.INV.RT(0.05,"abc",5)`, 0, true, ErrValVALUE},
+		{"err_non_numeric_df2", `F.INV.RT(0.05,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: wrong arg count
+		{"err_too_few", "F.INV.RT(0.05,5)", 0, true, ErrValVALUE},
+		{"err_too_many", "F.INV.RT(0.05,5,5,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError {
+					t.Fatalf("%s: want error %v, got type=%d val=%v", tt.formula, tt.errVal, got.Type, got)
+				}
+				if got.Err != tt.errVal {
+					t.Errorf("%s: want error %v, got %v", tt.formula, tt.errVal, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d err=%v", tt.formula, got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g (diff=%g)", tt.formula, got.Num, tt.want, math.Abs(got.Num-tt.want))
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// HYPGEOM.DIST
+// ---------------------------------------------------------------------------
+
+func TestHYPGEOM_DIST(t *testing.T) {
+	const tol = 1e-9
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF — Excel example
+		{"pmf_basic", "HYPGEOM.DIST(1,4,8,20,FALSE)", 0.363261093911, false, 0},
+
+		// Basic CDF — Excel example
+		{"cdf_basic", "HYPGEOM.DIST(1,4,8,20,TRUE)", 0.465428276574, false, 0},
+
+		// All successes in sample PMF
+		{"pmf_all_success", "HYPGEOM.DIST(4,4,8,20,FALSE)", 0.014447884417, false, 0},
+
+		// Zero successes PMF
+		{"pmf_zero_success", "HYPGEOM.DIST(0,4,8,20,FALSE)", 0.102167182663, false, 0},
+
+		// CDF at max should be 1
+		{"cdf_at_max", "HYPGEOM.DIST(4,4,8,20,TRUE)", 1, false, 0},
+
+		// Simple case: 1 success from sample of 1, 1 success in pop of 2
+		{"simple_half", "HYPGEOM.DIST(1,1,1,2,FALSE)", 0.5, false, 0},
+
+		// Simple case: 0 successes
+		{"simple_zero", "HYPGEOM.DIST(0,1,1,2,FALSE)", 0.5, false, 0},
+
+		// Simple CDF at max
+		{"simple_cdf_max", "HYPGEOM.DIST(1,1,1,2,TRUE)", 1, false, 0},
+
+		// Truncation: 1.9 -> 1, 4.7 -> 4, 8.3 -> 8, 20.1 -> 20
+		{"truncation", "HYPGEOM.DIST(1.9,4.7,8.3,20.1,FALSE)", 0.363261093911, false, 0},
+
+		// PMF with larger sample
+		{"pmf_large_sample", "HYPGEOM.DIST(3,10,15,50,FALSE)", 0.297855699521, false, 0},
+
+		// CDF with larger sample
+		{"cdf_large_sample", "HYPGEOM.DIST(3,10,15,50,TRUE)", 0.659406694786, false, 0},
+
+		// Extreme: sample_s equals both number_sample and population_s
+		{"pmf_all_match", "HYPGEOM.DIST(3,3,3,10,FALSE)", 0.008333333333, false, 0},
+
+		// PMF k=2 out of sample=4, pop_s=8, pop=20
+		{"pmf_k2", "HYPGEOM.DIST(2,4,8,20,FALSE)", 0.381424148607, false, 0},
+
+		// PMF k=3
+		{"pmf_k3", "HYPGEOM.DIST(3,4,8,20,FALSE)", 0.138699690402, false, 0},
+
+		// CDF at k=0
+		{"cdf_at_zero", "HYPGEOM.DIST(0,4,8,20,TRUE)", 0.102167182663, false, 0},
+
+		// CDF at k=2
+		{"cdf_at_k2", "HYPGEOM.DIST(2,4,8,20,TRUE)", 0.846852425181, false, 0},
+
+		// CDF at k=3
+		{"cdf_at_k3", "HYPGEOM.DIST(3,4,8,20,TRUE)", 0.985552115583, false, 0},
+
+		// Small population: pop=5, pop_s=2, sample=3, k=1
+		{"small_pop", "HYPGEOM.DIST(1,3,2,5,FALSE)", 0.6, false, 0},
+
+		// Small population CDF
+		{"small_pop_cdf", "HYPGEOM.DIST(1,3,2,5,TRUE)", 0.7, false, 0},
+
+		// Large population
+		{"large_pop_pmf", "HYPGEOM.DIST(5,10,50,200,FALSE)", 0.055830842234, false, 0},
+
+		// sample_s = number_sample (all drawn are successes)
+		{"all_drawn_success", "HYPGEOM.DIST(2,2,5,10,FALSE)", 0.222222222222, false, 0},
+
+		// Error: sample_s < 0
+		{"err_neg_sample_s", "HYPGEOM.DIST(-1,4,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s > number_sample
+		{"err_s_gt_n", "HYPGEOM.DIST(5,4,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s > population_s
+		{"err_s_gt_pop_s", "HYPGEOM.DIST(5,10,4,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_sample <= 0
+		{"err_n_zero", "HYPGEOM.DIST(0,0,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_sample > number_pop
+		{"err_n_gt_pop", "HYPGEOM.DIST(1,25,8,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: population_s <= 0
+		{"err_pop_s_zero", "HYPGEOM.DIST(0,4,0,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: population_s > number_pop
+		{"err_pop_s_gt_pop", "HYPGEOM.DIST(1,4,25,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_pop <= 0
+		{"err_pop_zero", "HYPGEOM.DIST(0,4,8,0,FALSE)", 0, true, ErrValNUM},
+
+		// Error: sample_s < max(0, n + M - N) — lower bound violation
+		{"err_lower_bound", "HYPGEOM.DIST(0,10,15,20,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric_1", `HYPGEOM.DIST("abc",4,8,20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric_2", `HYPGEOM.DIST(1,"abc",8,20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric third arg
+		{"err_non_numeric_3", `HYPGEOM.DIST(1,4,"abc",20,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fourth arg
+		{"err_non_numeric_4", `HYPGEOM.DIST(1,4,8,"abc",FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fifth arg
+		{"err_non_numeric_5", `HYPGEOM.DIST(1,4,8,20,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestHYPGEOM_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "HYPGEOM.DIST(1,4,8,20)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("HYPGEOM.DIST(1,4,8,20) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "HYPGEOM.DIST(1,4,8,20,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("HYPGEOM.DIST(1,4,8,20,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(HYPGEOM.DIST(1,4,8,20),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(HYPGEOM.DIST(1,4,8,20),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NEGBINOM.DIST
+// ---------------------------------------------------------------------------
+
+func TestNEGBINOM_DIST(t *testing.T) {
+	const tol = 1e-7
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic PMF — Excel: NEGBINOM.DIST(10,5,0.25,FALSE) ≈ 0.0550487
+		{"pmf_basic", "NEGBINOM.DIST(10,5,0.25,FALSE)", 0.0550487, false, 0},
+
+		// Basic CDF — Excel: NEGBINOM.DIST(10,5,0.25,TRUE) ≈ 0.3135141
+		{"cdf_basic", "NEGBINOM.DIST(10,5,0.25,TRUE)", 0.3135141, false, 0},
+
+		// PMF with p=0.5 — NEGBINOM.DIST(3,5,0.5,FALSE)
+		// C(7,4)*0.5^5*0.5^3 = 35 * 0.03125 * 0.125 = 0.13671875
+		{"pmf_p05", "NEGBINOM.DIST(3,5,0.5,FALSE)", 0.13671875, false, 0},
+
+		// CDF with p=0.5 — NEGBINOM.DIST(3,5,0.5,TRUE)
+		{"cdf_p05", "NEGBINOM.DIST(3,5,0.5,TRUE)", 0.36328125, false, 0},
+
+		// Zero failures PMF — P(X=0) = p^r
+		// NEGBINOM.DIST(0,5,0.5,FALSE) = 0.5^5 = 0.03125
+		{"pmf_zero_failures", "NEGBINOM.DIST(0,5,0.5,FALSE)", 0.03125, false, 0},
+
+		// Zero failures CDF — same as PMF
+		{"cdf_zero_failures", "NEGBINOM.DIST(0,5,0.5,TRUE)", 0.03125, false, 0},
+
+		// r=1, geometric distribution: PMF = p*(1-p)^f
+		// NEGBINOM.DIST(3,1,0.3,FALSE) = 0.3*0.7^3 = 0.1029
+		{"pmf_geometric", "NEGBINOM.DIST(3,1,0.3,FALSE)", 0.1029, false, 0},
+
+		// r=1, geometric distribution CDF
+		// CDF = 1-(1-p)^(f+1) = 1-0.7^4 = 1-0.2401 = 0.7599
+		{"cdf_geometric", "NEGBINOM.DIST(3,1,0.3,TRUE)", 0.7599, false, 0},
+
+		// p=0, f=0: certain to have zero failures if... wait, p=0 means
+		// success never happens. But the convention: p^r with p=0 and f=0
+		// returns 1 (edge case).
+		{"pmf_p0_f0", "NEGBINOM.DIST(0,1,0,FALSE)", 1, false, 0},
+
+		// p=0, f>0: no successes ever, so PMF is 0
+		{"pmf_p0_f_pos", "NEGBINOM.DIST(5,1,0,FALSE)", 0, false, 0},
+
+		// p=1, f=0: success always, zero failures, PMF = 1^r = 1
+		{"pmf_p1_f0", "NEGBINOM.DIST(0,3,1,FALSE)", 1, false, 0},
+
+		// p=1, f>0: no failures possible, PMF = 0
+		{"pmf_p1_f_pos", "NEGBINOM.DIST(2,3,1,FALSE)", 0, false, 0},
+
+		// CDF at p=1, f=0: CDF = 1
+		{"cdf_p1_f0", "NEGBINOM.DIST(0,3,1,TRUE)", 1, false, 0},
+
+		// CDF at p=0, f=0: CDF = I_0(r, 1) = 0 — but PMF for f=0 is 1
+		// regBetaInc(0, r, f+1) = 0, which contradicts. Actually p=0 edge:
+		// regBetaInc handles x=0 returning 0.
+		{"cdf_p0_f0", "NEGBINOM.DIST(0,1,0,TRUE)", 0, false, 0},
+
+		// Truncation: 10.9 -> 10, 5.7 -> 5
+		{"truncation", "NEGBINOM.DIST(10.9,5.7,0.25,FALSE)", 0.0550487, false, 0},
+
+		// Large failures PMF — NEGBINOM.DIST(50,10,0.3,FALSE)
+		{"pmf_large_f", "NEGBINOM.DIST(50,10,0.3,FALSE)", 0.0013344436566226712, false, 0},
+
+		// Large failures CDF — NEGBINOM.DIST(50,10,0.3,TRUE)
+		{"cdf_large_f", "NEGBINOM.DIST(50,10,0.3,TRUE)", 0.9941288117574135, false, 0},
+
+		// High p PMF — NEGBINOM.DIST(2,10,0.9,FALSE)
+		// Very likely to succeed, few failures expected
+		{"pmf_high_p", "NEGBINOM.DIST(2,10,0.9,FALSE)", 0.1917731420550001, false, 0},
+
+		// High p CDF — NEGBINOM.DIST(2,10,0.9,TRUE)
+		{"cdf_high_p", "NEGBINOM.DIST(2,10,0.9,TRUE)", 0.889130022255, false, 0},
+
+		// r=1, p=1, f=0: geometric with certain success
+		{"pmf_r1_p1_f0", "NEGBINOM.DIST(0,1,1,FALSE)", 1, false, 0},
+
+		// Error: number_f < 0
+		{"err_neg_f", "NEGBINOM.DIST(-1,5,0.25,FALSE)", 0, true, ErrValNUM},
+
+		// Error: number_s < 1
+		{"err_s_zero", "NEGBINOM.DIST(5,0,0.25,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability_s < 0
+		{"err_p_neg", "NEGBINOM.DIST(5,5,-0.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: probability_s > 1
+		{"err_p_gt1", "NEGBINOM.DIST(5,5,1.1,FALSE)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric_f", `NEGBINOM.DIST("abc",5,0.25,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric_s", `NEGBINOM.DIST(10,"abc",0.25,FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric third arg
+		{"err_non_numeric_p", `NEGBINOM.DIST(10,5,"abc",FALSE)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fourth arg
+		{"err_non_numeric_cum", `NEGBINOM.DIST(10,5,0.25,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("got %.12f, want %.12f", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestNEGBINOM_DIST_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "NEGBINOM.DIST(10,5,0.25)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("NEGBINOM.DIST(10,5,0.25) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "NEGBINOM.DIST(10,5,0.25,FALSE,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("NEGBINOM.DIST(10,5,0.25,FALSE,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(NEGBINOM.DIST(10,5,0.25),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(NEGBINOM.DIST(10,5,0.25),"err") = %v, want string "err"`, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.INV
+// ---------------------------------------------------------------------------
+
+func TestBINOM_INV(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Basic case from Excel docs
+		{"basic", "BINOM.INV(6,0.5,0.75)", 4, false, 0},
+
+		// Median of symmetric binomial
+		{"median_symmetric", "BINOM.INV(10,0.5,0.5)", 5, false, 0},
+
+		// Very low alpha — CDF(0)=0.000977 < 0.001, CDF(1)=0.01074 >= 0.001
+		{"low_alpha", "BINOM.INV(10,0.5,0.001)", 1, false, 0},
+
+		// Very high alpha — expect near n
+		{"high_alpha", "BINOM.INV(10,0.5,0.999)", 9, false, 0},
+
+		// Single trial, alpha below p(0)=0.5
+		{"single_trial_low", "BINOM.INV(1,0.5,0.4)", 0, false, 0},
+
+		// Single trial, alpha above p(0)=0.5
+		{"single_trial_high", "BINOM.INV(1,0.5,0.6)", 1, false, 0},
+
+		// Single trial, alpha exactly at boundary
+		{"single_trial_exact", "BINOM.INV(1,0.5,0.5)", 0, false, 0},
+
+		// Zero trials: CDF(0,0,p)=1, so any alpha < 1 returns 0
+		{"zero_trials", "BINOM.INV(0,0.5,0.5)", 0, false, 0},
+
+		// High probability of success
+		{"high_prob", "BINOM.INV(10,0.9,0.5)", 9, false, 0},
+
+		// Low probability of success
+		{"low_prob", "BINOM.INV(10,0.1,0.5)", 1, false, 0},
+
+		// High probability, low alpha
+		{"high_prob_low_alpha", "BINOM.INV(10,0.9,0.01)", 6, false, 0},
+
+		// Low probability, high alpha
+		{"low_prob_high_alpha", "BINOM.INV(10,0.1,0.99)", 4, false, 0},
+
+		// Truncation: 6.9 -> 6 trials
+		{"truncation", "BINOM.INV(6.9,0.5,0.75)", 4, false, 0},
+
+		// Alpha near lower boundary
+		{"alpha_near_zero", "BINOM.INV(10,0.5,0.01)", 1, false, 0},
+
+		// Larger n
+		{"larger_n", "BINOM.INV(100,0.5,0.5)", 50, false, 0},
+
+		// Asymmetric probability
+		{"asym_p03", "BINOM.INV(10,0.3,0.5)", 3, false, 0},
+
+		// Asymmetric probability with high alpha
+		{"asym_p03_high_alpha", "BINOM.INV(10,0.3,0.9)", 5, false, 0},
+
+		// Asymmetric probability with low alpha
+		{"asym_p07", "BINOM.INV(10,0.7,0.5)", 7, false, 0},
+
+		// p = 0.5, n = 20
+		{"n20_p05", "BINOM.INV(20,0.5,0.75)", 12, false, 0},
+
+		// ---- Error cases ----
+
+		// Negative trials
+		{"err_neg_trials", "BINOM.INV(-1,0.5,0.5)", 0, true, ErrValNUM},
+
+		// Probability <= 0
+		{"err_p_zero", "BINOM.INV(10,0,0.5)", 0, true, ErrValNUM},
+
+		// Probability >= 1
+		{"err_p_one", "BINOM.INV(10,1,0.5)", 0, true, ErrValNUM},
+
+		// Probability negative
+		{"err_p_neg", "BINOM.INV(10,-0.1,0.5)", 0, true, ErrValNUM},
+
+		// Probability > 1
+		{"err_p_gt1", "BINOM.INV(10,1.1,0.5)", 0, true, ErrValNUM},
+
+		// Alpha <= 0
+		{"err_alpha_zero", "BINOM.INV(10,0.5,0)", 0, true, ErrValNUM},
+
+		// Alpha >= 1
+		{"err_alpha_one", "BINOM.INV(10,0.5,1)", 0, true, ErrValNUM},
+
+		// Alpha negative
+		{"err_alpha_neg", "BINOM.INV(10,0.5,-0.1)", 0, true, ErrValNUM},
+
+		// Alpha > 1
+		{"err_alpha_gt1", "BINOM.INV(10,0.5,1.5)", 0, true, ErrValNUM},
+
+		// Non-numeric trials
+		{"err_non_numeric_trials", `BINOM.INV("abc",0.5,0.5)`, 0, true, ErrValVALUE},
+
+		// Non-numeric probability
+		{"err_non_numeric_prob", `BINOM.INV(10,"abc",0.5)`, 0, true, ErrValVALUE},
+
+		// Non-numeric alpha
+		{"err_non_numeric_alpha", `BINOM.INV(10,0.5,"abc")`, 0, true, ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error %v", tt.formula, got, tt.wantErr)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s error = %v, want %v", tt.formula, got.Err, tt.wantErr)
+				}
+				return
+			}
+
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v (type %d), want number %v", tt.formula, got, got.Type, tt.wantNum)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("%s = %v, want %v", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBINOM_INV_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args
+	cf := evalCompile(t, "BINOM.INV(10,0.5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.INV(10,0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args
+	cf = evalCompile(t, "BINOM.INV(10,0.5,0.5,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.INV(10,0.5,0.5,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(BINOM.INV(10,0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(BINOM.INV(10,0.5),"err") = %v, want string "err"`, got)
+	}
+}
+
+func TestPHI(t *testing.T) {
+	const tol = 1e-6
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+	}{
+		{"basic", "PHI(0.75)", 0.301137432, false},
+		{"zero", "PHI(0)", 0.398942280, false},
+		{"one", "PHI(1)", 0.241970725, false},
+		{"neg_one", "PHI(-1)", 0.241970725, false},
+		{"two", "PHI(2)", 0.053990967, false},
+		{"neg_two", "PHI(-2)", 0.053990967, false},
+		{"three", "PHI(3)", 0.004431848, false},
+		{"large", "PHI(10)", 0, false},
+		{"half", "PHI(0.5)", 0.352065327, false},
+		{"neg_half", "PHI(-0.5)", 0.352065327, false},
+		{"err_text", `PHI("abc")`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", tt.formula, got)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", tt.formula, got)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestGAUSS(t *testing.T) {
+	const tol = 1e-6
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+	}{
+		{"basic", "GAUSS(2)", 0.477250, false},
+		{"zero", "GAUSS(0)", 0, false},
+		{"one", "GAUSS(1)", 0.341345, false},
+		{"neg_one", "GAUSS(-1)", -0.341345, false},
+		{"three", "GAUSS(3)", 0.498650, false},
+		{"neg_two", "GAUSS(-2)", -0.477250, false},
+		{"half", "GAUSS(0.5)", 0.191462, false},
+		{"large", "GAUSS(6)", 0.5, false},
+		{"err_text", `GAUSS("abc")`, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if tt.isErr {
+				if got.Type != ValueError {
+					t.Errorf("%s = %v, want error", tt.formula, got)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s = %v, want number", tt.formula, got)
+			}
+			if math.Abs(got.Num-tt.want) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.want)
+			}
+		})
+	}
 }
