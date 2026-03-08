@@ -7,7 +7,7 @@ import (
 )
 
 // excelEpoch is "January 0, 1900" = December 31, 1899.
-// Excel serial 1 = January 1, 1900 = epoch + 1 day.
+// Serial 1 = January 1, 1900 = epoch + 1 day.
 var excelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
 
 // excel1904Epoch is January 1, 1904.
@@ -15,7 +15,7 @@ var excelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
 // Unlike the 1900 system, there is no phantom "January 0" offset.
 var excel1904Epoch = time.Date(1904, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// timeToExcelSerial converts a time.Time to an Excel serial date number.
+// timeToExcelSerial converts a time.Time to a serial date number.
 func timeToExcelSerial(t time.Time) float64 {
 	return timeToExcelSerialForDateSystem(t, false)
 }
@@ -28,7 +28,7 @@ func timeToExcelSerialForDateSystem(t time.Time, date1904 bool) float64 {
 }
 
 func timeToExcelSerial1900(t time.Time) float64 {
-	// Calculate the number of days between the Excel epoch and the given time.
+	// Calculate the number of days between the 1900 epoch and the given time.
 	// We cannot use t.Sub(excelEpoch) because time.Duration is an int64 of
 	// nanoseconds, which overflows for dates more than ~292 years from the epoch.
 	// Instead, compute whole days via calendar difference and fractional day
@@ -43,7 +43,7 @@ func timeToExcelSerial1900(t time.Time) float64 {
 	h, min, sec := t.Clock()
 	days += (float64(h)*3600 + float64(min)*60 + float64(sec)) / 86400.0
 
-	// Excel 1900 leap year bug: Excel thinks Feb 29, 1900 exists (serial 60).
+	// 1900 leap year bug: serial 60 is the phantom Feb 29, 1900.
 	// Dates on or after March 1, 1900 (real day 60) need serial incremented by 1.
 	if days >= 60 {
 		days++
@@ -91,14 +91,14 @@ func julianDayNumber(year, month, day int) int {
 	return day + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
 }
 
-// ExcelSerialToTime converts an Excel serial date number to a time.Time.
+// ExcelSerialToTime converts a serial date number to a time.Time.
 func ExcelSerialToTime(serial float64) time.Time {
 	return excelSerialToTime(serial)
 }
 
-// excelSerialToTime converts an Excel serial date number to a time.Time.
+// excelSerialToTime converts a serial date number to a time.Time.
 func excelSerialToTime(serial float64) time.Time {
-	// Excel 1900 leap year bug: serial 60 is the phantom Feb 29.
+	// 1900 leap year bug: serial 60 is the phantom Feb 29.
 	// For serial > 60, subtract 1 to get the real day count.
 	if serial > 60 {
 		serial--
@@ -110,8 +110,8 @@ func excelSerialToTime(serial float64) time.Time {
 	return t
 }
 
-// excelSerialToTime1904 converts an Excel serial date number to a time.Time
-// using the 1904 date system (Mac Excel). No leap-year bug adjustment is needed.
+// excelSerialToTime1904 converts a serial date number to a time.Time
+// using the 1904 date system. No leap-year bug adjustment is needed.
 func excelSerialToTime1904(serial float64) time.Time {
 	days := int(serial)
 	frac := serial - float64(days)

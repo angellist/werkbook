@@ -701,7 +701,7 @@ func fnDDB(args []Value) (Value, error) {
 	totalDepreciation := 0.0
 	var dep float64
 	// Period can be fractional in the sense that we iterate integer periods
-	// up to math.Floor(period), but Excel DDB treats period as integer-based.
+	// up to math.Floor(period), but DDB treats period as integer-based.
 	// We iterate through whole periods.
 	intPeriod := int(math.Floor(period))
 	for p := 1; p <= intPeriod; p++ {
@@ -800,7 +800,7 @@ func fnXNPV(args []Value) (Value, error) {
 	return NumberVal(xnpv), nil
 }
 
-// coerceDateNum converts a Value to a float64, treating date strings as Excel
+// coerceDateNum converts a Value to a float64, treating date strings as date
 // serial numbers. It first tries CoerceNum, and if that fails on a string
 // value, it attempts to parse the string as a date using common date formats.
 func coerceDateNum(v Value) (float64, *Value) {
@@ -1139,7 +1139,7 @@ func fnMirr(args []Value) (Value, error) {
 	}
 
 	// Must have at least one negative value (otherwise PV of negatives is 0 → division by zero).
-	// All-negative is valid in Excel (returns -1 because FV of positives is 0).
+	// All-negative is valid (returns -1 because FV of positives is 0).
 	hasNeg := false
 	for _, cf := range cashFlows {
 		if cf < 0 {
@@ -1345,7 +1345,7 @@ func fnSYD(args []Value) (Value, error) {
 		return *e, nil
 	}
 
-	// Excel truncates life and per to integers.
+	// Truncate life and per to integers.
 	life = math.Trunc(life)
 	per = math.Trunc(per)
 
@@ -1624,16 +1624,44 @@ func fnTbillYield(args []Value) (Value, error) {
 
 // fnTbillEq implements TBILLEQ(settlement, maturity, discount).
 // Returns the bond-equivalent yield for a Treasury bill.
-// Formula: TBILLEQ = (365 * discount) / (360 - discount * DSM)
+//
+// For DSM <= 182 (half-year or less):
+//
+//	TBILLEQ = (365 * discount) / (360 - discount * DSM)
+//
+// For DSM > 182 (more than half-year), Excel uses a semi-annual
+// compounding formula derived from the US Treasury's investment rate
+// calculation:
+//
+//	price = 100 * (1 - discount * DSM / 360)
+//	b     = DSM / 365
+//	TBILLEQ = (-2*b + 2*sqrt(b*b - (2*b - 1)*(1 - 100/price))) / (2*b - 1)
 func fnTbillEq(args []Value) (Value, error) {
 	dsm, discount, ev := tbillValidate(args, false)
 	if ev != nil {
 		return *ev, nil
 	}
-	denom := 360.0 - discount*dsm
-	if denom == 0 {
-		return ErrorVal(ErrValDIV0), nil
+
+	if dsm <= 182 {
+		// Short-term: simple bond-equivalent yield.
+		denom := 360.0 - discount*dsm
+		if denom == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		return NumberVal((365.0 * discount) / denom), nil
 	}
-	result := (365.0 * discount) / denom
+
+	// Long-term (DSM > 182): semi-annual compounding formula.
+	price := 100.0 * (1.0 - discount*dsm/360.0)
+	if price <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	b := dsm / 365.0
+	term := 2.0*b - 1.0
+	discriminant := b*b - term*(1.0-100.0/price)
+	if discriminant < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	result := (-2.0*b + 2.0*math.Sqrt(discriminant)) / term
 	return NumberVal(result), nil
 }

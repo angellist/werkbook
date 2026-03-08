@@ -14,8 +14,8 @@ func TestTimeToExcelSerial(t *testing.T) {
 	}{
 		{"Jan 1 1900", time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC), 1},
 		{"Feb 28 1900", time.Date(1900, 2, 28, 0, 0, 0, 0, time.UTC), 59},
-		// Excel has a bug where it thinks Feb 29, 1900 exists.
-		// March 1, 1900 should be serial 61 in Excel.
+		// 1900 leap year bug: Feb 29, 1900 does not exist but serial 60 is reserved for it.
+		// March 1, 1900 should be serial 61.
 		{"Mar 1 1900", time.Date(1900, 3, 1, 0, 0, 0, 0, time.UTC), 61},
 		{"Jan 1 2000", time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), 36526},
 		{"Jan 1 2024", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 45292},
@@ -100,7 +100,7 @@ func TestExcelSerialToTime1904(t *testing.T) {
 		// No leap year bug in 1904 system.
 		{"serial 59", 59, time.Date(1904, 2, 29, 0, 0, 0, 0, time.UTC)},
 		{"serial 60", 60, time.Date(1904, 3, 1, 0, 0, 0, 0, time.UTC)},
-		// Verified against Excel: serial 17816 in 1904 = Oct 11, 1952.
+		// Verified: serial 17816 in 1904 = Oct 11, 1952.
 		{"serial 17816", 17816, time.Date(1952, 10, 11, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tt := range tests {
