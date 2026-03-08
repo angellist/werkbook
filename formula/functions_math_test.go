@@ -8508,3 +8508,121 @@ func TestDEGREES(t *testing.T) {
 		})
 	}
 }
+
+func TestQUOTIENT(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// Excel documentation examples
+		{"doc_ex1", "QUOTIENT(5,2)", 2},
+		{"doc_ex2", "QUOTIENT(4.5,3.1)", 1},
+		{"doc_ex3", "QUOTIENT(-10,3)", -3},
+
+		// Basic positive division
+		{"10_div_3", "QUOTIENT(10,3)", 3},
+		{"7_div_2", "QUOTIENT(7,2)", 3},
+		{"100_div_10", "QUOTIENT(100,10)", 10},
+		{"1_div_1", "QUOTIENT(1,1)", 1},
+
+		// QUOTIENT(x,1) equals INT(x) for positive x
+		{"x_div_1_integer", "QUOTIENT(7,1)", 7},
+		{"x_div_1_decimal", "QUOTIENT(5.9,1)", 5},
+		{"x_div_1_large", "QUOTIENT(123,1)", 123},
+
+		// Negative numerator
+		{"neg_num_pos_den", "QUOTIENT(-7,2)", -3},
+		{"neg_num_pos_den2", "QUOTIENT(-1,2)", 0},
+		{"neg_num_pos_den3", "QUOTIENT(-13,4)", -3},
+
+		// Negative denominator
+		{"pos_num_neg_den", "QUOTIENT(7,-2)", -3},
+		{"pos_num_neg_den2", "QUOTIENT(10,-3)", -3},
+
+		// Both negative (result positive)
+		{"both_neg", "QUOTIENT(-10,-3)", 3},
+		{"both_neg2", "QUOTIENT(-7,-2)", 3},
+
+		// Decimal truncation behavior (truncates toward zero)
+		{"trunc_pos", "QUOTIENT(7,3)", 2},
+		{"trunc_neg_num", "QUOTIENT(-7,3)", -2},
+		{"trunc_decimal_args", "QUOTIENT(9.9,3.1)", 3},
+		{"trunc_small_result", "QUOTIENT(1,3)", 0},
+
+		// Zero numerator
+		{"zero_num", "QUOTIENT(0,5)", 0},
+		{"zero_num_neg_den", "QUOTIENT(0,-3)", 0},
+
+		// String coercion
+		{"string_num", `QUOTIENT("10",3)`, 3},
+		{"string_den", `QUOTIENT(10,"3")`, 3},
+		{"string_both", `QUOTIENT("10","3")`, 3},
+
+		// Boolean coercion
+		{"bool_true_num", "QUOTIENT(TRUE,1)", 1},
+		{"bool_false_num", "QUOTIENT(FALSE,1)", 0},
+		{"bool_true_den", "QUOTIENT(5,TRUE)", 5},
+		{"bool_true_both", "QUOTIENT(TRUE,TRUE)", 1},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q): got type %v, want number", tt.formula, got.Type)
+			}
+			if got.Num != tt.wantNum {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// Division by zero
+		{"div_by_zero", "QUOTIENT(5,0)", ErrValDIV0},
+		{"div_by_zero_neg", "QUOTIENT(-5,0)", ErrValDIV0},
+		{"div_zero_by_zero", "QUOTIENT(0,0)", ErrValDIV0},
+
+		// Wrong argument count
+		{"no_args", "QUOTIENT()", ErrValVALUE},
+		{"one_arg", "QUOTIENT(5)", ErrValVALUE},
+		{"three_args", "QUOTIENT(5,2,1)", ErrValVALUE},
+
+		// Non-numeric string
+		{"non_numeric_num", `QUOTIENT("abc",2)`, ErrValVALUE},
+		{"non_numeric_den", `QUOTIENT(2,"abc")`, ErrValVALUE},
+		{"non_numeric_both", `QUOTIENT("abc","def")`, ErrValVALUE},
+
+		// Error propagation
+		{"err_div0_num", "QUOTIENT(1/0,2)", ErrValDIV0},
+		{"err_div0_den", "QUOTIENT(2,1/0)", ErrValDIV0},
+		{"err_na_num", "QUOTIENT(NA(),2)", ErrValNA},
+
+		// Boolean FALSE as denominator (coerces to 0 -> #DIV/0!)
+		{"bool_false_den", "QUOTIENT(5,FALSE)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
