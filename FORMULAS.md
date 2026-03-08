@@ -318,7 +318,7 @@ Werkbook supports **343** Excel formula functions.
 | TRIM | Text | 18 |
 | TRIMMEAN | Statistical | 23 |
 | TRUE | Logical | - |
-| TRUNC | Math & Trig | - |
+| TRUNC | Math & Trig | 34 |
 | TYPE | Information | - |
 | UNIQUE | Lookup & Reference | 29 |
 | UPPER | Text | 23 |

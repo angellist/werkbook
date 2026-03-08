@@ -8852,3 +8852,107 @@ func TestDECIMAL(t *testing.T) {
 		})
 	}
 }
+
+func TestTRUNC(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+		tol     float64
+	}{
+		// Basic truncation toward zero (default num_digits=0)
+		{"trunc_positive", "TRUNC(8.9)", 8, 0},
+		{"trunc_negative", "TRUNC(-8.9)", -8, 0},
+		{"trunc_between_0_and_1", "TRUNC(0.45)", 0, 0},
+
+		// Truncation with num_digits > 0
+		{"1dp_positive", "TRUNC(8.59,1)", 8.5, 1e-10},
+		{"2dp_positive", "TRUNC(0.545,2)", 0.54, 1e-10},
+		{"3dp_positive", "TRUNC(1.23789,3)", 1.237, 1e-10},
+		{"1dp_negative", "TRUNC(-8.59,1)", -8.5, 1e-10},
+		{"2dp_negative", "TRUNC(-0.545,2)", -0.54, 1e-10},
+
+		// Truncation with negative num_digits (truncate to tens, hundreds)
+		{"neg_digits_tens", "TRUNC(123,-1)", 120, 0},
+		{"neg_digits_hundreds", "TRUNC(123,-2)", 100, 0},
+		{"neg_digits_thousands", "TRUNC(5678,-3)", 5000, 0},
+		{"neg_digits_tens_neg_num", "TRUNC(-123,-1)", -120, 0},
+		{"neg_digits_hundreds_neg_num", "TRUNC(-567,-2)", -500, 0},
+
+		// Explicit num_digits=0
+		{"explicit_zero_digits", "TRUNC(3.7,0)", 3, 0},
+		{"explicit_zero_digits_neg", "TRUNC(-3.7,0)", -3, 0},
+
+		// Zero as input
+		{"zero_value", "TRUNC(0)", 0, 0},
+		{"zero_with_digits", "TRUNC(0,5)", 0, 0},
+		{"zero_with_neg_digits", "TRUNC(0,-2)", 0, 0},
+
+		// Very small decimals
+		{"small_positive", "TRUNC(0.0001,3)", 0, 0},
+		{"small_positive_4dp", "TRUNC(0.0001,4)", 0.0001, 1e-12},
+
+		// Integer input (no fractional part)
+		{"integer", "TRUNC(5)", 5, 0},
+		{"integer_with_digits", "TRUNC(5,2)", 5, 0},
+
+		// Boolean coercion (TRUE=1, FALSE=0)
+		{"bool_true_number", "TRUNC(TRUE)", 1, 0},
+		{"bool_false_number", "TRUNC(FALSE)", 0, 0},
+		{"bool_true_digits", "TRUNC(3.14,TRUE)", 3.1, 1e-10},
+		{"bool_false_digits", "TRUNC(3.14,FALSE)", 3, 0},
+
+		// String coercion (numeric strings)
+		{"string_number", `TRUNC("8.9")`, 8, 0},
+		{"string_digits", `TRUNC(8.59,"1")`, 8.5, 1e-10},
+	}
+
+	const epsilon = 1e-10
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q) = type %v, want ValueNumber", tt.formula, got.Type)
+			}
+			tol := tt.tol
+			if tol == 0 {
+				tol = epsilon
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "TRUNC()", ErrValVALUE},
+		{"too_many_args", "TRUNC(1,2,3)", ErrValVALUE},
+		{"non_numeric_number", `TRUNC("abc")`, ErrValVALUE},
+		{"non_numeric_digits", `TRUNC(1,"abc")`, ErrValVALUE},
+		{"error_propagation_number", "TRUNC(1/0)", ErrValDIV0},
+		{"error_propagation_digits", "TRUNC(1,1/0)", ErrValDIV0},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
