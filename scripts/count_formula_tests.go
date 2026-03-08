@@ -1,7 +1,7 @@
 // Script to regenerate FORMULAS.md from the source of truth:
 //   1. Supported functions = all Register() calls in formula/*.go
 //   2. Test counts = formula strings + TestFUNC_ patterns in *_test.go
-//   3. Unsupported functions = those in the known Excel list but not registered
+//   3. Unsupported functions = those in the known function list but not registered
 //
 // Usage: go run scripts/count_formula_tests.go [--check]
 //   (default) regenerate FORMULAS.md
@@ -53,7 +53,7 @@ func main() {
 		}
 	}
 
-	// Step 3: load known Excel functions and compute unsupported
+	// Step 3: load known functions and compute unsupported
 	unsupported := computeUnsupported(supported)
 
 	// Step 4: generate FORMULAS.md content

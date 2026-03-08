@@ -373,14 +373,14 @@ func fnINDEX(args []Value) (Value, error) {
 		}
 		colNum = int(cn)
 	} else if len(arr.Array) == 1 {
-		// Excel treats INDEX(single_row_array, n) as INDEX(array, 1, n).
+		// INDEX(single_row_array, n) is treated as INDEX(array, 1, n).
 		// This also preserves the row/column zero semantics in the special
 		// handling below: INDEX(single_row_array, 0) returns the full row.
 		ri = 1
 		colNum = int(rowNum)
 	}
 
-	// Negative indices are invalid and return #VALUE! in Excel.
+	// Negative indices are invalid and return #VALUE!.
 	if ri < 0 || colNum < 0 {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -484,10 +484,10 @@ func fnMATCH(args []Value) (Value, error) {
 		return NumberVal(float64(last + 1)), nil
 
 	case -1:
-		// Approximate match (descending). Excel uses a binary search
+		// Approximate match (descending). Uses a binary search
 		// expecting descending-sorted data. We replicate that binary
 		// search so that unsorted data produces the same result (often
-		// #N/A) as Excel.
+		// #N/A) as expected.
 		n := len(values)
 		if n == 0 {
 			return ErrorVal(ErrValNA), nil

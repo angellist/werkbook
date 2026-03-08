@@ -152,7 +152,7 @@ func TestPOWER(t *testing.T) {
 		{"bool_true_power", "POWER(3,TRUE)", 3, 0},
 		{"bool_false_power", "POWER(3,FALSE)", 1, 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "POWER(5,2)", 25, 0},
 		{"doc_ex2", "POWER(98.6,3.2)", 2401077.2220695773, 1e-3},
 		{"doc_ex3", "POWER(4,5/4)", 5.656854249, 1e-6},
@@ -260,7 +260,7 @@ func TestABS(t *testing.T) {
 		{"expr_neg_result", "ABS(2-5)", 3},
 		{"expr_pos_result", "ABS(5-2)", 3},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ABS(2)", 2},
 		{"doc_ex2", "ABS(-2)", 2},
 	}
@@ -357,7 +357,7 @@ func TestFLOOR(t *testing.T) {
 		{"dec_sig_0.01", "FLOOR(0.234,0.01)", 0.23},
 		{"dec_sig_0.05", "FLOOR(4.42,0.05)", 4.4},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "FLOOR(3.7,2)", 2},
 		{"doc_ex2", "FLOOR(-2.5,-2)", -2},
 		{"doc_ex3", "FLOOR(1.58,0.1)", 1.5},
@@ -484,7 +484,7 @@ func TestCEILING(t *testing.T) {
 		{"dec_sig_0.05", "CEILING(4.42,0.05)", 4.45},
 		{"dec_sig_0.25", "CEILING(1.1,0.25)", 1.25},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "CEILING(2.5,1)", 3},
 		{"doc_ex2", "CEILING(-2.5,-2)", -4},
 		{"doc_ex3", "CEILING(-2.5,2)", -2},
@@ -811,7 +811,7 @@ func TestCEILINGPRECISE(t *testing.T) {
 		// String coercion of numeric strings
 		{"string_num", "CEILING.PRECISE(\"4.3\")", 5},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "CEILING.PRECISE(4.3)", 5},
 		{"doc_example_2", "CEILING.PRECISE(-4.3)", -4},
 		{"doc_example_3", "CEILING.PRECISE(4.3,2)", 6},
@@ -914,7 +914,7 @@ func TestFLOORPRECISE(t *testing.T) {
 		// String coercion of numeric strings
 		{"string_num", "FLOOR.PRECISE(\"3.2\")", 3},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "FLOOR.PRECISE(-3.2,-1)", -4},
 		{"doc_example_2", "FLOOR.PRECISE(3.2,1)", 3},
 		{"doc_example_3", "FLOOR.PRECISE(-3.2,1)", -4},
@@ -1032,7 +1032,7 @@ func TestMROUND(t *testing.T) {
 		wantNum float64
 		tol     float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "MROUND(10,3)", 9, 0},
 		{"doc_ex2", "MROUND(-10,-3)", -9, 0},
 		{"doc_ex3", "MROUND(1.3,0.2)", 1.4, 1e-10},
@@ -1061,8 +1061,8 @@ func TestMROUND(t *testing.T) {
 		{"neg_round_mid_away", "MROUND(-7.5,-5)", -10, 0},  // midpoint rounds away from zero
 
 		// Decimal multiples
-		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per Excel docs
-		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per Excel docs
+		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per docs
+		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per docs
 		{"decimal_mult_3", "MROUND(0.5,0.25)", 0.5, 1e-10},
 		{"decimal_mult_4", "MROUND(0.6,0.25)", 0.5, 1e-10},
 		{"decimal_mult_5", "MROUND(0.63,0.25)", 0.75, 1e-10},
@@ -1170,7 +1170,7 @@ func TestROUND(t *testing.T) {
 		{"neg_digits_hundreds", "ROUND(149,-2)", 100, 0},
 		{"neg_digits_hundreds_up", "ROUND(150,-2)", 200, 0},
 
-		// Rounding 0.5 (away from zero in Excel)
+		// Rounding 0.5 (away from zero)
 		{"half_up", "ROUND(2.5,0)", 3, 0},
 		{"half_up_neg", "ROUND(-2.5,0)", -3, 0},
 		{"half_up_1dp", "ROUND(0.15,1)", 0.2, 1e-10},
@@ -1298,7 +1298,7 @@ func TestROUNDDOWN(t *testing.T) {
 		{"string_number", `ROUNDDOWN("3.7",0)`, 3, 0},
 		{"string_digits", `ROUNDDOWN(3.14159,"2")`, 3.14, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ROUNDDOWN(3.2,0)", 3, 0},
 		{"doc_ex2", "ROUNDDOWN(76.9,0)", 76, 0},
 		{"doc_ex3", "ROUNDDOWN(3.14159,3)", 3.141, 1e-10},
@@ -1406,7 +1406,7 @@ func TestROUNDUP(t *testing.T) {
 		{"string_number", `ROUNDUP("3.2",0)`, 4, 0},
 		{"string_digits", `ROUNDUP(3.14159,"2")`, 3.15, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ROUNDUP(3.2,0)", 4, 0},
 		{"doc_ex2", "ROUNDUP(76.9,0)", 77, 0},
 		{"doc_ex3", "ROUNDUP(3.14159,3)", 3.142, 1e-10},
@@ -2257,7 +2257,7 @@ func TestSERIESSUM(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel documentation example: cos(PI/4) via Taylor series
+		// Documentation example: cos(PI/4) via Taylor series
 		{"excel_example", "SERIESSUM(PI()/4,0,2,{1,-0.5,0.041666667,-0.001388889})", 0.707103, 1e-4},
 		// Single coefficient
 		{"single_coeff", "SERIESSUM(2,3,1,{5})", 40, 0},
@@ -2265,7 +2265,7 @@ func TestSERIESSUM(t *testing.T) {
 		{"scalar_coeff", "SERIESSUM(2,3,1,5)", 40, 0},
 		// x=0, n>0: 0^positive = 0, so result = 0
 		{"x_zero_n_pos", "SERIESSUM(0,1,1,{3,4,5})", 0, 0},
-		// x=0, n=0: Excel returns #NUM! (0^0 indeterminate) — tested in error cases below
+		// x=0, n=0: returns #NUM! (0^0 indeterminate) — tested in error cases below
 		// x=1: all powers are 1, so result = sum of coefficients
 		{"x_one", "SERIESSUM(1,2,3,{2,3,4})", 9, 0},
 		// Negative x
@@ -2294,7 +2294,7 @@ func TestSERIESSUM(t *testing.T) {
 		{"power_step_2", "SERIESSUM(2,0,2,{1,2,3})", 57, 0},
 		// Very small x: 0.001^0=1 => 1*1 + 1000*0.001 = 2
 		{"small_x", "SERIESSUM(0.001,0,1,{1,1000})", 2, 1e-10},
-		// x=0, n=0, m=0: Excel returns #NUM! (0^0 indeterminate) — tested in error cases below
+		// x=0, n=0, m=0: returns #NUM! (0^0 indeterminate) — tested in error cases below
 	}
 
 	for _, tt := range numTests {
@@ -5046,9 +5046,9 @@ func TestINT(t *testing.T) {
 		{"already_int_pos", "INT(10)", 10},
 		// Already integer negative
 		{"already_int_neg", "INT(-10)", -10},
-		// Excel doc example: INT(8.9) = 8
+		// Doc example: INT(8.9) = 8
 		{"excel_doc_pos", "INT(8.9)", 8},
-		// Excel doc example: INT(-8.9) = -9
+		// Doc example: INT(-8.9) = -9
 		{"excel_doc_neg", "INT(-8.9)", -9},
 		// Positive number just below next integer
 		{"just_below", "INT(2.999999)", 2},
@@ -5134,7 +5134,7 @@ func TestSQRT(t *testing.T) {
 		// Boolean coercion
 		{"bool_true", "SQRT(TRUE)", 1},
 		{"bool_false", "SQRT(FALSE)", 0},
-		// Excel doc example: SQRT(ABS(-16)) = 4
+		// Doc example: SQRT(ABS(-16)) = 4
 		{"excel_doc_abs_neg16", "SQRT(ABS(-16))", 4},
 	}
 
@@ -5189,7 +5189,7 @@ func TestSQRTPI(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"sqrtpi_1", "SQRTPI(1)", math.Sqrt(math.Pi)},
 		{"sqrtpi_2", "SQRTPI(2)", math.Sqrt(2 * math.Pi)},
 		// Zero
@@ -5303,7 +5303,7 @@ func TestLOG(t *testing.T) {
 		{"log_large", "LOG(1000000)", 6, 1e-10},
 		{"log_large_base2", "LOG(1048576,2)", 20, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"excel_example_1", "LOG(10)", 1, 0},
 		{"excel_example_2", "LOG(8,2)", 3, 0},
 		{"excel_example_3", "LOG(86,2.7182818)", 4.4543473, 1e-4},
@@ -5420,7 +5420,7 @@ func TestLOG10(t *testing.T) {
 		{"log10_1e-5", "LOG10(0.00001)", -5, 1e-10},
 		{"log10_1e-10", "LOG10(1E-10)", -10, 1e-6},
 
-		// Excel documentation example
+		// Documentation example
 		{"excel_example_86", "LOG10(86)", 1.93449845124357, 1e-10},
 		{"excel_example_10", "LOG10(10)", 1, 0},
 		{"excel_example_1e5", "LOG10(1E5)", 5, 1e-10},
@@ -5642,7 +5642,7 @@ func TestACOS(t *testing.T) {
 		{"acos_string_zero", `ACOS("0")`, math.Pi / 2, 1e-10},
 		{"acos_string_one", `ACOS("1")`, 0, 0},
 
-		// Excel doc example: ACOS(-0.5) = 2.094395102
+		// Doc example: ACOS(-0.5) = 2.094395102
 		{"doc_example_neg0.5", "ACOS(-0.5)", 2.094395102, 1e-6},
 	}
 
@@ -5715,7 +5715,7 @@ func TestACOSH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "ACOSH(1)", 0, 0},
 		{"doc_example_10", "ACOSH(10)", 2.9932228461263808, 1e-10},
 
@@ -6015,7 +6015,7 @@ func TestASINH(t *testing.T) {
 		{"asinh_1", "ASINH(1)", math.Asinh(1), 1e-10},
 		{"asinh_neg1", "ASINH(-1)", math.Asinh(-1), 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_neg2.5", "ASINH(-2.5)", -1.6472311463710958, 1e-10},
 		{"doc_10", "ASINH(10)", 2.99822295029797, 1e-10},
 
@@ -6115,7 +6115,7 @@ func TestATAN(t *testing.T) {
 		{"atan_1", "ATAN(1)", math.Pi / 4, 1e-10},
 		{"atan_neg1", "ATAN(-1)", -math.Pi / 4, 1e-10},
 
-		// Excel doc example: ATAN(1) = 0.785398163...
+		// Doc example: ATAN(1) = 0.785398163...
 		{"doc_ex1", "ATAN(1)", 0.785398163, 1e-9},
 
 		// Fractional inputs
@@ -6302,7 +6302,7 @@ func TestATANH(t *testing.T) {
 		{"atanh_0.5", "ATANH(0.5)", 0.5493061443340549, 1e-10},
 		{"atanh_neg0.5", "ATANH(-0.5)", -0.5493061443340549, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ATANH(0.76159416)", 1.00000001, 1e-8},
 		{"doc_ex2", "ATANH(-0.1)", -0.100335348, 1e-9},
 
@@ -6414,7 +6414,7 @@ func TestFACT(t *testing.T) {
 		{"seven", "FACT(7)", 5040},
 		{"ten", "FACT(10)", 3628800},
 		{"twelve", "FACT(12)", 479001600},
-		// Decimal inputs — truncated to integer (Excel doc: FACT(1.9) = 1)
+		// Decimal inputs — truncated to integer (doc: FACT(1.9) = 1)
 		{"decimal_1.9", "FACT(1.9)", 1},
 		{"decimal_5.9", "FACT(5.9)", 120},
 		{"decimal_0.5", "FACT(0.5)", 1},
@@ -6454,7 +6454,7 @@ func TestFACT(t *testing.T) {
 		formula string
 		errVal  ErrorValue
 	}{
-		// Negative numbers → #NUM! (Excel doc: FACT(-1) = #NUM!)
+		// Negative numbers → #NUM! (doc: FACT(-1) = #NUM!)
 		{"negative_one", "FACT(-1)", ErrValNUM},
 		{"negative_five", "FACT(-5)", ErrValNUM},
 		// FACT(-0.1): math.Trunc(-0.1) = -0, which is not < 0, so returns FACT(0) = 1
@@ -6510,7 +6510,7 @@ func TestFACTDOUBLE(t *testing.T) {
 		{"twenty", "FACTDOUBLE(20)", 3715891200},   // 20*18*16*14*12*10*8*6*4*2
 		// FACTDOUBLE(-1) = 1 by convention
 		{"negative_one", "FACTDOUBLE(-1)", 1},
-		// Decimal inputs — truncated to integer (Excel doc: non-integer is truncated)
+		// Decimal inputs — truncated to integer (doc: non-integer is truncated)
 		{"decimal_5.9", "FACTDOUBLE(5.9)", 15},
 		{"decimal_6.1", "FACTDOUBLE(6.1)", 48},
 		{"decimal_0.7", "FACTDOUBLE(0.7)", 1},
@@ -6629,7 +6629,7 @@ func TestEVEN(t *testing.T) {
 		{"bool_true", "EVEN(TRUE)", 2},
 		{"bool_false", "EVEN(FALSE)", 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "EVEN(1.5)", 2},
 		{"doc_ex2", "EVEN(3)", 4},
 		{"doc_ex3", "EVEN(2)", 2},
@@ -6702,7 +6702,7 @@ func TestODD(t *testing.T) {
 		{"already_odd_9", "ODD(9)", 9},
 		{"already_odd_11", "ODD(11)", 11},
 
-		// Zero (Excel returns 1)
+		// Zero (returns 1)
 		{"zero", "ODD(0)", 1},
 
 		// Negative numbers (rounds away from zero)
@@ -6740,7 +6740,7 @@ func TestODD(t *testing.T) {
 		{"bool_true", "ODD(TRUE)", 1},
 		{"bool_false", "ODD(FALSE)", 1},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ODD(1.5)", 3},
 		{"doc_ex2", "ODD(3)", 3},
 		{"doc_ex3", "ODD(2)", 3},
@@ -6938,7 +6938,7 @@ func TestSIGN(t *testing.T) {
 		{"expr_neg_result", "SIGN(2-5)", -1},
 		{"expr_zero_result", "SIGN(4-4)", 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "SIGN(10)", 1},
 		{"doc_ex2", "SIGN(4-4)", 0},
 		{"doc_ex3", "SIGN(-0.00001)", -1},
@@ -7027,7 +7027,7 @@ func TestSIN(t *testing.T) {
 		// Small angle
 		{"sin_small", "SIN(0.001)", math.Sin(0.001), 1e-10},
 
-		// Degrees via conversion (Excel doc examples)
+		// Degrees via conversion (doc examples)
 		{"doc_ex1_pi", "SIN(PI())", 0, 1e-10},
 		{"doc_ex2_pi_2", "SIN(PI()/2)", 1, 1e-10},
 		{"doc_ex3_30deg", "SIN(30*PI()/180)", 0.5, 1e-10},
@@ -7099,7 +7099,7 @@ func TestCOMBINA(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "COMBINA(4,3)", 20},
 		{"doc_ex2", "COMBINA(10,3)", 220},
 
@@ -7200,7 +7200,7 @@ func TestCOMBIN(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example", "COMBIN(8,2)", 28},
 		// Basic combinations
 		{"5_choose_2", "COMBIN(5,2)", 10},
@@ -7304,7 +7304,7 @@ func TestCOS(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example", "COS(1.047)", 0.5001710745970701, 1e-10},
 
 		// Key angles
@@ -7397,7 +7397,7 @@ func TestCOSH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_4", "COSH(4)", 27.308232836016487, 1e-10},
 		{"doc_example_e", "COSH(EXP(1))", 7.6101251386622884, 1e-10},
 
@@ -7675,7 +7675,7 @@ func TestTANH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Basic values (from Excel docs)
+		// Basic values (from docs)
 		{"tanh_0", "TANH(0)", 0, 0},
 		{"tanh_0.5", "TANH(0.5)", 0.462117157, 1e-8},
 		{"tanh_1", "TANH(1)", 0.761594156, 1e-8},
@@ -7784,7 +7784,7 @@ func TestSINH(t *testing.T) {
 		{"sinh_small", "SINH(0.001)", math.Sinh(0.001), 1e-14},
 		{"sinh_tiny", "SINH(0.0001)", math.Sinh(0.0001), 1e-15},
 
-		// Excel doc example: 2.868*SINH(0.0342*1.03)
+		// Doc example: 2.868*SINH(0.0342*1.03)
 		{"doc_example", "2.868*SINH(0.0342*1.03)", 2.868 * math.Sinh(0.0342*1.03), 1e-7},
 
 		// Boolean coercion
@@ -7967,7 +7967,7 @@ func TestLN(t *testing.T) {
 		{"ln_exp_5", "LN(EXP(5))", 5, 1e-10},
 		{"ln_exp_0_5", "LN(EXP(0.5))", 0.5, 1e-10},
 
-		// Excel documentation examples
+		// Documentation examples
 		{"excel_example_86", "LN(86)", 4.4543473, 1e-4},
 		{"excel_example_e", "LN(2.7182818)", 1, 1e-4},
 		{"excel_example_exp3", "LN(EXP(3))", 3, 0},
@@ -8103,7 +8103,7 @@ func TestCSC(t *testing.T) {
 		// Degree conversion via expression (30 degrees = PI/6)
 		{"degrees_30", "CSC(30*PI()/180)", 2, 1e-10},
 
-		// Excel example: CSC(15) ≈ 1.5377...
+		// Example: CSC(15) ≈ 1.5377...
 		{"excel_example", "CSC(15)", 1 / math.Sin(15), 1e-10},
 	}
 
@@ -8168,7 +8168,7 @@ func TestSEC(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples (angles in radians)
+		// Doc examples (angles in radians)
 		{"doc_sec_45", "SEC(45)", 1.0 / math.Cos(45), 1e-5},
 		{"doc_sec_30", "SEC(30)", 1.0 / math.Cos(30), 1e-5},
 
@@ -8261,7 +8261,7 @@ func TestSECH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_45", "SECH(45)", 5.725037161098787e-20, 1e-30},
 		{"doc_example_30", "SECH(30)", 1.871524593768035e-13, 1e-23},
 
@@ -8583,7 +8583,7 @@ func TestRADIANS(t *testing.T) {
 		{"expr_mul", "RADIANS(2*90)", math.Pi, 1e-10},
 		{"expr_add", "RADIANS(45+45)", math.Pi / 2, 1e-10},
 
-		// Excel doc example
+		// Doc example
 		{"doc_ex1", "RADIANS(270)", 3 * math.Pi / 2, 1e-10},
 	}
 
@@ -8676,7 +8676,7 @@ func TestDEGREES(t *testing.T) {
 		{"string_zero", `DEGREES("0")`, 0, 0},
 		{"string_neg", `DEGREES("-1")`, -180 / math.Pi, 1e-10},
 
-		// Excel doc example
+		// Doc example
 		{"doc_example", "DEGREES(PI())", 180, 0},
 	}
 
@@ -8740,7 +8740,7 @@ func TestQUOTIENT(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "QUOTIENT(5,2)", 2},
 		{"doc_ex2", "QUOTIENT(4.5,3.1)", 1},
 		{"doc_ex3", "QUOTIENT(-10,3)", -3},
@@ -8858,7 +8858,7 @@ func TestDECIMAL(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"hex_FF", `DECIMAL("FF",16)`, 255},
 		{"binary_111", `DECIMAL("111",2)`, 7},
 		{"base36_zap", `DECIMAL("zap",36)`, 45745},
@@ -9073,7 +9073,7 @@ func TestLCM(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "LCM(5,2)", 10},
 		{"doc_ex2", "LCM(24,36)", 72},
 		// Basic two-argument cases
@@ -9174,7 +9174,7 @@ func TestGCD(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Basic two-argument cases (from Excel docs)
+		// Basic two-argument cases (from docs)
 		{"basic_12_8", "GCD(12,8)", 4},
 		{"basic_24_36", "GCD(24,36)", 12},
 		{"basic_5_2", "GCD(5,2)", 1},
@@ -9278,7 +9278,7 @@ func TestPRODUCT(t *testing.T) {
 		{"two_args", "PRODUCT(2,3)", 6},
 		{"five_args", "PRODUCT(1,2,3,4,5)", 120},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "PRODUCT(5,15,30)", 2250},
 		{"doc_ex1_with_multiplier", "PRODUCT(5,15,30,2)", 4500},
 
@@ -9463,7 +9463,7 @@ func TestPERMUT(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_100_3", "PERMUT(100,3)", 970200},
 		{"doc_example_3_2", "PERMUT(3,2)", 6},
 		// Basic permutations
@@ -9566,7 +9566,7 @@ func TestBASE(t *testing.T) {
 		formula string
 		want    string
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_binary_7", "BASE(7,2)", "111"},
 		{"doc_hex_100", "BASE(100,16)", "64"},
 		{"doc_binary_15_padded", "BASE(15,2,10)", "0000001111"},
@@ -9669,7 +9669,7 @@ func TestMULTINOMIAL(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example_2_3_4", "MULTINOMIAL(2,3,4)", 1260},
 		// Basic multinomial identities
 		{"two_ones", "MULTINOMIAL(1,1)", 2},

@@ -154,7 +154,7 @@ func TestAND(t *testing.T) {
 			{"AND(FALSE,1)", false},
 			{"AND(1,TRUE,2,TRUE)", true},
 
-			// Excel doc example: AND(A2>1,A2<100) style comparisons
+			// Doc example: AND(A2>1,A2<100) style comparisons
 			{"AND(50>1,50<100)", true},
 			{"AND(150>1,150<100)", false},
 		}
@@ -405,7 +405,7 @@ func TestOR(t *testing.T) {
 	})
 
 	t.Run("direct string args return VALUE error", func(t *testing.T) {
-		// In Excel, direct string arguments to OR cause #VALUE!
+		// Direct string arguments to OR cause #VALUE!
 		tests := []string{
 			`OR("hello")`,
 			`OR("TRUE")`,
@@ -655,7 +655,7 @@ func TestXOR(t *testing.T) {
 			{"XOR(TRUE,0)", true},   // 1 TRUE
 			{"XOR(FALSE,1)", true},  // 1 TRUE
 			{"XOR(FALSE,0)", false}, // 0 TRUE
-			// Excel doc examples: =XOR(3>0,2<9) → FALSE (both TRUE, even)
+			// Doc examples: =XOR(3>0,2<9) → FALSE (both TRUE, even)
 			{"XOR(3>0,2<9)", false},
 			// =XOR(3>12,4>6) → FALSE (both FALSE)
 			{"XOR(3>12,4>6)", false},
@@ -1571,7 +1571,7 @@ func TestSORT_Strings(t *testing.T) {
 }
 
 func TestSORT_MixedTypes(t *testing.T) {
-	// In Excel, numbers sort before strings
+	// Numbers sort before strings
 	arr := Value{Type: ValueArray, Array: [][]Value{
 		{StringVal("b")},
 		{NumberVal(2)},
@@ -1914,7 +1914,7 @@ func TestSORTBY(t *testing.T) {
 	})
 
 	t.Run("mixed type sort keys", func(t *testing.T) {
-		// Numbers sort before strings in Excel.
+		// Numbers sort before strings.
 		arr := Value{Type: ValueArray, Array: [][]Value{
 			{StringVal("A")}, {StringVal("B")}, {StringVal("C")}, {StringVal("D")},
 		}}

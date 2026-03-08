@@ -839,7 +839,7 @@ func TestMATCHDescending(t *testing.T) {
 }
 
 func TestMATCHDescendingUnsortedReturnsNA(t *testing.T) {
-	// When match_type=-1 is used on unsorted data, Excel's binary search
+	// When match_type=-1 is used on unsorted data, the binary search
 	// typically returns #N/A. Our binary search should replicate that.
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -1055,7 +1055,7 @@ func TestINDEXEdgeCases(t *testing.T) {
 		t.Errorf(`INDEX({"OUT","IN"},2): got %v, want "IN"`, got)
 	}
 
-	// With column_num=0, Excel returns the full single row.
+	// With column_num=0, the full single row is returned.
 	cf = evalCompile(t, `INDEX({"OUT","IN"},0)`)
 	got, err = Eval(cf, resolver, nil)
 	if err != nil {
@@ -7456,7 +7456,7 @@ func TestLOOKUPSingleElement(t *testing.T) {
 }
 
 func TestLOOKUPDecimalValues(t *testing.T) {
-	// Fractional/decimal lookup values (from Excel docs example)
+	// Fractional/decimal lookup values (from docs example)
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(4.14),

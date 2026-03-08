@@ -219,7 +219,7 @@ func fnCOUNT(args []Value) (Value, error) {
 		case ValueBool:
 			// Direct boolean args (e.g. COUNT(TRUE)) are counted,
 			// but booleans from cell references (e.g. COUNT(A1) where
-			// A1=TRUE) are not — matching Excel behavior.
+			// A1=TRUE) are not — matching expected behavior.
 			if !arg.FromCell {
 				count++
 			}
@@ -541,9 +541,9 @@ func fnCOUNTBLANK(args []Value) (Value, error) {
 	return NumberVal(float64(count)), nil
 }
 
-// MatchesCriteria checks if a value matches Excel-style criteria.
+// MatchesCriteria checks if a value matches criteria.
 //
-// In Excel, booleans and numbers are distinct types for criteria matching:
+// Booleans and numbers are distinct types for criteria matching:
 //   - Numeric criteria (e.g. 1) only match numeric cells, not booleans.
 //   - Boolean criteria (e.g. TRUE) only match boolean cells, not numbers.
 //   - String criteria with comparison operators (e.g. ">0") only compare
@@ -589,7 +589,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 	}
 
 	// Numeric criteria: match numeric cells, and also string cells whose
-	// content parses as the same number (Excel coerces strings to numbers
+	// content parses as the same number (strings are coerced to numbers
 	// for COUNTIF/SUMIF criteria matching). Booleans are excluded.
 	if criteria.Type == ValueNumber {
 		if v.Type == ValueNumber {
@@ -604,7 +604,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 	}
 
 	// String criteria "TRUE"/"FALSE": coerce to boolean for matching.
-	// In Excel, =COUNTIF(range,"TRUE") counts only boolean TRUE cells,
+	// =COUNTIF(range,"TRUE") counts only boolean TRUE cells,
 	// not cells containing the string "TRUE".
 	upper := strings.ToUpper(strings.TrimSpace(critStr))
 	if upper == "TRUE" {
@@ -619,7 +619,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 }
 
 // matchOperator applies a comparison operator to a cell value and an operand
-// string, respecting Excel's type separation between booleans and numbers.
+// string, respecting the type separation between booleans and numbers.
 func matchOperator(v Value, op, operand string) bool {
 	// "=" with empty operand matches only truly empty cells (TypeEmpty).
 	// This differs from bare "" criteria which matches both empty and empty-string cells.
@@ -627,7 +627,7 @@ func matchOperator(v Value, op, operand string) bool {
 		return v.Type == ValueEmpty
 	}
 	// "<>" with empty operand: everything except truly empty cells.
-	// In Excel, empty-string cells are considered non-blank for <>.
+	// Empty-string cells are considered non-blank for <>.
 	if op == "<>" && operand == "" {
 		return v.Type != ValueEmpty
 	}
@@ -658,7 +658,7 @@ func matchOperator(v Value, op, operand string) bool {
 
 	// If the operand is numeric, compare against numeric cells.
 	// For the "=" operator only, also match string cells whose content
-	// parses as the same number (Excel coerces text-numbers for equality
+	// parses as the same number (text-numbers are coerced for equality
 	// in *IF criteria, but not for ordering operators like >, <, etc.).
 	// Booleans are excluded from numeric comparisons.
 	if cn, err := strconv.ParseFloat(operand, 64); err == nil {
@@ -726,7 +726,7 @@ const (
 // classifyWildcard examines a criteria string and returns what kind of
 // wildcard processing it needs.
 //
-// In Excel, ~* escapes a single literal *, ~? escapes a single literal ?,
+// ~* escapes a single literal *, ~? escapes a single literal ?,
 // and ~~ escapes a single literal ~.  So "~**" has an escaped * followed
 // by an unescaped wildcard *, meaning it matches strings starting with
 // a literal '*'.
@@ -1743,7 +1743,7 @@ func fnPERCENTRANKEXC(args []Value) (Value, error) {
 
 // truncToSig truncates a float to sig decimal digits.
 func truncToSig(v float64, sig int) float64 {
-	// Round to 15 significant digits first (matching Excel precision)
+	// Round to 15 significant digits first (matching expected precision)
 	// to eliminate FP noise before truncating.
 	v = roundTo15SigFigs(v)
 	pow := math.Pow(10, float64(sig))
@@ -2571,7 +2571,7 @@ func fnPERMUTATIONA(args []Value) (Value, error) {
 	return NumberVal(math.Pow(number, numberChosen)), nil
 }
 
-// fnFREQUENCY implements the Excel FREQUENCY(data_array, bins_array) function.
+// fnFREQUENCY implements the FREQUENCY(data_array, bins_array) function.
 // It counts how many values in data_array fall into each interval defined by
 // bins_array. The result is a vertical array with len(bins)+1 rows.
 func fnFREQUENCY(args []Value) (Value, error) {
@@ -2580,7 +2580,7 @@ func fnFREQUENCY(args []Value) (Value, error) {
 	}
 
 	// collectNums flattens an argument into a slice of float64 values,
-	// ignoring text, booleans, and empty cells (matching Excel behaviour
+	// ignoring text, booleans, and empty cells (matching expected behaviour
 	// for array arguments). Propagates errors.
 	collectNums := func(v Value) ([]float64, *Value) {
 		var nums []float64
@@ -2728,7 +2728,7 @@ func fnNormInv(args []Value) (Value, error) {
 	}
 	x := mean + stdev*normSInv(p)
 	// When mean=0 and stdev=1 the result must equal NORM.S.INV exactly
-	// (Excel treats NORM.INV(p,0,1) identically to NORM.S.INV(p)).
+	// (NORM.INV(p,0,1) is treated identically to NORM.S.INV(p)).
 	// For all other parameters, refine with Newton-Raphson on the full
 	// normal distribution. The Acklam approximation gives ~8 digits;
 	// two iterations bring us to ~16 digits of precision.
@@ -2875,7 +2875,7 @@ func normSInv(p float64) float64 {
 			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
 	}
 
-	// One Halley step closes the remaining gap to Excel's float64 results.
+	// One Halley step closes the remaining gap to the expected float64 results.
 	e := 0.5*math.Erfc(-x/math.Sqrt2) - p
 	u := e * math.Sqrt(2*math.Pi) * math.Exp(x*x/2)
 	x = x - u/(1+x*u/2)
@@ -3137,7 +3137,7 @@ func fnWeibullDist(args []Value) (Value, error) {
 	}
 	// PDF: f(x) = (alpha/beta) * (x/beta)^(alpha-1) * exp(-(x/beta)^alpha)
 	if x == 0 {
-		// Excel returns 0 for all PDF evaluations at x=0.
+		// Returns 0 for all PDF evaluations at x=0.
 		return NumberVal(0), nil
 	}
 	return NumberVal((alpha / beta) * math.Pow(x/beta, alpha-1) * math.Exp(-math.Pow(x/beta, alpha))), nil
@@ -3334,8 +3334,8 @@ func fnGammaDist(args []Value) (Value, error) {
 		if alpha > 1 {
 			return NumberVal(0), nil
 		}
-		// alpha <= 1: Excel returns #NUM! at x=0 (PDF diverges for alpha<1,
-		// and Excel also returns #NUM! for the alpha==1 boundary case).
+		// alpha <= 1: returns #NUM! at x=0 (PDF diverges for alpha<1,
+		// and also returns #NUM! for the alpha==1 boundary case).
 		return ErrorVal(ErrValNUM), nil
 	}
 
@@ -3381,7 +3381,7 @@ func fnGammaInv(args []Value) (Value, error) {
 	if p == 0 {
 		return NumberVal(0), nil
 	}
-	// Excel returns #NUM! for probability = 1.
+	// Returns #NUM! for probability = 1.
 	if p == 1 {
 		return ErrorVal(ErrValNUM), nil
 	}
@@ -3511,7 +3511,7 @@ func fnChisqDist(args []Value) (Value, error) {
 	if x == 0 {
 		if df == 1 {
 			// PDF diverges at x=0 for df=1 (alpha=0.5).
-			// Excel returns Inf.
+			// Returns Inf.
 			return NumberVal(math.Inf(1)), nil
 		}
 		if df == 2 {
@@ -4594,7 +4594,7 @@ func fnBetaInv(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 	if p <= 0 || p > 1 {
-		// Excel: probability <= 0 or > 1 ⇒ #NUM!
+		// probability <= 0 or > 1 ⇒ #NUM!
 		// But p == 0 returns A in practice.
 		if p == 0 {
 			return NumberVal(a), nil
@@ -4851,7 +4851,7 @@ func negbinomPMF(f, r int, p float64) float64 {
 	return math.Exp(logProb)
 }
 
-// fnPROB implements the Excel PROB function.
+// fnPROB implements the PROB function.
 // PROB(x_range, prob_range, lower_limit, [upper_limit])
 // Returns the probability that values in x_range fall between lower_limit and
 // upper_limit (inclusive). If upper_limit is omitted, returns the probability

@@ -57,7 +57,7 @@ func fnIF(args []Value) (Value, error) {
 	if args[0].Type == ValueError {
 		return args[0], nil
 	}
-	// Excel's IF requires a numeric or boolean condition.
+	// IF requires a numeric or boolean condition.
 	// Strings that can be coerced to numbers are allowed; others cause #VALUE!.
 	if args[0].Type == ValueString {
 		n, e := CoerceNum(args[0])
@@ -99,7 +99,7 @@ func fnAND(args []Value) (Value, error) {
 		if arg.Type == ValueError {
 			return arg, nil
 		}
-		// Direct string argument → #VALUE! (Excel behaviour).
+		// Direct string argument → #VALUE! (expected behaviour).
 		if arg.Type == ValueString {
 			return ErrorVal(ErrValVALUE), nil
 		}
@@ -135,7 +135,7 @@ func fnOR(args []Value) (Value, error) {
 		if arg.Type == ValueError {
 			return arg, nil
 		}
-		// Direct string argument → #VALUE! (Excel behaviour).
+		// Direct string argument → #VALUE! (expected behaviour).
 		if arg.Type == ValueString {
 			return ErrorVal(ErrValVALUE), nil
 		}

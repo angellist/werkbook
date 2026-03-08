@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-// Lexer tokenizes an Excel formula string.
+// Lexer tokenizes a formula string.
 type Lexer struct {
 	src []byte
 	pos int // current byte position
 }
 
 // NewLexer creates a lexer for the given formula string.
-// The formula should NOT include the leading '=' that Excel uses;
+// The formula should NOT include the leading '=';
 // strip it before passing to the lexer.
 func NewLexer(formula string) *Lexer {
 	return &Lexer{src: []byte(formula)}
@@ -360,7 +360,7 @@ func (l *Lexer) lexIdentOrRef() (Token, error) {
 		// Only try 3D sheet reference if the word so far does NOT look like
 		// a cell reference. E.g. "S1:S3!A1" — S1 is a valid cell ref, so
 		// the colon should be a range operator, not a 3D sheet separator.
-		// Excel behaves the same way: sheet names that look like cell refs
+		// Sheet names that look like cell refs
 		// must be quoted to form a valid 3D reference.
 		word := string(l.src[start:l.pos])
 		if !looksLikeCellRef(word) {
@@ -496,7 +496,7 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-// looksLikeCellRef checks if a string looks like a valid Excel cell reference.
+// looksLikeCellRef checks if a string looks like a valid cell reference.
 // Accepts: A1, $A1, A$1, $A$1, XFD1048576, etc.
 func looksLikeCellRef(s string) bool {
 	i := 0

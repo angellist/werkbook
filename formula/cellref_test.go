@@ -129,7 +129,7 @@ func TestParseCellRefToken3DRef(t *testing.T) {
 }
 
 func TestParseCellRefTokenOutOfRange(t *testing.T) {
-	// Column or row numbers exceeding Excel limits must return an error.
+	// Column or row numbers exceeding limits must return an error.
 	tests := []struct {
 		name  string
 		input string

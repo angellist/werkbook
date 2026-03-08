@@ -134,11 +134,11 @@ func fnCEILING(args []Value) (Value, error) {
 	if sig == 0 {
 		return NumberVal(0), nil
 	}
-	// Excel: positive number with negative significance is an error.
+	// Positive number with negative significance is an error.
 	if n > 0 && sig < 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
-	// Excel: negative number with positive significance rounds toward zero.
+	// Negative number with positive significance rounds toward zero.
 	if n < 0 && sig > 0 {
 		return NumberVal(-math.Floor(math.Abs(n)/sig) * sig), nil
 	}
@@ -257,11 +257,11 @@ func fnFLOOR(args []Value) (Value, error) {
 	if sig == 0 {
 		return ErrorVal(ErrValDIV0), nil
 	}
-	// Excel: positive number with negative significance is an error.
+	// Positive number with negative significance is an error.
 	if n > 0 && sig < 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
-	// Excel: negative number with positive significance rounds away from zero.
+	// Negative number with positive significance rounds away from zero.
 	if n < 0 && sig > 0 {
 		return NumberVal(-math.Ceil(math.Abs(n)/sig) * sig), nil
 	}
@@ -341,8 +341,8 @@ func fnMOD(args []Value) (Value, error) {
 	}
 	q := n / d
 	// When |n/d| is very large, math.Floor loses precision and the result is
-	// floating-point noise. Excel returns #NUM! in this case. The threshold
-	// aligns with Excel's behavior: once the quotient exceeds ~10^13, the
+	// floating-point noise. Returns #NUM! in this case. The threshold
+	// aligns with expected behavior: once the quotient exceeds ~10^13, the
 	// intermediate INT(n/d)*d multiplication cannot recover n accurately
 	// within float64's ~15 significant digits.
 	if math.Abs(q) >= 1e13 {
@@ -364,11 +364,11 @@ func fnPOWER(args []Value) (Value, error) {
 	if e != nil {
 		return *e, nil
 	}
-	// Excel: POWER(0,0) returns #NUM!
+	// POWER(0,0) returns #NUM!
 	if base == 0 && exp == 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
-	// Excel: POWER(0, negative) returns #DIV/0!
+	// POWER(0, negative) returns #DIV/0!
 	if base == 0 && exp < 0 {
 		return ErrorVal(ErrValDIV0), nil
 	}
@@ -1005,7 +1005,7 @@ func fnTRUNC(args []Value) (Value, error) {
 	return NumberVal(math.Trunc(n*pow) / pow), nil
 }
 
-// fnSUBTOTALCtx implements the Excel SUBTOTAL function. It applies an aggregate
+// fnSUBTOTALCtx implements the SUBTOTAL function. It applies an aggregate
 // function (SUM, AVERAGE, etc.) to one or more ranges, but excludes cells that
 // themselves contain SUBTOTAL formulas to prevent double-counting of nested
 // subtotals.
@@ -1286,7 +1286,7 @@ func fnSERIESSUM(args []Value) (Value, error) {
 			return *ce, nil
 		}
 		exp := n + float64(i)*m
-		// Excel returns #NUM! for 0^0 and 0^negative.
+		// Returns #NUM! for 0^0 and 0^negative.
 		if x == 0 && exp <= 0 {
 			return ErrorVal(ErrValNUM), nil
 		}

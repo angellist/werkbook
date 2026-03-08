@@ -15,7 +15,7 @@ import (
 type File struct {
 	sheets       []*Sheet
 	sheetNames   []string
-	date1904     bool // true if the workbook uses the 1904 date system (Mac Excel)
+	date1904     bool // true if the workbook uses the 1904 date system
 	calcProps    CalcProperties
 	calcGen      uint64            // incremented on any cell mutation; starts at 1
 	evaluating   map[cellKey]bool  // tracks cells being evaluated (circular ref detection)
@@ -66,7 +66,7 @@ func New(opts ...Option) *File {
 	return f
 }
 
-// Date1904 reports whether the workbook uses the 1904 date system (Mac Excel).
+// Date1904 reports whether the workbook uses the 1904 date system.
 func (f *File) Date1904() bool {
 	return f.date1904
 }
@@ -370,7 +370,7 @@ func fileFromData(data *ooxml.WorkbookData) *File {
 func cellDataToValue(cd ooxml.CellData, _ []*Style, date1904 bool) Value {
 	switch cd.Type {
 	case "s":
-		// Shared-string cells are always strings. In Excel, a cell stored
+		// Shared-string cells are always strings. A cell stored
 		// as a shared string is text even if the content looks numeric —
 		// e.g. the string "1" is not equal to the number 1 via the = operator.
 		// Arithmetic operations will coerce via CoerceNum as needed.

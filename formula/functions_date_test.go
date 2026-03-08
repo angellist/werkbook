@@ -128,7 +128,7 @@ func TestDATEComprehensive(t *testing.T) {
 		{"basic_dec31_2023", "DATE(2023,12,31)", 45291, false, 0},
 		{"basic_jul4_2000", "DATE(2000,7,4)", 36711, false, 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_2008_1_2", "DATE(2008,1,2)", 39449, false, 0},
 		{"doc_example_108_1_2", "DATE(108,1,2)", 39449, false, 0},         // 1900+108=2008
 		{"doc_example_2008_14_2", "DATE(2008,14,2)", 39846, false, 0},     // Feb 2, 2009
@@ -145,7 +145,7 @@ func TestDATEComprehensive(t *testing.T) {
 		{"year_1900_jan1", "DATE(1900,1,1)", 1, false, 0},
 		{"year_1900_jan2", "DATE(1900,1,2)", 2, false, 0},
 		{"year_1900_feb28", "DATE(1900,2,28)", 59, false, 0},
-		{"year_1900_feb29_fictional", "DATE(1900,2,29)", 60, false, 0}, // Excel fictional leap day
+		{"year_1900_feb29_fictional", "DATE(1900,2,29)", 60, false, 0}, // Fictional leap day
 		{"year_1900_mar1", "DATE(1900,3,1)", 61, false, 0},
 
 		// Month overflow: DATE(2023,13,1) → Jan 2024
@@ -175,7 +175,7 @@ func TestDATEComprehensive(t *testing.T) {
 
 		// Non-leap year: DATE(2023,2,29) → Mar 1
 		{"non_leap_feb29", "DATE(2023,2,29)", 44986, false, 0},   // Mar 1, 2023
-		{"non_leap_1900_feb29", "DATE(1900,2,29)", 60, false, 0}, // Excel fictional
+		{"non_leap_1900_feb29", "DATE(1900,2,29)", 60, false, 0}, // Fictional
 
 		// Large year values (but within range)
 		{"year_9999_dec31", "DATE(9999,12,31)", 2958465, false, 0}, // Max serial
@@ -256,9 +256,9 @@ func TestYEARComprehensive(t *testing.T) {
 		{"jan_1", "YEAR(DATE(2025,1,1))", 2025, false, 0},
 		// Leap year date: Feb 29, 2024
 		{"leap_year_2024", "YEAR(DATE(2024,2,29))", 2024, false, 0},
-		// Serial 0 → 1900 (Excel's "January 0, 1900" sentinel)
+		// Serial 0 → 1900 ("January 0, 1900" sentinel)
 		{"serial_0", "YEAR(0)", 1900, false, 0},
-		// Serial 60 → 1900 (Excel's fictional Feb 29, 1900)
+		// Serial 60 → 1900 (fictional Feb 29, 1900)
 		{"serial_60", "YEAR(60)", 1900, false, 0},
 		// String date input via DATEVALUE: YEAR(DATEVALUE("1/1/2023"))
 		{"string_date_via_datevalue", `YEAR(DATEVALUE("1/1/2023"))`, 2023, false, 0},
@@ -276,7 +276,7 @@ func TestYEARComprehensive(t *testing.T) {
 		{"max_serial", "YEAR(2958465)", 9999, false, 0},
 		// Beyond max serial → #NUM!
 		{"beyond_max_serial", "YEAR(2958466)", 0, true, ErrValNUM},
-		// Excel doc examples via DATEVALUE
+		// Doc examples via DATEVALUE
 		{"excel_doc_2023", `YEAR(DATEVALUE("7/5/2023"))`, 2023, false, 0},
 		{"excel_doc_2025", `YEAR(DATEVALUE("7/5/2025"))`, 2025, false, 0},
 		// Fractional serial (should use integer part): 45306.75 → 2024
@@ -339,7 +339,7 @@ func TestDAY(t *testing.T) {
 func TestYEARMONTHDAY_Serial0(t *testing.T) {
 	resolver := &mockResolver{}
 
-	// Excel serial 0 is "January 0, 1900" — a special sentinel.
+	// Serial 0 is "January 0, 1900" — a special sentinel.
 	// YEAR(0)=1900, MONTH(0)=1, DAY(0)=0.
 	cf := evalCompile(t, "YEAR(0)")
 	got, err := Eval(cf, resolver, nil)
@@ -812,7 +812,7 @@ func TestSerial60Boundary(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Serial 60 = Excel's fictional Feb 29, 1900
+		// Serial 60 = fictional Feb 29, 1900
 		{"DAY_60", "DAY(60)", 29},
 		{"MONTH_60", "MONTH(60)", 2},
 		{"YEAR_60", "YEAR(60)", 1900},
@@ -897,7 +897,7 @@ func TestTIME(t *testing.T) {
 			{"string_hour", `TIME("12",0,0)`, 0.5},
 			{"string_all", `TIME("6","30","0")`, 6.5 / 24.0},
 
-			// Excel doc examples
+			// Doc examples
 			{"doc_example_1", "TIME(12,0,0)", 0.5},
 			{"doc_example_2", "TIME(16,48,10)", 0.700115740740741},
 
@@ -1070,7 +1070,7 @@ func TestDATEVALUEComprehensive(t *testing.T) {
 		{"leap_year_feb29_2024", `DATEVALUE("2/29/2024")`, 45351, false, 0},
 		{"leap_year_feb29_2000", `DATEVALUE("2/29/2000")`, 36585, false, 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_8_22_2011", `DATEVALUE("8/22/2011")`, 40777, false, 0},
 		{"doc_22_may_2011", `DATEVALUE("22-May-2011")`, 40685, false, 0},
 		{"doc_2011_02_23", `DATEVALUE("2011/02/23")`, 40597, false, 0},
@@ -1149,7 +1149,7 @@ func TestWORKDAY(t *testing.T) {
 	// Jan 7  = 45664 (Tue), Jan 8  = 45665 (Wed), Jan 9  = 45666 (Thu)
 	// Jan 10 = 45667 (Fri), Jan 13 = 45670 (Mon), Jan 15 = 45672 (Wed)
 	//
-	// Excel doc dates:
+	// Doc dates:
 	// 2008-10-01 (Wed) = 39722 (start), 2009-04-30 (Thu) = 39933 (result no holidays)
 	// 2009-05-05 (Tue) = 39938 (result with holidays)
 	// Holidays: 2008-11-26 = 39778, 2008-12-04 = 39786, 2009-01-21 = 39834
@@ -1225,7 +1225,7 @@ func TestWORKDAY(t *testing.T) {
 		// --- Too many args → error ---
 		{"too_many_args", "WORKDAY(45658,5,45659,1)", 0, true, ErrValVALUE},
 
-		// --- Excel doc examples ---
+		// --- Doc examples ---
 		// WORKDAY(10/1/2008, 151) = 4/30/2009 = 39933
 		{"excel_doc_no_holidays", "WORKDAY(39722,151)", 39933, false, 0},
 		// WORKDAY(10/1/2008, 151, {11/26/2008,12/4/2008,1/21/2009}) = 5/5/2009 = 39938
@@ -1421,13 +1421,13 @@ func TestWORKDAY_INTL(t *testing.T) {
 func TestNETWORKDAYS(t *testing.T) {
 	resolver := &mockResolver{}
 
-	// Key dates (2025) — serial numbers per ExcelSerialToTime:
+	// Key dates (2025) — date serial numbers:
 	// Jan 1  = 45658 (Wed), Jan 3  = 45660 (Fri), Jan 4  = 45661 (Sat)
 	// Jan 5  = 45662 (Sun), Jan 6  = 45663 (Mon), Jan 7  = 45664 (Tue)
 	// Jan 8  = 45665 (Wed), Jan 10 = 45667 (Fri), Jan 11 = 45668 (Sat)
 	// Jan 12 = 45669 (Sun), Jan 13 = 45670 (Mon), Jan 31 = 45688 (Fri)
 	//
-	// Excel doc example dates (serial numbers):
+	// Doc example dates (serial numbers):
 	// 2012-10-01 (Mon) = 41183  (project start)
 	// 2013-03-01 (Fri) = 41334  (project end)
 	// 2012-11-22 (Thu) = 41235  (holiday 1)
@@ -1484,7 +1484,7 @@ func TestNETWORKDAYS(t *testing.T) {
 		{"negative_range", "NETWORKDAYS(45667,45663)", -5, false, 0},
 		{"negative_cross_weekend", "NETWORKDAYS(45670,45660)", -7, false, 0},
 
-		// Excel doc examples:
+		// Doc examples:
 		// NETWORKDAYS(10/1/2012, 3/1/2013) = 110
 		{"excel_doc_no_holidays", "NETWORKDAYS(41183,41334)", 110, false, 0},
 		// NETWORKDAYS(10/1/2012, 3/1/2013, 11/22/2012) = 109
@@ -1638,7 +1638,7 @@ func TestWEEKNUM(t *testing.T) {
 		isErr   bool
 		errVal  ErrorValue
 	}{
-		// Excel doc examples: Mar 9, 2012
+		// Doc examples: Mar 9, 2012
 		{"doc_example_default", "WEEKNUM(DATE(2012,3,9))", 10, false, 0},
 		{"doc_example_rt2", "WEEKNUM(DATE(2012,3,9),2)", 11, false, 0},
 
@@ -1731,7 +1731,7 @@ func TestISOWEEKNUM(t *testing.T) {
 		isErr   bool
 		errVal  ErrorValue
 	}{
-		// Excel documentation example: March 9, 2012 = ISO week 10
+		// Documentation example: March 9, 2012 = ISO week 10
 		{"excel_doc_mar_9_2012", "ISOWEEKNUM(40977)", 10, false, 0},
 		// Using DATE() to construct the same date
 		{"excel_doc_via_date", "ISOWEEKNUM(DATE(2012,3,9))", 10, false, 0},
@@ -1773,7 +1773,7 @@ func TestISOWEEKNUM(t *testing.T) {
 		{"serial_1_jan1_1900", "ISOWEEKNUM(1)", 1, false, 0},
 		// Serial 7 = Jan 7, 1900 (Sunday) = ISO week 1
 		{"serial_7_jan7_1900", "ISOWEEKNUM(7)", 1, false, 0},
-		// Serial 0 = Excel's "Jan 0, 1900" mapped to Dec 31, 1899 = ISO week 52
+		// Serial 0 = "Jan 0, 1900" mapped to Dec 31, 1899 = ISO week 52
 		{"serial_0", "ISOWEEKNUM(0)", 52, false, 0},
 
 		// Fractional serial: should use the date portion only
@@ -1825,7 +1825,7 @@ func TestYEARFRAC(t *testing.T) {
 			formula string
 			want    float64
 		}{
-			// === Excel documentation examples ===
+			// === Documentation examples ===
 			// 1/1/2012 to 7/30/2012
 			{"doc_basis0_default", "YEARFRAC(DATE(2012,1,1),DATE(2012,7,30))", 0.58055555555555556},
 			{"doc_basis1", "YEARFRAC(DATE(2012,1,1),DATE(2012,7,30),1)", 0.57650273224043716},

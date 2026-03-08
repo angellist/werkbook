@@ -50,7 +50,7 @@ func init() {
 	Register("OCT2HEX", NoCtx(fnOct2Hex))
 }
 
-// fnBin2Dec implements the Excel BIN2DEC function.
+// fnBin2Dec implements the BIN2DEC function.
 // BIN2DEC(number) — converts a binary number string to decimal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -165,7 +165,7 @@ func parseBinToInt64(args []Value) (int64, *Value) {
 	return int64(u), nil
 }
 
-// fnBin2Hex implements the Excel BIN2HEX function.
+// fnBin2Hex implements the BIN2HEX function.
 // BIN2HEX(number, [places]) — converts a binary number string to hexadecimal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -209,7 +209,7 @@ func fnBin2Hex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnBin2Oct implements the Excel BIN2OCT function.
+// fnBin2Oct implements the BIN2OCT function.
 // BIN2OCT(number, [places]) — converts a binary number string to octal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -262,7 +262,7 @@ func formatComplexNum(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-// fnComplex implements the Excel COMPLEX function.
+// fnComplex implements the COMPLEX function.
 // COMPLEX(real_num, i_num, [suffix]) — converts real and imaginary
 // coefficients into a complex number string of the form x+yi or x+yj.
 func fnComplex(args []Value) (Value, error) {
@@ -334,7 +334,7 @@ func fnComplex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDELTA implements the Excel DELTA function.
+// fnDELTA implements the DELTA function.
 // DELTA(number1, [number2]) — returns 1 if number1 == number2, else 0.
 // number2 defaults to 0. Non-numeric arguments produce #VALUE!.
 func fnDELTA(args []Value) (Value, error) {
@@ -361,7 +361,7 @@ func fnDELTA(args []Value) (Value, error) {
 	return NumberVal(0), nil
 }
 
-// fnDec2Bin implements the Excel DEC2BIN function.
+// fnDec2Bin implements the DEC2BIN function.
 // DEC2BIN(number, [places]) — converts a decimal number to binary.
 // number must be between -512 and 511 (inclusive). Non-integer values are truncated.
 // Negative numbers use two's complement (10-bit). places specifies minimum digits (1–10).
@@ -370,7 +370,7 @@ func fnDec2Bin(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -419,7 +419,7 @@ func fnDec2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDec2Hex implements the Excel DEC2HEX function.
+// fnDec2Hex implements the DEC2HEX function.
 // DEC2HEX(number, [places]) — converts a decimal number to hexadecimal.
 // number must be between -549755813888 and 549755813887 (inclusive, -2^39 to 2^39-1).
 // Non-integer values are truncated. Negative numbers use two's complement (10 hex digits = 40 bits).
@@ -429,7 +429,7 @@ func fnDec2Hex(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -478,7 +478,7 @@ func fnDec2Hex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDec2Oct implements the Excel DEC2OCT function.
+// fnDec2Oct implements the DEC2OCT function.
 // DEC2OCT(number, [places]) — converts a decimal number to octal.
 // number must be between -536870912 and 536870911 (inclusive, -2^29 to 2^29-1).
 // Non-integer values are truncated. Negative numbers use two's complement (10 octal digits = 30 bits).
@@ -488,7 +488,7 @@ func fnDec2Oct(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -537,7 +537,7 @@ func fnDec2Oct(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnHex2Dec implements the Excel HEX2DEC function.
+// fnHex2Dec implements the HEX2DEC function.
 // HEX2DEC(number) — converts a hexadecimal number string to decimal.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // 10-digit numbers starting with 8-F are negative (two's complement).
@@ -597,7 +597,7 @@ func fnHex2Dec(args []Value) (Value, error) {
 	return NumberVal(result), nil
 }
 
-// fnOct2Dec implements the Excel OCT2DEC function.
+// fnOct2Dec implements the OCT2DEC function.
 // OCT2DEC(number) — converts an octal number string to decimal.
 // Input must contain only octal chars (0-7), max 10 digits.
 // 10-digit numbers starting with 4-7 are negative (two's complement, 30-bit).
@@ -767,7 +767,7 @@ func parseOctToInt64(args []Value) (int64, *Value) {
 	return int64(u), nil
 }
 
-// fnHex2Bin implements the Excel HEX2BIN function.
+// fnHex2Bin implements the HEX2BIN function.
 // HEX2BIN(number, [places]) — converts a hexadecimal number string to binary.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // Output must be in range -512 to 511 (10-bit binary).
@@ -815,7 +815,7 @@ func fnHex2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnHex2Oct implements the Excel HEX2OCT function.
+// fnHex2Oct implements the HEX2OCT function.
 // HEX2OCT(number, [places]) — converts a hexadecimal number string to octal.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // Output must be in range -536870912 to 536870911 (30-bit octal).
@@ -863,7 +863,7 @@ func fnHex2Oct(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnOct2Bin implements the Excel OCT2BIN function.
+// fnOct2Bin implements the OCT2BIN function.
 // OCT2BIN(number, [places]) — converts an octal number string to binary.
 // Input must contain only octal chars (0-7), max 10 digits.
 // Output must be in range -512 to 511 (10-bit binary).
@@ -911,7 +911,7 @@ func fnOct2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnOct2Hex implements the Excel OCT2HEX function.
+// fnOct2Hex implements the OCT2HEX function.
 // OCT2HEX(number, [places]) — converts an octal number string to hexadecimal.
 // Input must contain only octal chars (0-7), max 10 digits.
 // Output is uppercase hex. Negative numbers use 40-bit two's complement.
@@ -1260,7 +1260,7 @@ func convertTemperature(val float64, from, to string) (float64, bool) {
 	return result, true
 }
 
-// fnConvert implements the Excel CONVERT function.
+// fnConvert implements the CONVERT function.
 // CONVERT(number, from_unit, to_unit) — converts a number from one measurement
 // unit to another.
 func fnConvert(args []Value) (Value, error) {
@@ -1332,7 +1332,7 @@ func fnConvert(args []Value) (Value, error) {
 	return NumberVal(result), nil
 }
 
-// parseComplex parses an Excel-style complex number string (e.g. "3+4i",
+// parseComplex parses a complex number string (e.g. "3+4i",
 // "-3-4j", "i", "3", "-i") and returns the real and imaginary coefficients.
 // The third return value is true if the string is not a valid complex number.
 func parseComplex(s string) (real, imag float64, fail bool) {
@@ -1416,7 +1416,7 @@ func parseComplex(s string) (real, imag float64, fail bool) {
 	return r, im, false
 }
 
-// fnImabs implements the Excel IMABS function.
+// fnImabs implements the IMABS function.
 // IMABS(inumber) — returns the absolute value (modulus) of a complex number.
 // The modulus is sqrt(real² + imag²).
 func fnImabs(args []Value) (Value, error) {
@@ -1462,7 +1462,7 @@ func fnImabs(args []Value) (Value, error) {
 	return NumberVal(math.Sqrt(real*real + imag*imag)), nil
 }
 
-// fnImaginary implements the Excel IMAGINARY function.
+// fnImaginary implements the IMAGINARY function.
 // IMAGINARY(inumber) — returns the imaginary coefficient of a complex number.
 func fnImaginary(args []Value) (Value, error) {
 	if len(args) != 1 {
@@ -1504,7 +1504,7 @@ func fnImaginary(args []Value) (Value, error) {
 	return NumberVal(imag), nil
 }
 
-// fnImreal implements the Excel IMREAL function.
+// fnImreal implements the IMREAL function.
 // IMREAL(inumber) — returns the real coefficient of a complex number.
 func fnImreal(args []Value) (Value, error) {
 	if len(args) != 1 {
@@ -1549,7 +1549,7 @@ func fnImreal(args []Value) (Value, error) {
 	return NumberVal(real), nil
 }
 
-// fnImargument implements the Excel IMARGUMENT function.
+// fnImargument implements the IMARGUMENT function.
 // IMARGUMENT(inumber) — returns the argument (theta/angle in radians) of a complex number.
 // The argument of zero is undefined and returns #DIV/0!.
 func fnImargument(args []Value) (Value, error) {
@@ -1602,7 +1602,7 @@ func fnImargument(args []Value) (Value, error) {
 	return NumberVal(math.Atan2(imag, real)), nil
 }
 
-// fnImconjugate implements the Excel IMCONJUGATE function.
+// fnImconjugate implements the IMCONJUGATE function.
 // IMCONJUGATE(inumber) — returns the complex conjugate of a complex number.
 // The conjugate of a+bi is a-bi (the imaginary part is negated).
 func fnImconjugate(args []Value) (Value, error) {
@@ -1674,7 +1674,7 @@ func parseComplexWithSuffix(s string) (real, imag float64, suffix string, fail b
 	return r, im, suffix, false
 }
 
-// formatComplex formats a complex number as an Excel-style string
+// formatComplex formats a complex number as a formatted string
 // using the same formatting rules as the COMPLEX function.
 func formatComplex(real, imag float64, suffix string) string {
 	// Both zero: just "0".
@@ -1709,7 +1709,7 @@ func formatComplex(real, imag float64, suffix string) string {
 	return result
 }
 
-// fnImdiv implements the Excel IMDIV function.
+// fnImdiv implements the IMDIV function.
 // IMDIV(inumber1, inumber2) — returns the quotient of two complex numbers.
 // Both arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 // Division by zero (both real and imag of divisor are 0) returns #NUM!.
@@ -1782,7 +1782,7 @@ func fnImdiv(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImproduct implements the Excel IMPRODUCT function.
+// fnImproduct implements the IMPRODUCT function.
 // IMPRODUCT(inumber1, [inumber2], ...) — returns the product of 1 to 255 complex numbers.
 // All arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImproduct(args []Value) (Value, error) {
@@ -1847,7 +1847,7 @@ func fnImproduct(args []Value) (Value, error) {
 	return StringVal(formatComplex(totalReal, totalImag, suffix)), nil
 }
 
-// fnImsum implements the Excel IMSUM function.
+// fnImsum implements the IMSUM function.
 // IMSUM(inumber1, [inumber2], ...) — returns the sum of two or more complex numbers.
 // All arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImsum(args []Value) (Value, error) {
@@ -1907,7 +1907,7 @@ func fnImsum(args []Value) (Value, error) {
 	return StringVal(formatComplex(totalReal, totalImag, suffix)), nil
 }
 
-// fnImsub implements the Excel IMSUB function.
+// fnImsub implements the IMSUB function.
 // IMSUB(inumber1, inumber2) — returns the difference of two complex numbers.
 // Both arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImsub(args []Value) (Value, error) {
@@ -1981,7 +1981,7 @@ func cleanFloat(v float64) float64 {
 	return v
 }
 
-// fnImsqrt implements the Excel IMSQRT function.
+// fnImsqrt implements the IMSQRT function.
 // IMSQRT(inumber) — returns the square root of a complex number.
 // Uses polar form: r=sqrt(x²+y²), θ=atan2(y,x), result=sqrt(r)*(cos(θ/2)+sin(θ/2)*i).
 func fnImsqrt(args []Value) (Value, error) {
@@ -2044,7 +2044,7 @@ func fnImsqrt(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImpower implements the Excel IMPOWER function.
+// fnImpower implements the IMPOWER function.
 // IMPOWER(inumber, number) — returns a complex number raised to a power.
 // Uses polar form: r^n * (cos(nθ) + sin(nθ)*i).
 func fnImpower(args []Value) (Value, error) {
@@ -2122,7 +2122,7 @@ func fnImpower(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImexp implements the Excel IMEXP function.
+// fnImexp implements the IMEXP function.
 // IMEXP(inumber) — returns the exponential of a complex number.
 // e^(x+yi) = e^x * (cos(y) + sin(y)*i).
 func fnImexp(args []Value) (Value, error) {
@@ -2176,7 +2176,7 @@ func fnImexp(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImln implements the Excel IMLN function.
+// fnImln implements the IMLN function.
 // IMLN(inumber) — returns the natural logarithm of a complex number.
 // ln(x+yi) = ln(|z|) + atan2(y,x)*i.
 func fnImln(args []Value) (Value, error) {
@@ -2235,7 +2235,7 @@ func fnImln(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImlog2 implements the Excel IMLOG2 function.
+// fnImlog2 implements the IMLOG2 function.
 // IMLOG2(inumber) — returns the base-2 logarithm of a complex number.
 // log2(z) = ln(z) / ln(2).
 func fnImlog2(args []Value) (Value, error) {
@@ -2295,7 +2295,7 @@ func fnImlog2(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImlog10 implements the Excel IMLOG10 function.
+// fnImlog10 implements the IMLOG10 function.
 // IMLOG10(inumber) — returns the base-10 logarithm of a complex number.
 // log10(z) = ln(z) / ln(10).
 func fnImlog10(args []Value) (Value, error) {
@@ -2355,7 +2355,7 @@ func fnImlog10(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsin implements the Excel IMSIN function.
+// fnImsin implements the IMSIN function.
 // IMSIN(inumber) — returns the sine of a complex number.
 // sin(x+yi) = sin(x)*cosh(y) + cos(x)*sinh(y)*i.
 func fnImsin(args []Value) (Value, error) {
@@ -2407,7 +2407,7 @@ func fnImsin(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcos implements the Excel IMCOS function.
+// fnImcos implements the IMCOS function.
 // IMCOS(inumber) — returns the cosine of a complex number.
 // cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i.
 func fnImcos(args []Value) (Value, error) {
@@ -2459,7 +2459,7 @@ func fnImcos(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImtan implements the Excel IMTAN function.
+// fnImtan implements the IMTAN function.
 // IMTAN(inumber) — returns the tangent of a complex number.
 // tan(z) = sin(z)/cos(z).
 // real part = sin(2x)/(cos(2x)+cosh(2y))
@@ -2521,7 +2521,7 @@ func fnImtan(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsinh implements the Excel IMSINH function.
+// fnImsinh implements the IMSINH function.
 // IMSINH(inumber) — returns the hyperbolic sine of a complex number.
 // sinh(x+yi) = sinh(x)*cos(y) + cosh(x)*sin(y)*i.
 func fnImsinh(args []Value) (Value, error) {
@@ -2573,7 +2573,7 @@ func fnImsinh(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcosh implements the Excel IMCOSH function.
+// fnImcosh implements the IMCOSH function.
 // IMCOSH(inumber) — returns the hyperbolic cosine of a complex number.
 // cosh(x+yi) = cosh(x)*cos(y) + sinh(x)*sin(y)*i.
 func fnImcosh(args []Value) (Value, error) {
@@ -2625,7 +2625,7 @@ func fnImcosh(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsech implements the Excel IMSECH function.
+// fnImsech implements the IMSECH function.
 // IMSECH(inumber) — returns the hyperbolic secant of a complex number.
 // sech(z) = 1/cosh(z).
 func fnImsech(args []Value) (Value, error) {
@@ -2687,7 +2687,7 @@ func fnImsech(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcsc implements the Excel IMCSC function.
+// fnImcsc implements the IMCSC function.
 // IMCSC(inumber) — returns the cosecant of a complex number.
 // csc(z) = 1/sin(z).
 func fnImcsc(args []Value) (Value, error) {
@@ -2749,7 +2749,7 @@ func fnImcsc(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcot implements the Excel IMCOT function.
+// fnImcot implements the IMCOT function.
 // IMCOT(inumber) — returns the cotangent of a complex number.
 // cot(z) = cos(z)/sin(z).
 func fnImcot(args []Value) (Value, error) {
@@ -2816,7 +2816,7 @@ func fnImcot(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcsch implements the Excel IMCSCH function.
+// fnImcsch implements the IMCSCH function.
 // IMCSCH(inumber) — returns the hyperbolic cosecant of a complex number.
 // csch(z) = 1/sinh(z).
 func fnImcsch(args []Value) (Value, error) {
@@ -2878,7 +2878,7 @@ func fnImcsch(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnGESTEP implements the Excel GESTEP function.
+// fnGESTEP implements the GESTEP function.
 // GESTEP(number, [step]) — returns 1 if number >= step, else 0.
 // step defaults to 0. Non-numeric arguments produce #VALUE!.
 func fnGESTEP(args []Value) (Value, error) {

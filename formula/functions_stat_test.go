@@ -352,7 +352,7 @@ func TestSUMIFPropagatesMatchedSumRangeError(t *testing.T) {
 func TestCOUNTBooleanDirectArgs(t *testing.T) {
 	resolver := &mockResolver{cells: map[CellAddr]Value{}}
 
-	// Direct boolean args should be counted (Excel behavior).
+	// Direct boolean args should be counted (expected behavior).
 	cf := evalCompile(t, "COUNT(TRUE,FALSE,10,20)")
 	got, err := Eval(cf, resolver, nil)
 	if err != nil {
@@ -1333,7 +1333,7 @@ func TestCOUNTA(t *testing.T) {
 		}
 	})
 
-	// Excel doc example: date, number, decimal, TRUE, #DIV/0! → 5
+	// Doc example: date, number, decimal, TRUE, #DIV/0! → 5
 	t.Run("excel_doc_example", func(t *testing.T) {
 		r := &mockResolver{
 			cells: map[CellAddr]Value{
@@ -1807,7 +1807,7 @@ func TestSUMIFS_DateSerialNumbers(t *testing.T) {
 			{Col: 1, Row: 1}: NumberVal(100),
 			{Col: 1, Row: 2}: NumberVal(200),
 			{Col: 1, Row: 3}: NumberVal(300),
-			// Date range (B): Excel serial numbers
+			// Date range (B): date serial numbers
 			// 44927 = 2023-01-01, 44958 = 2023-02-01, 44986 = 2023-03-01
 			{Col: 2, Row: 1}: NumberVal(44927),
 			{Col: 2, Row: 2}: NumberVal(44958),
@@ -2188,7 +2188,7 @@ func TestCOUNTIFS_ErrorOddArgs(t *testing.T) {
 }
 
 func TestCOUNTIFS_DateSerialNumbers(t *testing.T) {
-	// Excel serial: 44197 = 2021-01-01, 44228 = 2021-02-01, 44256 = 2021-03-01
+	// Date serial: 44197 = 2021-01-01, 44228 = 2021-02-01, 44256 = 2021-03-01
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(44197),
@@ -3156,7 +3156,7 @@ func TestSUMIF_TooManyArgs(t *testing.T) {
 }
 
 func TestSUMIF_ExcelDocExample(t *testing.T) {
-	// From Excel docs Example 1: property values and commissions
+	// From docs Example 1: property values and commissions
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(100000),
@@ -3195,7 +3195,7 @@ func TestSUMIF_ExcelDocExample(t *testing.T) {
 }
 
 func TestSUMIF_ExcelDocExample2(t *testing.T) {
-	// From Excel docs Example 2: categories and food sales
+	// From docs Example 2: categories and food sales
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: StringVal("Vegetables"),
@@ -3574,7 +3574,7 @@ func TestAVERAGE(t *testing.T) {
 	})
 
 	t.Run("range with numeric string ignored", func(t *testing.T) {
-		// Per Excel: numeric strings in ranges are ignored by AVERAGE.
+		// Expected behavior: numeric strings in ranges are ignored by AVERAGE.
 		resolver := valResolver(
 			NumberVal(10),
 			StringVal("5"),
@@ -3675,7 +3675,7 @@ func TestAVERAGEA(t *testing.T) {
 	})
 
 	t.Run("range with text counts as 0", func(t *testing.T) {
-		// Excel example: {10, 7, 9, 2, "Not available"} => (10+7+9+2+0)/5 = 5.6
+		// Example: {10, 7, 9, 2, "Not available"} => (10+7+9+2+0)/5 = 5.6
 		resolver := valResolver(
 			NumberVal(10),
 			NumberVal(7),
@@ -5196,7 +5196,7 @@ func TestLARGEComprehensive(t *testing.T) {
 	})
 
 	t.Run("Excel example from docs", func(t *testing.T) {
-		// Excel docs example: {3,4,5,2,3,4,5,6,4,7} LARGE(...,3)=5, LARGE(...,7)=4
+		// Docs example: {3,4,5,2,3,4,5,6,4,7} LARGE(...,3)=5, LARGE(...,7)=4
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(3), {Col: 2, Row: 1}: NumberVal(4),
@@ -5623,7 +5623,7 @@ func TestSMALLComprehensive(t *testing.T) {
 	})
 
 	t.Run("Excel example from docs", func(t *testing.T) {
-		// Excel docs: Data={3,4,5,2,3,4,6,4,7} SMALL(A2:A10,4)=4
+		// Docs: Data={3,4,5,2,3,4,6,4,7} SMALL(A2:A10,4)=4
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(3), {Col: 2, Row: 1}: NumberVal(1),
@@ -5799,7 +5799,7 @@ func TestMatchesCriteriaBoolNumDistinction(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestQUARTILE(t *testing.T) {
-	// Standard dataset from Excel docs: {1,2,4,7,8,9,10,12}
+	// Standard dataset from docs: {1,2,4,7,8,9,10,12}
 	stdResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
@@ -5881,7 +5881,7 @@ func TestQUARTILE(t *testing.T) {
 	}{
 		// quart=0 (minimum)
 		{"q0_min", "QUARTILE(A1:A8,0)", stdResolver, 1, 0},
-		// quart=1 (25th percentile) - Excel example
+		// quart=1 (25th percentile) - example
 		{"q1_25th", "QUARTILE(A1:A8,1)", stdResolver, 3.5, 0},
 		// quart=2 (median)
 		{"q2_median", "QUARTILE(A1:A8,2)", stdResolver, 7.5, 0},
@@ -5991,7 +5991,7 @@ func TestQUARTILE(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPERCENTILE(t *testing.T) {
-	// Excel docs example: {1,2,3,4} in A1:A4
+	// Docs example: {1,2,3,4} in A1:A4
 	basicResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
@@ -6068,8 +6068,8 @@ func TestPERCENTILE(t *testing.T) {
 		},
 	}
 
-	// Excel doc example: {1,2,3,6,6,6,7,8,9} → PERCENTILE(data, 0.3) is from the docs
-	// Using simpler data set matching Excel example
+	// Doc example: {1,2,3,6,6,6,7,8,9} → PERCENTILE(data, 0.3) is from the docs
+	// Using simpler data set matching doc example
 	excelDocResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 9, Row: 1}: NumberVal(1),
@@ -6138,7 +6138,7 @@ func TestPERCENTILE(t *testing.T) {
 		{"empty_array", "PERCENTILE(Z1:Z3,0.5)", emptyResolver, 0, ErrValNUM},
 		// Non-numeric values in array are ignored: {1,3} → k=0.5 → 2
 		{"mixed_ignore_strings", "PERCENTILE(G1:G4,0.5)", mixedResolver, 2, 0},
-		// Excel doc example: PERCENTILE({1,2,3,6,6,6,7,8,9},0.3)
+		// Doc example: PERCENTILE({1,2,3,6,6,6,7,8,9},0.3)
 		// rank=0.3*8=2.4, sorted[2]=3, sorted[3]=6 → 3+0.4*(6-3)=4.2
 		{"excel_doc_example", "PERCENTILE(I1:I9,0.3)", excelDocResolver, 4.2, 0},
 	}
@@ -6207,7 +6207,7 @@ func TestPERCENTILE(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPERCENTILEEXC(t *testing.T) {
-	// Excel docs example: {6,7,15,36,39,40,41,42,43,47,49} in A1:A11
+	// Docs example: {6,7,15,36,39,40,41,42,43,47,49} in A1:A11
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(6),
@@ -6303,9 +6303,9 @@ func TestPERCENTILEEXC(t *testing.T) {
 		wantNum  float64
 		wantErr  ErrorValue
 	}{
-		// Excel docs example: PERCENTILE.EXC({6,7,15,36,39,40,41,42,43,47,49}, 0.25) = 15
+		// Docs example: PERCENTILE.EXC({6,7,15,36,39,40,41,42,43,47,49}, 0.25) = 15
 		{"excel_example_25th", "PERCENTILE.EXC(A1:A11,0.25)", excelResolver, 15, 0},
-		// Excel docs example: PERCENTILE.EXC({6,7,15,36,39,40,41,42,43,47,49}, 0.75) = 43
+		// Docs example: PERCENTILE.EXC({6,7,15,36,39,40,41,42,43,47,49}, 0.75) = 43
 		{"excel_example_75th", "PERCENTILE.EXC(A1:A11,0.75)", excelResolver, 43, 0},
 		// Median (k=0.5) on excel data: rank=0.5*12=6, so nums[5]=40
 		{"excel_median", "PERCENTILE.EXC(A1:A11,0.5)", excelResolver, 40, 0},
@@ -6403,7 +6403,7 @@ func TestPERCENTILEEXC(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestQUARTILEEXC(t *testing.T) {
-	// Excel docs example: {6,7,15,36,39,40,41,42,43,47,49} in A1:A11
+	// Docs example: {6,7,15,36,39,40,41,42,43,47,49} in A1:A11
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(6),
@@ -6484,9 +6484,9 @@ func TestQUARTILEEXC(t *testing.T) {
 		wantNum  float64
 		wantErr  ErrorValue
 	}{
-		// Excel docs example: QUARTILE.EXC({6,7,...,49}, 1) = 15
+		// Docs example: QUARTILE.EXC({6,7,...,49}, 1) = 15
 		{"excel_q1", "QUARTILE.EXC(A1:A11,1)", excelResolver, 15, 0},
-		// Excel docs example: QUARTILE.EXC({6,7,...,49}, 3) = 43
+		// Docs example: QUARTILE.EXC({6,7,...,49}, 3) = 43
 		{"excel_q3", "QUARTILE.EXC(A1:A11,3)", excelResolver, 43, 0},
 		// QUARTILE.EXC(data, 2) = MEDIAN
 		{"excel_q2_median", "QUARTILE.EXC(A1:A11,2)", excelResolver, 40, 0},
@@ -6595,7 +6595,7 @@ func TestQUARTILEEXC(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestTRIMMEAN(t *testing.T) {
-	// Excel docs example: {4,5,6,7,2,3,4,5,1,2,3} in A1:A11
+	// Docs example: {4,5,6,7,2,3,4,5,1,2,3} in A1:A11
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(4),
@@ -6709,7 +6709,7 @@ func TestTRIMMEAN(t *testing.T) {
 		wantNum  float64
 		wantErr  ErrorValue
 	}{
-		// Excel docs example: {4,5,6,7,2,3,4,5,1,2,3}, 0.2
+		// Docs example: {4,5,6,7,2,3,4,5,1,2,3}, 0.2
 		// sorted: 1,2,2,3,3,4,4,5,5,6,7; n=11, floor(11*0.2/2)=1, trim 1 each end
 		// remaining: 2,2,3,3,4,4,5,5,6 → mean = 34/9
 		{"excel_example", "TRIMMEAN(A1:A11,0.2)", excelResolver, 34.0 / 9.0, 0},
@@ -6826,7 +6826,7 @@ func TestTRIMMEAN(t *testing.T) {
 func TestGEOMEAN(t *testing.T) {
 	const tol = 1e-6
 
-	// Resolver with Excel doc example {4,5,8,7,11,4,3} in A1:A7
+	// Resolver with doc example {4,5,8,7,11,4,3} in A1:A7
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(4),
@@ -6930,7 +6930,7 @@ func TestGEOMEAN(t *testing.T) {
 			formula: "GEOMEAN(4,0,9)",
 			wantErr: true,
 		},
-		// Range input - Excel doc example: GEOMEAN(A2:A8) = 5.476987
+		// Range input - doc example: GEOMEAN(A2:A8) = 5.476987
 		{
 			name:     "excel_example_range",
 			formula:  "GEOMEAN(A1:A7)",
@@ -7116,7 +7116,7 @@ func TestHARMEAN(t *testing.T) {
 		wantNum  float64
 		wantErr  bool // expect ValueError type
 	}{
-		// Excel documentation example: {4,5,8,7,11,4,3}
+		// Documentation example: {4,5,8,7,11,4,3}
 		{
 			name:     "excel_example_array_ref",
 			formula:  "HARMEAN(A1:A7)",
@@ -7572,7 +7572,7 @@ func TestCORREL(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSLOPE(t *testing.T) {
-	// Excel example: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
+	// Example: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(6),
@@ -7756,7 +7756,7 @@ func TestSLOPE(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestINTERCEPT(t *testing.T) {
-	// Excel example: y={2,3,9,1,8}, x={6,5,11,7,5}
+	// Example: y={2,3,9,1,8}, x={6,5,11,7,5}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(6),
@@ -7933,7 +7933,7 @@ func TestINTERCEPT(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFORECAST(t *testing.T) {
-	// Excel example: y={6,7,9,15,21}, x_known={20,28,31,38,40}
+	// Example: y={6,7,9,15,21}, x_known={20,28,31,38,40}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(6), {Col: 2, Row: 1}: NumberVal(20),
@@ -8054,7 +8054,7 @@ func TestFORECAST(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Excel example
+		// Example
 		{"excel_example", "FORECAST(30,A1:A5,B1:B5)", excelResolver, 10.607253, false, 0},
 		// FORECAST.LINEAR identical
 		{"forecast_linear_same", "FORECAST.LINEAR(30,A1:A5,B1:B5)", excelResolver, 10.607253, false, 0},
@@ -8131,7 +8131,7 @@ func TestFORECAST(t *testing.T) {
 		{"fl_non_numeric_x", "FORECAST.LINEAR(\"hello\",A1:A3,B1:B3)", linearResolver, 0, true, ErrValVALUE},
 		// FORECAST.LINEAR: too many args -> #VALUE!
 		{"fl_too_many_args", "FORECAST.LINEAR(5,A1:A3,B1:B3,A1:A3)", linearResolver, 0, true, ErrValVALUE},
-		// FORECAST.LINEAR: Excel doc example with x=30
+		// FORECAST.LINEAR: doc example with x=30
 		{"fl_excel_doc_example", "FORECAST.LINEAR(30,A1:A5,B1:B5)", excelResolver, 10.607253, false, 0},
 		// FORECAST.LINEAR: large dataset y=2x+1, predict x=50 -> 101
 		{"fl_large_dataset", "FORECAST.LINEAR(50,A1:A20,B1:B20)", largeResolver, 101.0, false, 0},
@@ -8457,7 +8457,7 @@ func TestGAMMALN_argcount(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPERCENTRANK(t *testing.T) {
-	// Excel example data: {13,12,11,8,4,3,2,1,1,1}
+	// Example data: {13,12,11,8,4,3,2,1,1,1}
 	// Sorted: {1,1,1,2,3,4,8,11,12,13}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -8520,7 +8520,7 @@ func TestPERCENTRANK(t *testing.T) {
 		wantNum  float64
 		wantErr  ErrorValue // 0 means expect number result
 	}{
-		// Excel doc examples
+		// Doc examples
 		{name: "excel_x=2", formula: "PERCENTRANK(A1:A10,2)", resolver: excelResolver, wantNum: 0.333},
 		{name: "excel_x=4", formula: "PERCENTRANK(A1:A10,4)", resolver: excelResolver, wantNum: 0.555},
 		{name: "excel_x=8", formula: "PERCENTRANK(A1:A10,8)", resolver: excelResolver, wantNum: 0.666},
@@ -8636,7 +8636,7 @@ func TestPERCENTRANK(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPERCENTRANKEXC(t *testing.T) {
-	// Excel example data: {1,2,3,6,6,6,7,8,9} in A1:A9
+	// Example data: {1,2,3,6,6,6,7,8,9} in A1:A9
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
@@ -8699,7 +8699,7 @@ func TestPERCENTRANKEXC(t *testing.T) {
 		wantNum  float64
 		wantErr  ErrorValue
 	}{
-		// Excel doc examples
+		// Doc examples
 		{name: "excel_x=7", formula: "PERCENTRANK.EXC(A1:A9,7)", resolver: excelResolver, wantNum: 0.7},
 		{name: "excel_x=5.43", formula: "PERCENTRANK.EXC(A1:A9,5.43)", resolver: excelResolver, wantNum: 0.381},
 		{name: "excel_x=5.43_sig1", formula: "PERCENTRANK.EXC(A1:A9,5.43,1)", resolver: excelResolver, wantNum: 0.3},
@@ -8815,7 +8815,7 @@ func TestPERCENTRANKEXC(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSKEW(t *testing.T) {
-	// Resolver with {3,4,5,2,3,4,5,6,4,7} in A1:A10 (Excel docs example)
+	// Resolver with {3,4,5,2,3,4,5,6,4,7} in A1:A10 (docs example)
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(3),
@@ -8962,7 +8962,7 @@ func TestSKEW(t *testing.T) {
 		isErr    bool
 		tol      float64
 	}{
-		// Excel docs example: {3,4,5,2,3,4,5,6,4,7} → 0.359543
+		// Docs example: {3,4,5,2,3,4,5,6,4,7} → 0.359543
 		{"excel_example", "SKEW(A1:A10)", excelResolver, 0.359543, 0, false, 1e-4},
 
 		// Symmetric data {1,2,3,4,5} → skew = 0
@@ -9093,7 +9093,7 @@ func TestSKEW(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSKEWP(t *testing.T) {
-	// Excel docs example: {3,4,5,2,3,4,5,6,4,7} in A1:A10
+	// Docs example: {3,4,5,2,3,4,5,6,4,7} in A1:A10
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(3),
@@ -9235,7 +9235,7 @@ func TestSKEWP(t *testing.T) {
 		isErr    bool
 		tol      float64
 	}{
-		// 1. Excel docs example: {3,4,5,2,3,4,5,6,4,7} → 0.303193
+		// 1. Docs example: {3,4,5,2,3,4,5,6,4,7} → 0.303193
 		{"excel_example", "SKEW.P(A1:A10)", excelResolver, 0.303193, 0, false, 1e-4},
 
 		// 2. Symmetric data {1,2,3,4,5} → skew ≈ 0
@@ -9379,7 +9379,7 @@ func TestSKEWP(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKURT(t *testing.T) {
-	// Excel docs example: {3,4,5,2,3,4,5,6,4,7} in A1:A10
+	// Docs example: {3,4,5,2,3,4,5,6,4,7} in A1:A10
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}:  NumberVal(3),
@@ -9510,7 +9510,7 @@ func TestKURT(t *testing.T) {
 		isErr    bool
 		tol      float64
 	}{
-		// Excel docs example: {3,4,5,2,3,4,5,6,4,7} → -0.151799637
+		// Docs example: {3,4,5,2,3,4,5,6,4,7} → -0.151799637
 		{"excel_example", "KURT(A1:A10)", excelResolver, -0.151799637, 0, false, 1e-4},
 
 		// All same values → #DIV/0! (std dev = 0)
@@ -9838,7 +9838,7 @@ func TestMAXA(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMAXIFS_SingleCriteria(t *testing.T) {
-	// Excel doc Example 1: =MAXIFS(A2:A7,B2:B7,1) => 91
+	// Doc Example 1: =MAXIFS(A2:A7,B2:B7,1) => 91
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			// max range (A): grades
@@ -9870,7 +9870,7 @@ func TestMAXIFS_SingleCriteria(t *testing.T) {
 }
 
 func TestMAXIFS_MultipleCriteria(t *testing.T) {
-	// Excel doc Example 3: =MAXIFS(A2:A7,B2:B7,"b",D2:D7,">100") => 50
+	// Doc Example 3: =MAXIFS(A2:A7,B2:B7,"b",D2:D7,">100") => 50
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			// max range (A): weights
@@ -10228,7 +10228,7 @@ func TestMAXIFS_StringNotEqual(t *testing.T) {
 }
 
 func TestMAXIFS_ExcelDocExample2(t *testing.T) {
-	// Excel doc Example 2: =MAXIFS(A2:A5,B3:B6,"a") => 10
+	// Doc Example 2: =MAXIFS(A2:A5,B3:B6,"a") => 10
 	// criteria_range and max_range aren't aligned but same shape
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -10308,7 +10308,7 @@ func TestMAXIFS_NonArrayMaxRange(t *testing.T) {
 }
 
 func TestMINIFS_SingleCriteria(t *testing.T) {
-	// Excel doc Example 1: =MINIFS(A2:A7,B2:B7,1) => 88
+	// Doc Example 1: =MINIFS(A2:A7,B2:B7,1) => 88
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			// min range (A): grades
@@ -10340,7 +10340,7 @@ func TestMINIFS_SingleCriteria(t *testing.T) {
 }
 
 func TestMINIFS_MultipleCriteria(t *testing.T) {
-	// Excel doc Example 3: =MINIFS(A2:A7,B2:B7,"b",D2:D7,">100") => 13
+	// Doc Example 3: =MINIFS(A2:A7,B2:B7,"b",D2:D7,">100") => 13
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			// min range (A): weights
@@ -10698,7 +10698,7 @@ func TestMINIFS_StringNotEqual(t *testing.T) {
 }
 
 func TestMINIFS_ExcelDocExample2(t *testing.T) {
-	// Excel doc Example 2: =MINIFS(A2:A5,B3:B6,"a") => 10
+	// Doc Example 2: =MINIFS(A2:A5,B3:B6,"a") => 10
 	// criteria_range and min_range aren't aligned but same shape
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -11152,7 +11152,7 @@ func TestRANK(t *testing.T) {
 		},
 	}
 
-	// Excel doc example: {7, 3.5, 3.5, 1, 2}
+	// Doc example: {7, 3.5, 3.5, 1, 2}
 	excelDocResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 7, Row: 1}: NumberVal(7),
@@ -11225,9 +11225,9 @@ func TestRANK(t *testing.T) {
 		{name: "too_few_args", formula: "RANK(9)", resolver: resolver, isErr: true, wantErr: ErrValVALUE},
 		{name: "too_many_args", formula: "RANK(9,A1:A5,1,1)", resolver: resolver, isErr: true, wantErr: ErrValVALUE},
 
-		// Excel documentation example: RANK(3.5, {7,3.5,3.5,1,2}, 1) = 3
+		// Documentation example: RANK(3.5, {7,3.5,3.5,1,2}, 1) = 3
 		{name: "excel_doc_asc", formula: "RANK(G2,G1:G5,1)", resolver: excelDocResolver, want: 3},
-		// Excel documentation example: RANK(7, {7,3.5,3.5,1,2}, 1) = 5
+		// Documentation example: RANK(7, {7,3.5,3.5,1,2}, 1) = 5
 		{name: "excel_doc_top_asc", formula: "RANK(G1,G1:G5,1)", resolver: excelDocResolver, want: 5},
 	}
 
@@ -12343,7 +12343,7 @@ func TestRSQ(t *testing.T) {
 		},
 	}
 
-	// Excel example: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
+	// Example: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(2),
@@ -12389,7 +12389,7 @@ func TestRSQ(t *testing.T) {
 
 	// CORREL for the excel data is approximately 0.057950. RSQ = r^2 ≈ 0.003358
 	// Let's compute: r = correl({2,3,9,1,8,7,5},{6,5,11,7,5,4,4})
-	// Excel gives RSQ ≈ 0.05795 for this data... let me use the known CORREL value.
+	// Expected RSQ ≈ 0.05795 for this data... let me use the known CORREL value.
 	// Actually, the CORREL of this data set:
 	// mean_y = 5, mean_x = 6
 	// We can just verify it matches CORREL^2.
@@ -12447,7 +12447,7 @@ func TestRSQ(t *testing.T) {
 		{"reversed_args", "RSQ(B1:B5,A1:A5)", basicResolver, 0.997054486 * 0.997054486, false, 0},
 		// Fractional values: r=1, r^2=1
 		{"fractional_values", "RSQ(A1:A3,B1:B3)", fracResolver, 1.0, false, 0},
-		// Excel example data
+		// Example data
 		{"excel_example", "RSQ(A1:A7,B1:B7)", excelResolver, 0.057950, false, 0},
 	}
 
@@ -12481,7 +12481,7 @@ func TestRSQ(t *testing.T) {
 func TestSTEYX(t *testing.T) {
 	const tol = 1e-6
 
-	// Excel example data: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
+	// Example data: y={2,3,9,1,8,7,5}, x={6,5,11,7,5,4,4}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(6),
@@ -12696,7 +12696,7 @@ func TestSTEYX(t *testing.T) {
 		{"Five points", "STEYX(A1:A5,B1:B5)", fivePointResolver, 0.0, false, 0},
 		{"Zero y values", "STEYX(A1:A4,B1:B4)", zeroYResolver, 0.387298, false, 0},
 		{"Negative slope perfect", "STEYX(A1:A3,B1:B3)", negSlopeResolver, 0, false, 0},
-		{"Repeat Excel example", "STEYX(A1:A7,B1:B7)", excelResolver, 3.305719, false, 0},
+		{"Repeat example", "STEYX(A1:A7,B1:B7)", excelResolver, 3.305719, false, 0},
 		{"Empty arrays", "STEYX(C1:C3,D1:D3)", excelResolver, 0, true, ErrValDIV0},
 		{"Non-numeric both positions", "STEYX(A1:A7,B1:B7)", nonNumericResolver, 2.934247, false, 0},
 	}
@@ -13501,7 +13501,7 @@ func TestNORMSINV_argcount(t *testing.T) {
 }
 
 func TestNORMSINV_NORMSDIST_roundtrip(t *testing.T) {
-	// Excel's NORM.S.INV uses Acklam's approximation without refinement,
+	// NORM.S.INV uses Acklam's approximation without refinement,
 	// so the roundtrip through NORM.S.DIST is only accurate to ~8 digits.
 	const tol = 1e-8
 	resolver := &mockResolver{}
@@ -14058,7 +14058,7 @@ func TestMEDIAN(t *testing.T) {
 	})
 
 	t.Run("Excel example odd", func(t *testing.T) {
-		// From Excel docs: MEDIAN(1,2,3,4,5) = 3
+		// From docs: MEDIAN(1,2,3,4,5) = 3
 		m := numResolver(1, 2, 3, 4, 5)
 		cf := evalCompile(t, "MEDIAN(A1:A5)")
 		got, err := Eval(cf, m, nil)
@@ -14071,7 +14071,7 @@ func TestMEDIAN(t *testing.T) {
 	})
 
 	t.Run("Excel example even", func(t *testing.T) {
-		// From Excel docs: MEDIAN(1,2,3,4,5,6) = 3.5
+		// From docs: MEDIAN(1,2,3,4,5,6) = 3.5
 		m := numResolver(1, 2, 3, 4, 5, 6)
 		cf := evalCompile(t, "MEDIAN(A1:A6)")
 		got, err := Eval(cf, m, nil)
@@ -15107,7 +15107,7 @@ func TestGAMMA_INV(t *testing.T) {
 		// Error: probability > 1
 		{"err_p_gt1", "GAMMA.INV(1.5,2,1)", 0, true, ErrValNUM},
 
-		// Error: probability = 1 (Excel returns #NUM!)
+		// Error: probability = 1 (returns #NUM!)
 		{"err_p_one", "GAMMA.INV(1,2,1)", 0, true, ErrValNUM},
 
 		// Error: alpha = 0
@@ -15353,7 +15353,7 @@ func TestCHISQ_DIST_argCount(t *testing.T) {
 }
 
 func TestCHISQ_DIST_x0_df1_pdf(t *testing.T) {
-	// df=1 ⇒ alpha=0.5, PDF diverges at x=0 (Excel returns +Inf)
+	// df=1 ⇒ alpha=0.5, PDF diverges at x=0 (returns +Inf)
 	resolver := &mockResolver{}
 	cf := evalCompile(t, "CHISQ.DIST(0,1,FALSE)")
 	got, err := Eval(cf, resolver, nil)
@@ -16325,7 +16325,7 @@ func TestCONFIDENCE_NORM(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Basic values verified against Excel
+		// Basic values verified against expected results
 		{"basic_005_25_50", "CONFIDENCE.NORM(0.05,2.5,50)", 0.692952, false, 0},
 		{"basic_005_1_100", "CONFIDENCE.NORM(0.05,1,100)", 0.196, false, 0},
 		{"basic_001_25_50", "CONFIDENCE.NORM(0.01,2.5,50)", 0.910693, false, 0},
@@ -16446,7 +16446,7 @@ func TestCONFIDENCE_T(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Basic values verified against Excel
+		// Basic values verified against expected results
 		{"basic_005_1_50", "CONFIDENCE.T(0.05,1,50)", 0.284196, false, 0},
 		{"basic_005_25_50", "CONFIDENCE.T(0.05,2.5,50)", 0.710492, false, 0},
 		{"basic_001_1_30", "CONFIDENCE.T(0.01,1,30)", 0.503245, false, 0},
@@ -16660,9 +16660,9 @@ func TestBETA_DIST(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// CDF with custom bounds (Excel documentation example)
+		// CDF with custom bounds (documentation example)
 		{"cdf_custom_bounds", "BETA.DIST(2,8,10,TRUE,1,3)", 0.6854706, false, 0},
-		// PDF with custom bounds (Excel documentation example)
+		// PDF with custom bounds (documentation example)
 		{"pdf_custom_bounds", "BETA.DIST(2,8,10,FALSE,1,3)", 1.4837646, false, 0},
 
 		// Standard beta CDF
@@ -16796,7 +16796,7 @@ func TestBETA_INV(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Excel documentation example
+		// Documentation example
 		{"excel_example", "BETA.INV(0.685470581,8,10,1,3)", 2, false, 0},
 
 		// Symmetric distribution: BETA.INV(0.5, 2, 2) = 0.5
@@ -17482,10 +17482,10 @@ func TestHYPGEOM_DIST(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Basic PMF — Excel example
+		// Basic PMF — example
 		{"pmf_basic", "HYPGEOM.DIST(1,4,8,20,FALSE)", 0.363261093911, false, 0},
 
-		// Basic CDF — Excel example
+		// Basic CDF — example
 		{"cdf_basic", "HYPGEOM.DIST(1,4,8,20,TRUE)", 0.465428276574, false, 0},
 
 		// All successes in sample PMF
@@ -17660,10 +17660,10 @@ func TestNEGBINOM_DIST(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Basic PMF — Excel: NEGBINOM.DIST(10,5,0.25,FALSE) ≈ 0.0550487
+		// Basic PMF — NEGBINOM.DIST(10,5,0.25,FALSE) ≈ 0.0550487
 		{"pmf_basic", "NEGBINOM.DIST(10,5,0.25,FALSE)", 0.0550487, false, 0},
 
-		// Basic CDF — Excel: NEGBINOM.DIST(10,5,0.25,TRUE) ≈ 0.3135141
+		// Basic CDF — NEGBINOM.DIST(10,5,0.25,TRUE) ≈ 0.3135141
 		{"cdf_basic", "NEGBINOM.DIST(10,5,0.25,TRUE)", 0.3135141, false, 0},
 
 		// PMF with p=0.5 — NEGBINOM.DIST(3,5,0.5,FALSE)
@@ -17825,7 +17825,7 @@ func TestBINOM_INV(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Basic case from Excel docs
+		// Basic case from docs
 		{"basic", "BINOM.INV(6,0.5,0.75)", 4, false, 0},
 
 		// Median of symmetric binomial
@@ -18077,7 +18077,7 @@ func TestSUMSQ(t *testing.T) {
 		want    float64
 		isErr   bool
 	}{
-		// Excel doc example
+		// Doc example
 		{"excel_doc_3_4", "SUMSQ(3,4)", 25, false},
 
 		// Basic multi-arg
@@ -18341,7 +18341,7 @@ func TestSTDEV(t *testing.T) {
 
 	t.Run("Excel documentation example", func(t *testing.T) {
 		// STDEV(1345,1301,1368,1322,1310,1370,1318,1350,1303,1299)
-		// Expected: 27.46391572 (from Excel docs)
+		// Expected: 27.46391572 (from docs)
 		r := valResolver(
 			NumberVal(1345), NumberVal(1301), NumberVal(1368),
 			NumberVal(1322), NumberVal(1310), NumberVal(1370),
@@ -18598,7 +18598,7 @@ func TestSTDEV(t *testing.T) {
 	})
 
 	t.Run("range ignores numeric string cells", func(t *testing.T) {
-		// Per Excel: numeric strings in ranges are ignored.
+		// Expected behavior: numeric strings in ranges are ignored.
 		r := valResolver(NumberVal(10), StringVal("5"), NumberVal(30))
 		cf := evalCompile(t, "STDEV(A1:A3)")
 		got, err := Eval(cf, r, nil)
@@ -18735,7 +18735,7 @@ func TestSTDEVP(t *testing.T) {
 	})
 
 	t.Run("range ignores numeric strings", func(t *testing.T) {
-		// Per Excel: numeric strings in ranges are ignored.
+		// Expected behavior: numeric strings in ranges are ignored.
 		resolver := valResolver(
 			NumberVal(10),
 			StringVal("5"),
@@ -18970,7 +18970,7 @@ func TestVAR(t *testing.T) {
 
 	t.Run("Excel documentation example", func(t *testing.T) {
 		// VAR(1345,1301,1368,1322,1310,1370,1318,1350,1303,1299)
-		// Expected: 754.2667 (from Excel docs)
+		// Expected: 754.2667 (from docs)
 		r := valResolver(
 			NumberVal(1345), NumberVal(1301), NumberVal(1368),
 			NumberVal(1322), NumberVal(1310), NumberVal(1370),
@@ -19194,7 +19194,7 @@ func TestVAR(t *testing.T) {
 	})
 
 	t.Run("range ignores numeric string cells", func(t *testing.T) {
-		// Per Excel: numeric strings in ranges are ignored.
+		// Expected behavior: numeric strings in ranges are ignored.
 		r := valResolver(NumberVal(10), StringVal("5"), NumberVal(30))
 		cf := evalCompile(t, "VAR(A1:A3)")
 		got, err := Eval(cf, r, nil)
@@ -19911,7 +19911,7 @@ func TestMODE(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCOVARIANCEP(t *testing.T) {
-	// Excel doc example: Data1={3,2,4,5,6}, Data2={9,7,12,15,17}
+	// Doc example: Data1={3,2,4,5,6}, Data2={9,7,12,15,17}
 	excelResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(3),
@@ -20121,7 +20121,7 @@ func TestCOVARIANCEP(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Excel doc example: expected result 5.2
+		// Doc example: expected result 5.2
 		{"excel_doc_example", "COVARIANCE.P(A1:A5,B1:B5)", excelResolver, 5.2, false, 0},
 		// Positive covariance (perfectly correlated y=2x)
 		{"positive_covariance", "COVARIANCE.P(A1:A3,B1:B3)", posCovResolver, 4.0 / 3.0, false, 0},
@@ -20210,7 +20210,7 @@ func TestCOVAR(t *testing.T) {
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Excel doc example via COVAR alias
+		// Doc example via COVAR alias
 		{"covar_excel_example", "COVAR(A1:A5,B1:B5)", 5.2, false, 0},
 		// Reversed args
 		{"covar_reversed", "COVAR(B1:B5,A1:A5)", 5.2, false, 0},
@@ -20709,7 +20709,7 @@ func TestDEVSQ(t *testing.T) {
 	})
 
 	t.Run("range reference", func(t *testing.T) {
-		// Same as Excel doc example but via range
+		// Same as doc example but via range
 		resolver := numResolver(4, 5, 8, 7, 11, 4, 3)
 		cf := evalCompile(t, "DEVSQ(A1:A7)")
 		got, err := Eval(cf, resolver, nil)
@@ -22093,7 +22093,7 @@ func TestPROB(t *testing.T) {
 	// --- Error cases ---
 
 	t.Run("prob value zero allowed", func(t *testing.T) {
-		// Excel allows zero probabilities as long as the sum equals 1.
+		// Allows zero probabilities as long as the sum equals 1.
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(1),
@@ -22113,7 +22113,7 @@ func TestPROB(t *testing.T) {
 	})
 
 	t.Run("prob value negative allowed", func(t *testing.T) {
-		// Excel allows negative probabilities as long as the sum equals 1.
+		// Allows negative probabilities as long as the sum equals 1.
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: NumberVal(1),

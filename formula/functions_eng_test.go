@@ -558,7 +558,7 @@ func TestDELTA(t *testing.T) {
 			formula string
 			want    float64
 		}{
-			// Excel doc examples
+			// Doc examples
 			{"DELTA(5,4)", 0},
 			{"DELTA(5,5)", 1},
 			{"DELTA(0.5,0)", 0},
@@ -1863,7 +1863,7 @@ func TestGESTEP(t *testing.T) {
 			formula string
 			want    float64
 		}{
-			// Excel doc examples
+			// Doc examples
 			{"GESTEP(5,4)", 1},
 			{"GESTEP(5,5)", 1},
 			{"GESTEP(-4,-5)", 1},

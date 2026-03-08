@@ -101,7 +101,7 @@ func TestSUBSTITUTE(t *testing.T) {
 		{name: "replace_1st", formula: `SUBSTITUTE("abab","a","X",1)`, want: "Xbab"},
 		// No match — return original
 		{name: "no_match", formula: `SUBSTITUTE("hello","z","X")`, want: "hello"},
-		// Empty old_text — Excel returns original text unchanged
+		// Empty old_text — returns original text unchanged
 		{name: "empty_old", formula: `SUBSTITUTE("hello","","X")`, want: "hello"},
 		// Empty new_text — delete occurrences
 		{name: "delete_all", formula: `SUBSTITUTE("hello","l","")`, want: "heo"},
@@ -122,11 +122,11 @@ func TestSUBSTITUTE(t *testing.T) {
 		{name: "multi_replace_all", formula: `SUBSTITUTE("aaaa","aa","X")`, want: "XX"},
 		// Delete specific instance
 		{name: "delete_2nd", formula: `SUBSTITUTE("abab","a","",2)`, want: "abb"},
-		// Excel doc example: replace "Sales" with "Cost"
+		// Doc example: replace "Sales" with "Cost"
 		{name: "excel_example_1", formula: `SUBSTITUTE("Sales Data","Sales","Cost")`, want: "Cost Data"},
-		// Excel doc example: replace 1st "1" with "2"
+		// Doc example: replace 1st "1" with "2"
 		{name: "excel_example_2", formula: `SUBSTITUTE("Quarter 1, 2008","1","2",1)`, want: "Quarter 2, 2008"},
-		// Excel doc example: replace 3rd "1" with "2"
+		// Doc example: replace 3rd "1" with "2"
 		{name: "excel_example_3", formula: `SUBSTITUTE("Quarter 1, 2011","1","2",3)`, want: "Quarter 1, 2012"},
 	}
 
@@ -234,7 +234,7 @@ func TestTEXTDateTimeFormats(t *testing.T) {
 		formula string
 		want    string
 	}{
-		// Date formatting from Excel serial numbers
+		// Date formatting from date serial numbers
 		{name: "mm-dd-yy", formula: `TEXT(17816.607951388887, "mm-dd-yy")`, want: "10-10-48"},
 		{name: "yyyy-mm-dd", formula: `TEXT(44197, "yyyy-mm-dd")`, want: "2021-01-01"},
 		{name: "mm/dd/yyyy", formula: `TEXT(44197, "mm/dd/yyyy")`, want: "01/01/2021"},
@@ -458,7 +458,7 @@ func TestTEXTScientific(t *testing.T) {
 func TestTEXTLowercaseEReturnsVALUE(t *testing.T) {
 	resolver := &mockResolver{}
 
-	// Excel only recognises uppercase E for scientific notation.
+	// Only uppercase E is recognised for scientific notation.
 	// Lowercase e+/e- in format strings → #VALUE!.
 	formats := []string{
 		`"|#,e-#|"`,
@@ -1209,7 +1209,7 @@ func TestCHOOSEComprehensive(t *testing.T) {
 		// Boolean as index (TRUE=1)
 		{name: "bool_true_index", formula: `CHOOSE(TRUE,"a","b","c")`, want: want{typ: ValueString, str: "a"}},
 
-		// Excel doc examples
+		// Doc examples
 		{name: "excel_doc_example", formula: `CHOOSE(3,"Wide",115,"world",8)`, want: want{typ: ValueString, str: "world"}},
 
 		// Error: index out of range (too high)
@@ -2206,7 +2206,7 @@ func TestUNICHAR(t *testing.T) {
 		// Max valid Unicode code point
 		{"max_unicode", `UNICHAR(1114111)`, "\U0010FFFF"},
 
-		// Non-integer inputs should truncate (like Excel does)
+		// Non-integer inputs should truncate
 		{"truncate_65.1", `UNICHAR(65.1)`, "A"},
 		{"truncate_65.9", `UNICHAR(65.9)`, "A"},
 		{"truncate_66.5", `UNICHAR(66.5)`, "B"},
@@ -3918,7 +3918,7 @@ func TestREPT(t *testing.T) {
 		formula string
 		want    string
 	}{
-		// Basic usage (Excel docs examples)
+		// Basic usage (docs examples)
 		{name: "doc_example_star_dash", formula: `REPT("*-",3)`, want: "*-*-*-"},
 		{name: "doc_example_dash_10", formula: `REPT("-",10)`, want: "----------"},
 
@@ -4018,7 +4018,7 @@ func TestREPLACEComprehensive(t *testing.T) {
 		want    string
 		isErr   bool
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{name: "excel_example_1", formula: `REPLACE("abcdefghijk",6,5,"*")`, want: "abcde*k"},
 		{name: "excel_example_2", formula: `REPLACE("2009",3,2,"10")`, want: "2010"},
 
@@ -4147,7 +4147,7 @@ func TestPROPER(t *testing.T) {
 		{"all lowercase", `PROPER("hello")`, "Hello"},
 		{"already proper", `PROPER("Hello World")`, "Hello World"},
 
-		// Non-letter separators trigger capitalization (Excel behavior)
+		// Non-letter separators trigger capitalization (expected behavior)
 		{"apostrophe separator", `PROPER("2-cent's worth")`, "2-Cent'S Worth"},
 		{"number prefix", `PROPER("76BudGet")`, "76Budget"},
 		{"hyphen separator", `PROPER("2-way street")`, "2-Way Street"},
@@ -4554,10 +4554,10 @@ func TestNUMBERVALUE(t *testing.T) {
 		formula string
 		want    want
 	}{
-		// Excel documentation example: European format
+		// Documentation example: European format
 		{name: "european_format", formula: `NUMBERVALUE("2.500,27",",",".")`, want: want{typ: ValueNumber, num: 2500.27}},
 
-		// Excel documentation example: simple decimal
+		// Documentation example: simple decimal
 		{name: "simple_decimal_explicit_seps", formula: `NUMBERVALUE("3.5",".",",")`, want: want{typ: ValueNumber, num: 3.5}},
 
 		// Simple number, no separators needed

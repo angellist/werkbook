@@ -3,8 +3,8 @@ package formula
 import "strings"
 
 // xlfnPrefix maps function names to their required OOXML prefix.
-// These are Excel functions added after the original OOXML specification
-// that require a special prefix in the XML to be recognized by Excel.
+// These are functions added after the original OOXML specification
+// that require a special prefix in the XML to be recognized.
 var xlfnPrefix = map[string]string{
 	"ACOT":            "_xlfn.",
 	"ACOTH":           "_xlfn.",
@@ -218,7 +218,7 @@ func AddXlfnPrefixes(f string) string {
 	return string(buf)
 }
 
-// IsDynamicArrayFormula reports whether the formula uses Excel dynamic-array
+// IsDynamicArrayFormula reports whether the formula uses dynamic-array
 // semantics and must be serialized with dynamic-array OOXML metadata.
 func IsDynamicArrayFormula(f string) bool {
 	if f == "" {

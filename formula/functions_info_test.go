@@ -100,7 +100,7 @@ func TestISBLANK(t *testing.T) {
 	})
 
 	t.Run("empty_string_literal_not_blank", func(t *testing.T) {
-		// In Excel, ISBLANK("") returns FALSE. An empty string is NOT the same as blank.
+		// ISBLANK("") returns FALSE. An empty string is NOT the same as blank.
 		resolver := &mockResolver{}
 
 		cf := evalCompile(t, `ISBLANK("")`)
@@ -1113,7 +1113,7 @@ func TestISNONTEXT(t *testing.T) {
 		}
 	})
 
-	// Blank cell → TRUE (Excel docs: "this function returns TRUE if the value refers to a blank cell")
+	// Blank cell → TRUE ("this function returns TRUE if the value refers to a blank cell")
 	t.Run("blank_cell", func(t *testing.T) {
 		blankResolver := &mockResolver{}
 		ctx := &EvalContext{
@@ -1460,7 +1460,7 @@ func TestROWS(t *testing.T) {
 			{"two_rows_A2_A3", `ROWS(A2:A3)`, 2},
 			{"three_rows_B2_C4", `ROWS(B2:C4)`, 3},
 
-			// Excel documentation example: ROWS(C1:E4) = 4
+			// Documentation example: ROWS(C1:E4) = 4
 			{"excel_doc_example", `ROWS(C1:E4)`, 4},
 
 			// Large range
@@ -1927,7 +1927,7 @@ func TestISNUMBER(t *testing.T) {
 	})
 
 	t.Run("string_looks_like_number", func(t *testing.T) {
-		// Per Excel docs: numeric values in double quotes are treated as text
+		// Per docs: numeric values in double quotes are treated as text
 		cf := evalCompile(t, `ISNUMBER("123")`)
 		got, err := Eval(cf, resolver, nil)
 		if err != nil {
@@ -1950,7 +1950,7 @@ func TestISNUMBER(t *testing.T) {
 	})
 
 	t.Run("boolean_TRUE_is_not_number", func(t *testing.T) {
-		// Booleans are NOT numbers in Excel
+		// Booleans are NOT numbers
 		cf := evalCompile(t, `ISNUMBER(TRUE)`)
 		got, err := Eval(cf, resolver, nil)
 		if err != nil {

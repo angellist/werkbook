@@ -40,6 +40,7 @@ func init() {
 	Register("DISC", NoCtx(fnDisc))
 	Register("INTRATE", NoCtx(fnIntrate))
 	Register("RECEIVED", NoCtx(fnReceived))
+	Register("ACCRINT", NoCtx(fnAccrint))
 	Register("ACCRINTM", NoCtx(fnAccrintm))
 	Register("PRICEDISC", NoCtx(fnPricedisc))
 	Register("YIELDDISC", NoCtx(fnYielddisc))
@@ -1919,6 +1920,188 @@ func fnReceived(args []Value) (Value, error) {
 // Returns the accrued interest for a security that pays interest at maturity.
 // Formula: ACCRINTM = par * rate * A / D
 // where A = accrued days from issue to settlement, D = annual basis days.
+// fnAccrint implements ACCRINT(issue, first_interest, settlement, rate, par, frequency, [basis], [calc_method]).
+// Returns the accrued interest for a security that pays periodic interest.
+func fnAccrint(args []Value) (Value, error) {
+	if len(args) < 6 || len(args) > 8 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	issueRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	firstInterestRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	settlementRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	rate, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	par, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	freqRaw, e := CoerceNum(args[5])
+	if e != nil {
+		return *e, nil
+	}
+
+	basis := 0
+	if len(args) >= 7 {
+		b, e := CoerceNum(args[6])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	calcMethod := true
+	if len(args) == 8 {
+		cm, e := CoerceNum(args[7])
+		if e != nil {
+			return *e, nil
+		}
+		calcMethod = cm != 0
+	}
+
+	issue := math.Trunc(issueRaw)
+	firstInterest := math.Trunc(firstInterestRaw)
+	settlement := math.Trunc(settlementRaw)
+	freq := int(math.Trunc(freqRaw))
+
+	// Validate inputs.
+	if rate <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if par <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if freq != 1 && freq != 2 && freq != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if basis < 0 || basis > 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if issue >= settlement {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	fiTime := ExcelSerialToTime(firstInterest)
+	monthStep := 12 / freq
+	fiD := fiTime.Day()
+
+	// Determine the accrual start date.
+	// calc_method=TRUE (default): accrue from issue to settlement.
+	// calc_method=FALSE: accrue only from the previous coupon date (on or after issue) to settlement.
+	startDate := issue
+
+	if !calcMethod {
+		// Find the most recent quasi-coupon date on or before settlement.
+		settTime := ExcelSerialToTime(settlement)
+		pcdOfSettlement := couppcd(settTime, fiTime, freq)
+		pcdSer := TimeToExcelSerial(pcdOfSettlement)
+		// Use the later of issue and pcdOfSettlement.
+		if pcdSer > issue {
+			startDate = pcdSer
+		}
+	}
+
+	// Find the quasi-coupon date on or before startDate.
+	startTime := ExcelSerialToTime(startDate)
+	pcd := couppcd(startTime, fiTime, freq)
+	pcdSerial := TimeToExcelSerial(pcd)
+
+	// If pcd is after startDate (edge case), step back further.
+	for pcdSerial > startDate {
+		pcdY, pcdM := pcd.Year(), int(pcd.Month())
+		prevMonth := pcdM - monthStep
+		prevYear := pcdY
+		for prevMonth <= 0 {
+			prevMonth += 12
+			prevYear--
+		}
+		pcd = clampDate(prevYear, prevMonth, fiD)
+		pcdSerial = TimeToExcelSerial(pcd)
+	}
+
+	// Walk forward through quasi-coupon periods, accumulating accrued interest.
+	var result float64
+
+	for pcdSerial < settlement {
+		// Compute the next coupon date.
+		ncdMonth := int(pcd.Month()) + monthStep
+		ncdYear := pcd.Year()
+		for ncdMonth > 12 {
+			ncdMonth -= 12
+			ncdYear++
+		}
+		ncd := clampDate(ncdYear, ncdMonth, fiD)
+		ncdSerial := TimeToExcelSerial(ncd)
+
+		// Determine the portion of this quasi-coupon period that falls within [startDate, settlement].
+		periodStart := pcdSerial
+		if periodStart < startDate {
+			periodStart = startDate
+		}
+		periodEnd := ncdSerial
+		if periodEnd > settlement {
+			periodEnd = settlement
+		}
+
+		if periodEnd > periodStart {
+			// Compute A_i (accrued days in this quasi-coupon period).
+			var ai float64
+			psTime := ExcelSerialToTime(periodStart)
+			peTime := ExcelSerialToTime(periodEnd)
+			switch basis {
+			case 0: // US 30/360
+				ai = days360Calc(
+					psTime.Year(), int(psTime.Month()), psTime.Day(),
+					peTime.Year(), int(peTime.Month()), peTime.Day(),
+					false,
+				)
+			case 4: // European 30/360
+				ai = days360Calc(
+					psTime.Year(), int(psTime.Month()), psTime.Day(),
+					peTime.Year(), int(peTime.Month()), peTime.Day(),
+					true,
+				)
+			default: // basis 1, 2, 3: actual days
+				ai = periodEnd - periodStart
+			}
+
+			// Compute NL_i (normal length of quasi-coupon period).
+			var nli float64
+			switch basis {
+			case 0, 4: // 30/360
+				nli = 360.0 / float64(freq)
+			case 1: // actual/actual
+				nli = ncdSerial - pcdSerial
+			case 2: // actual/360
+				nli = 360.0 / float64(freq)
+			case 3: // actual/365
+				nli = 365.0 / float64(freq)
+			}
+
+			if nli > 0 {
+				result += par * rate / float64(freq) * ai / nli
+			}
+		}
+
+		// Move to the next quasi-coupon period.
+		pcd = ncd
+		pcdSerial = ncdSerial
+	}
+
+	return NumberVal(result), nil
+}
+
 func fnAccrintm(args []Value) (Value, error) {
 	if len(args) < 4 || len(args) > 5 {
 		return ErrorVal(ErrValVALUE), nil

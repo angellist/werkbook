@@ -73,16 +73,16 @@ var infixBP = map[string]bindingPower{
 	"-":  {6, 7},
 	"*":  {8, 9},
 	"/":  {8, 9},
-	"^":  {10, 11}, // left-associative (matches Excel)
+	"^":  {10, 11}, // left-associative (matches expected behavior)
 }
 
 const (
 	colonLeftBP  = 14
 	colonRightBP = 15
-	prefixRBP    = 11 // unary - and + bind tighter than ^ (Excel convention: -2^2 = 4)
+	prefixRBP    = 11 // unary - and + bind tighter than ^ (convention: -2^2 = 4)
 
-	maxExcelRow = maxExcelRows // maximum row number in Excel
-	maxExcelCol = maxExcelCols // maximum column number in Excel (XFD)
+	maxExcelRow = maxExcelRows // maximum row number
+	maxExcelCol = maxExcelCols // maximum column number (XFD)
 )
 
 // parseExpression is the core Pratt parsing loop.
@@ -165,7 +165,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 
 			// If the right side has an explicit sheet qualifier that differs
 			// from the left side, this is a cross-sheet range which is invalid
-			// in Excel (e.g. S1:S3!A1 or Sheet1!A1:Sheet2!B5). Return #VALUE!.
+			// (e.g. S1:S3!A1 or Sheet1!A1:Sheet2!B5). Return #VALUE!.
 			// Note: Sheet1!A1:B5 is valid — B5 has no sheet and inherits Sheet1.
 			if toRef.Sheet != "" && toRef.Sheet != fromRef.Sheet {
 				left = &ErrorLit{Code: ErrVALUE}

@@ -37,16 +37,16 @@ func init() {
 // Serial date helpers — duplicated from werkbook/date.go to avoid circular imports.
 var ExcelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
 
-// Excel1904Epoch is January 1, 1904.
+// Excel1904Epoch is January 1, 1904 (1904 date system).
 // In the 1904 date system, serial number 0 = January 1, 1904, and there is
 // no leap-year bug to compensate for.
 var Excel1904Epoch = time.Date(1904, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// MaxExcelSerial is the largest valid Excel serial date (Dec 31, 9999).
+// MaxExcelSerial is the largest valid date serial number (Dec 31, 9999).
 const MaxExcelSerial = 2958465
 
 func TimeToExcelSerial(t time.Time) float64 {
-	// Calculate the number of days between the Excel epoch and the given time.
+	// Calculate the number of days between the epoch and the given time.
 	// We cannot use t.Sub(ExcelEpoch) because time.Duration is an int64 of
 	// nanoseconds, which overflows for dates more than ~292 years from the epoch.
 	// Instead, compute whole days via calendar difference and fractional day
@@ -114,12 +114,12 @@ func excelSerialToTimeForDateSystem(serial float64, date1904 bool) time.Time {
 	return ExcelSerialToTime(serial)
 }
 
-// excelSerialDateParts returns the year, month, day for an Excel serial number,
-// correctly handling serial 60 (Excel's fictional Feb 29, 1900).
+// excelSerialDateParts returns the year, month, day for a date serial number,
+// correctly handling serial 60 (the fictional Feb 29, 1900).
 func excelSerialDateParts(serial float64) (int, time.Month, int) {
 	s := int(serial)
 	if s == 0 {
-		// Serial 0 is Excel's "January 0, 1900" sentinel value.
+		// Serial 0 is the "January 0, 1900" sentinel value.
 		return 1900, time.January, 0
 	}
 	if s == 60 {
@@ -137,8 +137,8 @@ func excelSerialDatePartsForDateSystem(serial float64, date1904 bool) (int, time
 	return excelSerialDateParts(serial)
 }
 
-// ExcelSerialToTime1904 converts an Excel serial date number to a time.Time
-// using the 1904 date system (Mac Excel). No leap-year bug adjustment is needed.
+// ExcelSerialToTime1904 converts a date serial number to a time.Time
+// using the 1904 date system. No leap-year bug adjustment is needed.
 func ExcelSerialToTime1904(serial float64) time.Time {
 	days := int(serial)
 	frac := serial - float64(days)
@@ -172,15 +172,15 @@ func fnDATEWithDateSystem(args []Value, date1904 bool) (Value, error) {
 		return *e, nil
 	}
 
-	// Excel checks the raw float BEFORE truncation: negative values → #NUM!
-	// e.g. int(-0.5) truncates to 0 in Go, but Excel sees -0.5 < 0 → #NUM!
+	// The raw float is checked BEFORE truncation: negative values → #NUM!
+	// e.g. int(-0.5) truncates to 0 in Go, but -0.5 < 0 → #NUM!
 	if year < 0 || year >= 10000 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
 	y := int(year)
 
-	// Excel adds 1900 to years in the range 0–1899.
+	// Years in the range 0–1899 have 1900 added.
 	// e.g. DATE(108,1,2) → year 2008.
 	if y >= 0 && y <= 1899 {
 		y += 1900
@@ -191,19 +191,19 @@ func fnDATEWithDateSystem(args []Value, date1904 bool) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	// Excel uses INT (floor) semantics to truncate month and day to integers,
+	// INT (floor) semantics are used to truncate month and day to integers,
 	// not TRUNC (toward zero). E.g. INT(-0.5) = -1, not 0.
 	m := int(math.Floor(month))
 	d := int(math.Floor(day))
 
 	// Guard against extreme month/day values that would overflow time.Duration
-	// (max ≈ 292 years in nanoseconds). Excel's valid range is 1/1/1900–12/31/9999,
+	// (max ≈ 292 years in nanoseconds). The valid range is 1/1/1900–12/31/9999,
 	// so values that shift the year far outside always produce #NUM!.
 	if m < -120000 || m > 120000 || d < -4000000 || d > 4000000 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	// Special-case: DATE(1900,2,29) should return serial 60 (Excel's fictional
+	// Special-case: DATE(1900,2,29) should return serial 60 (the fictional
 	// leap day). Go's time.Date normalizes Feb 29, 1900 to Mar 1, 1900, which
 	// would produce serial 61 via TimeToExcelSerial, so we intercept it here.
 	if y == 1900 && m == 2 && d == 29 {
@@ -365,7 +365,7 @@ func fnDATEDIF(args []Value) (Value, error) {
 		}
 		return NumberVal(float64(m)), nil
 	case "YD":
-		// Excel's YD algorithm: move end's month/day into start's year,
+		// YD algorithm: move end's month/day into start's year,
 		// then compute the day difference from start to the adjusted date.
 		endMonth := end.Month()
 		endDay := end.Day()
@@ -548,18 +548,18 @@ func fnTIME(args []Value) (Value, error) {
 	if e != nil {
 		return *e, nil
 	}
-	// Excel truncates arguments to integers.
+	// Arguments are truncated to integers.
 	hour = math.Trunc(hour)
 	minute = math.Trunc(minute)
 	second = math.Trunc(second)
 
-	// Excel returns #NUM! if any argument exceeds 32767.
+	// Returns #NUM! if any argument exceeds 32767.
 	if hour > 32767 || minute > 32767 || second > 32767 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
 	totalSeconds := hour*3600 + minute*60 + second
-	// Excel returns #NUM! if the total time is negative.
+	// Returns #NUM! if the total time is negative.
 	if totalSeconds < 0 {
 		return ErrorVal(ErrValNUM), nil
 	}

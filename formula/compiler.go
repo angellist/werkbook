@@ -111,7 +111,7 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *CellRef:
 		if n.DotNotation {
-			// Dot-notation (Sheet1.A1) is a LibreOffice extension; Excel returns #NAME?
+			// Dot-notation (Sheet1.A1) is a LibreOffice extension; returns #NAME?
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
@@ -132,7 +132,7 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *RangeRef:
 		if n.From.DotNotation || n.To.DotNotation {
-			// Dot-notation range (Sheet1.A1:Sheet1.A5) is a LibreOffice extension; Excel returns #NAME?
+			// Dot-notation range (Sheet1.A1:Sheet1.A5) is a LibreOffice extension; returns #NAME?
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
@@ -190,8 +190,8 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *FuncCall:
 		name := strings.ToUpper(n.Name)
-		// The _xludf. prefix means "user-defined function" in Excel's
-		// saved formula format. These are not real Excel functions and
+		// The _xludf. prefix means "user-defined function" in the
+		// saved formula format. These are not real functions and
 		// must always produce #NAME?. We emit a runtime error instead of
 		// a compile error so that wrapping functions like IFERROR can
 		// catch the #NAME? value.
