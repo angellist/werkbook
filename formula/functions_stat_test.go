@@ -17257,3 +17257,285 @@ func TestSUMSQ_MixedRangeAndScalar(t *testing.T) {
 		t.Errorf("SUMSQ(A1:A2,3) = %v, want 14", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// STDEV.P / STDEVP
+// ---------------------------------------------------------------------------
+
+func TestSTDEVP(t *testing.T) {
+	// Helper to build a resolver with numeric values in column A.
+	numResolver := func(nums ...float64) *mockResolver {
+		m := &mockResolver{cells: map[CellAddr]Value{}}
+		for i, n := range nums {
+			m.cells[CellAddr{Col: 1, Row: i + 1}] = NumberVal(n)
+		}
+		return m
+	}
+
+	// Helper for resolvers with arbitrary values in column A.
+	valResolver := func(vals ...Value) *mockResolver {
+		m := &mockResolver{cells: map[CellAddr]Value{}}
+		for i, v := range vals {
+			m.cells[CellAddr{Col: 1, Row: i + 1}] = v
+		}
+		return m
+	}
+
+	t.Run("STDEV.P(1,2,3,4,5)", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P(1,2,3,4,5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// mean=3, ssq=10, var=2, stdev=sqrt(2)
+		want := math.Sqrt(2)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > 1e-10 {
+			t.Errorf("got %v, want %g", got, want)
+		}
+	})
+
+	t.Run("Excel documentation example", func(t *testing.T) {
+		resolver := numResolver(1345, 1301, 1368, 1322, 1310, 1370, 1318, 1350, 1303, 1299)
+		cf := evalCompile(t, "STDEV.P(A1:A10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := 26.05455814
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > 1e-6 {
+			t.Errorf("got %v, want %g", got, want)
+		}
+	})
+
+	t.Run("identical values returns 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P(7,7,7,7)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("single value returns 0", func(t *testing.T) {
+		// Unlike STDEV (sample) which returns #DIV/0! for a single value,
+		// STDEV.P (population) returns 0 since there is no deviation.
+		cf := evalCompile(t, "STDEV.P(5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("two values", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P(10,20)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// mean=15, ssq=(25+25)=50, var=25, stdev=5
+		if got.Type != ValueNumber || math.Abs(got.Num-5) > 1e-10 {
+			t.Errorf("got %v, want 5", got)
+		}
+	})
+
+	t.Run("range ignores text", func(t *testing.T) {
+		// In a range, text values are ignored (only numbers counted).
+		resolver := valResolver(
+			NumberVal(10),
+			StringVal("hello"),
+			NumberVal(30),
+		)
+		cf := evalCompile(t, "STDEV.P(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Only 10 and 30: mean=20, ssq=200, var=100, stdev=10
+		if got.Type != ValueNumber || math.Abs(got.Num-10) > 1e-10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+
+	t.Run("range ignores booleans", func(t *testing.T) {
+		// In a range, booleans are ignored (only numbers counted).
+		resolver := valResolver(
+			NumberVal(10),
+			BoolVal(true),
+			NumberVal(30),
+		)
+		cf := evalCompile(t, "STDEV.P(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Only 10 and 30: mean=20, ssq=200, var=100, stdev=10
+		if got.Type != ValueNumber || math.Abs(got.Num-10) > 1e-10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+
+	t.Run("range ignores numeric strings", func(t *testing.T) {
+		// Per Excel: numeric strings in ranges are ignored.
+		resolver := valResolver(
+			NumberVal(10),
+			StringVal("5"),
+			NumberVal(30),
+		)
+		cf := evalCompile(t, "STDEV.P(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Only 10 and 30: stdev.p = 10
+		if got.Type != ValueNumber || math.Abs(got.Num-10) > 1e-10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+
+	t.Run("error propagation in range", func(t *testing.T) {
+		resolver := valResolver(
+			NumberVal(10),
+			ErrorVal(ErrValNA),
+			NumberVal(20),
+		)
+		cf := evalCompile(t, "STDEV.P(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("error in direct arg propagates", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P(1/0,5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("no args returns VALUE error", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P()")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error", got)
+		}
+	})
+
+	t.Run("all empty range gives DIV/0", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, "STDEV.P(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("boolean TRUE as direct arg coerces to 1", func(t *testing.T) {
+		cf := evalCompile(t, "STDEV.P(TRUE,3)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// TRUE=1, values {1,3}: mean=2, ssq=2, var=1, stdev=1
+		if got.Type != ValueNumber || math.Abs(got.Num-1) > 1e-10 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("non-numeric string as direct arg errors", func(t *testing.T) {
+		cf := evalCompile(t, `STDEV.P("hello",10)`)
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("mixed range and literal", func(t *testing.T) {
+		resolver := numResolver(10, 20)
+		cf := evalCompile(t, "STDEV.P(A1:A2,30)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Values: {10,20,30}, mean=20, ssq=200, var=200/3, stdev=sqrt(200/3)
+		want := math.Sqrt(200.0 / 3.0)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > 1e-10 {
+			t.Errorf("got %g, want %g", got.Num, want)
+		}
+	})
+
+	// --- STDEVP (legacy alias) tests ---
+
+	t.Run("STDEVP is alias for STDEV.P", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVP(1,2,3,4,5)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := math.Sqrt(2)
+		if got.Type != ValueNumber || math.Abs(got.Num-want) > 1e-10 {
+			t.Errorf("got %v, want %g", got, want)
+		}
+	})
+
+	t.Run("STDEVP identical values returns 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVP(3,3,3)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("STDEVP single value returns 0", func(t *testing.T) {
+		cf := evalCompile(t, "STDEVP(42)")
+		got, err := Eval(cf, &mockResolver{}, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("STDEVP error propagation", func(t *testing.T) {
+		resolver := valResolver(
+			NumberVal(1),
+			ErrorVal(ErrValREF),
+			NumberVal(3),
+		)
+		cf := evalCompile(t, "STDEVP(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("got %v, want #REF!", got)
+		}
+	})
+
+	_ = numResolver
+	_ = valResolver
+}
