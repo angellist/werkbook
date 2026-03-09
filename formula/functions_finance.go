@@ -3428,7 +3428,7 @@ func fnAmorlinc(args []Value) (Value, error) {
 	period := int(math.Trunc(periodRaw))
 
 	// Validate inputs.
-	if cost < 0 {
+	if cost <= 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
 	if salvage < 0 || salvage > cost {
@@ -3445,6 +3445,11 @@ func fnAmorlinc(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
+	// When salvage equals cost, nothing to depreciate.
+	if salvage == cost {
+		return NumberVal(0), nil
+	}
+
 	// Compute year fraction for the prorated first period.
 	dsm, bYear := dayCountBasis(datePurchased, firstPeriod, basis)
 	if bYear == 0 {
@@ -3452,33 +3457,37 @@ func fnAmorlinc(args []Value) (Value, error) {
 	}
 	yearFrac := dsm / bYear
 
-	// Total number of depreciation periods = ceil(1/rate).
-	nper := int(math.Ceil(1.0 / rate))
+	// Normal period depreciation (flat amount).
+	normalDep := cost * rate
 
 	// Period 0: prorated depreciation.
 	dep0 := cost * rate * yearFrac
 
+	// Total depreciable amount.
+	depreciable := cost - salvage
+
 	if period == 0 {
+		if dep0 > depreciable {
+			return NumberVal(depreciable), nil
+		}
 		return NumberVal(dep0), nil
 	}
 
-	// Normal period depreciation (flat amount).
-	normalDep := cost * rate
-
-	// Last period index is nper (period 0 is prorated, periods 1..nper-1 are normal, period nper is remainder).
-	if period > nper {
-		return NumberVal(0), nil
-	}
-
-	if period == nper {
-		// Last period: remaining amount after salvage and all prior depreciation.
-		rest := cost - salvage - dep0 - float64(nper-1)*normalDep
-		if rest < 0 {
+	// Accumulate depreciation through prior periods to cap at depreciable amount.
+	accum := dep0
+	for p := 1; p <= period; p++ {
+		remaining := depreciable - accum
+		if remaining <= 0 {
 			return NumberVal(0), nil
 		}
-		return NumberVal(rest), nil
+		if p == period {
+			if normalDep > remaining {
+				return NumberVal(remaining), nil
+			}
+			return NumberVal(normalDep), nil
+		}
+		accum += normalDep
 	}
 
-	// Normal periods 1 through nper-1.
-	return NumberVal(normalDep), nil
+	return NumberVal(0), nil
 }

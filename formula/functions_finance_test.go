@@ -10315,9 +10315,9 @@ func TestAMORLINC_Comprehensive(t *testing.T) {
 		{
 			name: "doc example period 6 basis 1",
 			args: numArgs(2400, 39679, 39813, 300, 6, 0.15, 1),
-			want: 360,
+			want: 168.19672131147536,
 		},
-		// Period 7 (last = nper): rest = 2400 - 300 - 131.803 - 6*360 = -191.803 → clamped to 0
+		// Period 7: beyond depreciable amount, returns 0
 		{
 			name: "doc example period 7 last period",
 			args: numArgs(2400, 39679, 39813, 300, 7, 0.15, 1),
@@ -10427,30 +10427,27 @@ func TestAMORLINC_Comprehensive(t *testing.T) {
 			args: numArgs(2400, 39679, 39813, 300, 1, 1.0, 1),
 			want: 1221.3114754098361,
 		},
-		// --- Zero cost ---
+		// --- Zero cost → #NUM! ---
 		{
 			name: "zero cost period 0",
-			args: numArgs(0, 39679, 39813, 0, 0, 0.15, 1),
-			want: 0,
+			args:    numArgs(0, 39679, 39813, 0, 0, 0.15, 1),
+			wantErr: true,
 		},
 		{
 			name: "zero cost period 1",
-			args: numArgs(0, 39679, 39813, 0, 1, 0.15, 1),
-			want: 0,
+			args:    numArgs(0, 39679, 39813, 0, 1, 0.15, 1),
+			wantErr: true,
 		},
-		// --- Salvage = cost ---
-		// dep0 = 2400 * 0.15 * yearFrac (still computed)
-		// normalDep = 360
-		// But last period rest = 2400 - 2400 - dep0 - ... is very negative → 0
+		// --- Salvage = cost → nothing to depreciate, always 0 ---
 		{
 			name: "salvage equals cost period 0",
 			args: numArgs(2400, 39679, 39813, 2400, 0, 0.15, 1),
-			want: 131.80327868852460,
+			want: 0,
 		},
 		{
 			name: "salvage equals cost period 1",
 			args: numArgs(2400, 39679, 39813, 2400, 1, 0.15, 1),
-			want: 360,
+			want: 0,
 		},
 		// --- Error cases ---
 		// Negative cost
