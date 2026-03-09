@@ -2904,6 +2904,7 @@ func TestDMIN(t *testing.T) {
 	db := standardDB()
 
 	tests := []dbTestCase{
+		// --- basic: min of numeric column with single text criteria ---
 		{
 			name: "min Apple profit",
 			db:   db,
@@ -2916,23 +2917,26 @@ func TestDMIN(t *testing.T) {
 			wantNum:  45,
 		},
 		{
-			name: "min all height",
+			name: "min Pear profit",
 			db:   db,
 			crit: [][]Value{
 				{StringVal("Tree")},
-				{StringVal("")},
+				{StringVal("Pear")},
 			},
-			field:    `"Height"`,
-			wantType: ValueNumber,
-			wantNum:  8,
-		},
-		{
-			name:     "min no matches returns 0",
-			db:       db,
-			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
 			field:    `"Profit"`,
 			wantType: ValueNumber,
-			wantNum:  0,
+			wantNum:  76.8,
+		},
+		{
+			name: "min Cherry profit (single record)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
 		},
 		{
 			name: "min Pear yield",
@@ -2945,8 +2949,295 @@ func TestDMIN(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  8,
 		},
+		// --- all records match (blank criteria) ---
 		{
-			name: "min with negative numbers",
+			name: "min all height - blank criteria value",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  8,
+		},
+		{
+			name: "min all profit - blank criteria value",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45,
+		},
+		{
+			name: "min all records - no criteria rows",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+			},
+			field:    `"Age"`,
+			wantType: ValueNumber,
+			wantNum:  8,
+		},
+		// --- no matching records → 0 ---
+		{
+			name:     "no matching records returns 0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- single record match → that value ---
+		{
+			name: "single record match returns that value",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  13,
+		},
+		// --- field specified by column number ---
+		{
+			name: "field by column number 5 (Profit)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "5",
+			wantType: ValueNumber,
+			wantNum:  45,
+		},
+		{
+			name: "field by column number 2 (Height)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    "2",
+			wantType: ValueNumber,
+			wantNum:  8,
+		},
+		// --- field specified by header string (case-insensitive) ---
+		{
+			name: "field header is case-insensitive",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    `"profit"`,
+			wantType: ValueNumber,
+			wantNum:  45,
+		},
+		// --- multiple criteria rows (OR logic) ---
+		{
+			name: "OR criteria - Apple OR Pear",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Pear")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // min of Apple(105,75,45) and Pear(96,76.8)
+		},
+		{
+			name: "OR criteria - Apple OR Cherry",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  8, // min of Apple(18,14,8) and Cherry(13)
+		},
+		// --- multiple criteria columns (AND logic) ---
+		{
+			name: "AND criteria - Apple AND Height>10",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // Apple h=18(105), h=14(75)
+		},
+		{
+			name: "three-column AND criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10"), StringVal("<20")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // only Apple h=14, age=15
+		},
+		// --- combined AND/OR criteria ---
+		{
+			name: "combined AND/OR - (Apple AND Height>10) OR Cherry",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Cherry"), StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // Apple h>10: 105,75; Cherry: 105 → min=75
+		},
+		{
+			name: "combined AND/OR - (Apple AND Height>10) OR (Pear AND Height<10)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Pear"), StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // Apple h>10: 105,75; Pear h<10: 76.8 → min=75
+		},
+		// --- numeric comparison operators ---
+		{
+			name: "numeric comparison > on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">10")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  9, // h=18(y=14), h=12(y=10), h=13(y=9), h=14(y=10) → min=9
+		},
+		{
+			name: "numeric comparison < on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // h=9(76.8), h=8(45) → min=45
+		},
+		{
+			name: "numeric comparison >= on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=14")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // h=18(105), h=14(75) → min=75
+		},
+		{
+			name: "numeric comparison <= on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // h=12(96), h=9(76.8), h=8(45) → min=45
+		},
+		{
+			name: "numeric comparison <> on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<>13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // all except Cherry(h=13) → min=45
+		},
+		{
+			name: "exact numeric match =14 on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("=14")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // only Apple h=14
+		},
+		// --- wildcard criteria ---
+		{
+			name: "wildcard * in criteria - trees starting with A",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("A*")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // all Apple records: 105, 75, 45 → min=45
+		},
+		{
+			name: "wildcard ? in criteria - Pea? matches Pear",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  9, // Pear: h=12, h=9 → min=9
+		},
+		{
+			name: "wildcard * contains pattern",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("*e*")}, // Apple, Pear, Cherry all contain 'e'
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // all records → min=45
+		},
+		// --- cross-column criteria ---
+		{
+			name: "criteria on Age, min of Yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Age")},
+				{StringVal(">14")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  10, // age>14: age=20(y=14), age=15(y=10) → min=10
+		},
+		{
+			name: "criteria on Profit, min of Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Profit")},
+				{StringVal(">100")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  13, // Profit>100: Apple(h=18,p=105), Cherry(h=13,p=105) → min=13
+		},
+		// --- negative numbers (min of negatives) ---
+		{
+			name: "min with all negative numbers",
 			db: [][]Value{
 				{StringVal("Name"), StringVal("Value")},
 				{StringVal("A"), NumberVal(-10)},
@@ -2958,18 +3249,282 @@ func TestDMIN(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  -20,
 		},
+		{
+			name: "min negatives with criteria",
+			db: [][]Value{
+				{StringVal("Cat"), StringVal("Score")},
+				{StringVal("X"), NumberVal(-100)},
+				{StringVal("Y"), NumberVal(-3)},
+				{StringVal("X"), NumberVal(-50)},
+			},
+			crit:     [][]Value{{StringVal("Cat")}, {StringVal("X")}},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  -100, // min of -100 and -50
+		},
+		// --- all same values → that value ---
+		{
+			name: "all same values returns that value",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(42)},
+				{StringVal("B"), NumberVal(42)},
+				{StringVal("C"), NumberVal(42)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		// --- decimal values ---
+		{
+			name: "min of decimal values",
+			db: [][]Value{
+				{StringVal("Item"), StringVal("Price")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.75)},
+				{StringVal("C"), NumberVal(0.99)},
+				{StringVal("D"), NumberVal(2.74)},
+			},
+			crit:     [][]Value{{StringVal("Item")}, {StringVal("")}},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  0.99,
+		},
+		{
+			name: "min Pear profit is decimal",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pear")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  76.8, // Pear: 96, 76.8
+		},
+		// --- text column → 0 (DMIN only considers numbers) ---
+		{
+			name: "text column returns 0",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- database with empty cells in field ---
+		{
+			name: "empty cells in field are ignored",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score")},
+				{StringVal("A"), NumberVal(100)},
+				{StringVal("B"), EmptyVal()},
+				{StringVal("C"), NumberVal(200)},
+				{StringVal("D"), EmptyVal()},
+				{StringVal("E"), NumberVal(50)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  50,
+		},
+		// --- mixed types (only numbers considered) ---
+		{
+			name: "mixed types - only numbers considered for min",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), StringVal("text")},
+				{StringVal("C"), NumberVal(20)},
+				{StringVal("D"), BoolVal(true)},
+				{StringVal("E"), EmptyVal()},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		// --- boolean criteria match ---
+		{
+			name: "boolean criteria match TRUE",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Active"), StringVal("Score")},
+				{StringVal("A"), BoolVal(true), NumberVal(10)},
+				{StringVal("B"), BoolVal(false), NumberVal(20)},
+				{StringVal("C"), BoolVal(true), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Active")},
+				{BoolVal(true)},
+			},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  10, // A=10, C=30 → min=10
+		},
+		{
+			name: "boolean criteria match FALSE",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Active"), StringVal("Score")},
+				{StringVal("A"), BoolVal(true), NumberVal(10)},
+				{StringVal("B"), BoolVal(false), NumberVal(20)},
+				{StringVal("C"), BoolVal(true), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Active")},
+				{BoolVal(false)},
+			},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  20, // only B
+		},
+		// --- large numbers ---
+		{
+			name: "min with large numbers",
+			db: [][]Value{
+				{StringVal("ID"), StringVal("Amount")},
+				{StringVal("A"), NumberVal(1e10)},
+				{StringVal("B"), NumberVal(1e12)},
+				{StringVal("C"), NumberVal(1e8)},
+			},
+			crit:     [][]Value{{StringVal("ID")}, {StringVal("")}},
+			field:    `"Amount"`,
+			wantType: ValueNumber,
+			wantNum:  1e8,
+		},
+		// --- zero values ---
+		{
+			name: "min when values include zero",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score")},
+				{StringVal("A"), NumberVal(0)},
+				{StringVal("B"), NumberVal(5)},
+				{StringVal("C"), NumberVal(10)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		{
+			name: "min when zero is not the smallest",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score")},
+				{StringVal("A"), NumberVal(0)},
+				{StringVal("B"), NumberVal(-5)},
+				{StringVal("C"), NumberVal(0)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  -5,
+		},
+		// --- single row database ---
+		{
+			name: "single row database returns that value",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("Only"), NumberVal(99)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  99,
+		},
+		// --- Excel documentation example ---
+		{
+			name: "Excel doc example - min profit Apple h>10 age<16",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10"), StringVal("<16")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // Apple h=14, age=15 matches; h=18 age=20 excluded by <16
+		},
 	}
 
 	runDBTests(t, "DMIN", tests)
 }
 
 func TestDMIN_WrongArgCount(t *testing.T) {
-	result, err := fnDMin(nil)
-	if err != nil {
-		t.Fatalf("fnDMin error: %v", err)
+	tests := []struct {
+		name string
+		args []Value
+	}{
+		{"zero args", nil},
+		{"one arg", []Value{NumberVal(1)}},
+		{"two args", []Value{NumberVal(1), NumberVal(2)}},
+		{"four args", []Value{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4)}},
 	}
-	if result.Type != ValueError || result.Err != ErrValVALUE {
-		t.Errorf("fnDMin(nil) = %+v, want #VALUE!", result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := fnDMin(tt.args)
+			if err != nil {
+				t.Fatalf("fnDMin error: %v", err)
+			}
+			if result.Type != ValueError || result.Err != ErrValVALUE {
+				t.Errorf("fnDMin(%d args) = %+v, want #VALUE!", len(tt.args), result)
+			}
+		})
+	}
+}
+
+func TestDMIN_ErrorPropagation(t *testing.T) {
+	// If the database contains an error in the field column, propagate it.
+	db := [][]Value{
+		{StringVal("Name"), StringVal("Value")},
+		{StringVal("A"), NumberVal(10)},
+		{StringVal("B"), ErrorVal(ErrValDIV0)},
+		{StringVal("C"), NumberVal(20)},
+	}
+	crit := [][]Value{
+		{StringVal("Name")},
+		{StringVal("")}, // match all
+	}
+
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+	formula := `DMIN(A1:B4,"Value",G1:G2)`
+	cf := evalCompile(t, formula)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("DMIN with error cell = %+v, want #DIV/0!", got)
+	}
+}
+
+func TestDMIN_ErrorInNonFieldColumn(t *testing.T) {
+	// Error in a non-field column should not affect the result.
+	db := [][]Value{
+		{StringVal("Name"), StringVal("Score"), StringVal("Value")},
+		{StringVal("A"), NumberVal(100), NumberVal(10)},
+		{StringVal("B"), ErrorVal(ErrValNA), NumberVal(20)},
+		{StringVal("C"), NumberVal(300), NumberVal(30)},
+	}
+	crit := [][]Value{
+		{StringVal("Name")},
+		{StringVal("")},
+	}
+
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+	formula := `DMIN(A1:C4,"Value",G1:G2)`
+	cf := evalCompile(t, formula)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("DMIN = %+v, want 10", got)
 	}
 }
 
