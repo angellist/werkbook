@@ -1030,6 +1030,127 @@ func TestPV_Comprehensive(t *testing.T) {
 			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), StringVal("1")},
 			want: 1167.70,
 		},
+		// --- Single period ---
+		{
+			name: "single period nper=1 type=0",
+			args: numArgs(0.10, 1, -1000),
+			want: 909.09,
+		},
+		{
+			name: "single period nper=1 type=1",
+			args: numArgs(0.10, 1, -1000, 0, 1),
+			want: 1000.0,
+		},
+		// --- Very high interest rate ---
+		{
+			name: "very high rate 100%",
+			args: numArgs(1.0, 5, -100),
+			want: 96.88,
+		},
+		// --- Very small interest rate ---
+		{
+			name: "very small rate 0.001%",
+			args: numArgs(0.00001, 120, -500),
+			want: 59963.71,
+		},
+		// --- Fractional nper ---
+		{
+			name: "fractional nper 6.5",
+			args: numArgs(0.05, 6.5, -1000),
+			want: 5435.37,
+		},
+		// --- Negative nper ---
+		{
+			name: "negative nper",
+			args: numArgs(0.05, -5, -1000),
+			want: -5525.63,
+		},
+		// --- Both pmt and fv with type=1 ---
+		{
+			name: "pmt and fv combined type=1",
+			args: numArgs(0.06/12, 60, -200, -5000, 1),
+			want: 14103.70,
+		},
+		// --- Boolean coercion for type ---
+		{
+			name: "bool TRUE for type",
+			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), BoolVal(true)},
+			want: 1167.70,
+		},
+		{
+			name: "bool FALSE for type",
+			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), BoolVal(false)},
+			want: 1161.89,
+		},
+		// --- Empty cell references (EmptyVal coerces to 0) ---
+		{
+			name: "empty rate coerces to zero",
+			args: []Value{EmptyVal(), NumberVal(10), NumberVal(-500)},
+			want: 5000,
+		},
+		{
+			name: "empty fv coerces to zero",
+			args: []Value{NumberVal(0.05), NumberVal(3), NumberVal(-1000), EmptyVal()},
+			want: 2723.25,
+		},
+		{
+			name: "empty type coerces to zero",
+			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), EmptyVal()},
+			want: 1161.89,
+		},
+		// --- Large fv with no pmt ---
+		{
+			name: "large fv no pmt 30yr",
+			args: numArgs(0.03/12, 360, 0, -1000000),
+			want: 407026.55,
+		},
+		// --- Classic mortgage question ---
+		{
+			name: "classic mortgage PV 8% 30yr $1000/mo",
+			args: numArgs(0.08/12, 360, -1000),
+			want: 136283.49,
+		},
+		// --- Zero pmt zero fv nonzero rate ---
+		{
+			name: "zero pmt zero fv",
+			args: numArgs(0.05, 10, 0, 0),
+			want: 0,
+		},
+		// --- Very large nper ---
+		{
+			name: "very large nper 1000 periods",
+			args: numArgs(0.01, 1000, -1),
+			want: 100.0,
+		},
+		// --- Negative rate ---
+		{
+			name: "negative rate",
+			args: numArgs(-0.05, 10, -1000),
+			want: 13403.65,
+		},
+		// --- Type non-zero non-one treated as 1 ---
+		{
+			name: "type=5 treated as beginning of period",
+			args: numArgs(0.06/12, 12, -100, 0, 5),
+			want: 1167.70,
+		},
+		// --- Zero rate with type=1 (type is ignored in zero-rate branch) ---
+		{
+			name: "zero rate with type=1",
+			args: numArgs(0, 12, -100, 0, 1),
+			want: 1200,
+		},
+		// --- fv only type=0 vs type=1 (pmt=0 so type doesn't change result) ---
+		{
+			name: "fv only type=0",
+			args: numArgs(0.05, 10, 0, -1000, 0),
+			want: 613.91,
+		},
+		{
+			name: "fv only type=1",
+			args: numArgs(0.05, 10, 0, -1000, 1),
+			want: 613.91,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1083,6 +1204,42 @@ func TestPV_Errors(t *testing.T) {
 		{
 			name: "nper zero with nonzero rate",
 			args: numArgs(0.05, 0, -100),
+		},
+		// --- Error propagation: ErrorVal passed as argument ---
+		{
+			name: "error propagation rate",
+			args: []Value{ErrorVal(ErrValNUM), NumberVal(10), NumberVal(-100)},
+		},
+		{
+			name: "error propagation nper",
+			args: []Value{NumberVal(0.05), ErrorVal(ErrValREF), NumberVal(-100)},
+		},
+		{
+			name: "error propagation pmt",
+			args: []Value{NumberVal(0.05), NumberVal(10), ErrorVal(ErrValDIV0)},
+		},
+		{
+			name: "error propagation fv",
+			args: []Value{NumberVal(0.05), NumberVal(10), NumberVal(-100), ErrorVal(ErrValNA)},
+		},
+		{
+			name: "error propagation type",
+			args: []Value{NumberVal(0.05), NumberVal(10), NumberVal(-100), NumberVal(0), ErrorVal(ErrValVALUE)},
+		},
+		// --- Empty string is #VALUE! ---
+		{
+			name: "empty string rate",
+			args: []Value{StringVal(""), NumberVal(10), NumberVal(-100)},
+		},
+		// --- Single arg (too few) ---
+		{
+			name: "single arg",
+			args: numArgs(0.05),
+		},
+		// --- No args (too few) ---
+		{
+			name: "no args",
+			args: []Value{},
 		},
 	}
 
