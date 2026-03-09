@@ -405,47 +405,458 @@ func TestISBLANK(t *testing.T) {
 }
 
 func TestISEVEN(t *testing.T) {
-	resolver := &mockResolver{}
+	// --- Literal / expression tests (no cell references) ---
 
-	// ISEVEN(4) = TRUE
-	cf := evalCompile(t, `ISEVEN(4)`)
-	got, err := Eval(cf, resolver, nil)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueBool || !got.Bool {
-		t.Errorf("ISEVEN(4) = %v, want true", got)
-	}
+	t.Run("even_positive_4", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(4)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(4) = %v, want TRUE", got)
+		}
+	})
 
-	// ISEVEN(3) = FALSE
-	cf = evalCompile(t, `ISEVEN(3)`)
-	got, err = Eval(cf, resolver, nil)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueBool || got.Bool {
-		t.Errorf("ISEVEN(3) = %v, want false", got)
-	}
+	t.Run("odd_positive_3", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(3) = %v, want FALSE", got)
+		}
+	})
 
-	// ISEVEN(TRUE) = #VALUE!
-	cf = evalCompile(t, `ISEVEN(TRUE)`)
-	got, err = Eval(cf, resolver, nil)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValVALUE {
-		t.Errorf("ISEVEN(TRUE) = %v, want #VALUE!", got)
-	}
+	t.Run("zero_is_even", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(0) = %v, want TRUE", got)
+		}
+	})
 
-	// ISEVEN(FALSE) = #VALUE!
-	cf = evalCompile(t, `ISEVEN(FALSE)`)
-	got, err = Eval(cf, resolver, nil)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValVALUE {
-		t.Errorf("ISEVEN(FALSE) = %v, want #VALUE!", got)
-	}
+	t.Run("even_positive_2", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(2) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("even_positive_100", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(100)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(100) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("odd_positive_1", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(1) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("odd_positive_5", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(5)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(5) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("negative_even", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(-2) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("negative_even_minus4", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-4)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(-4) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("negative_odd_minus1", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(-1) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("negative_odd_minus3", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(-3) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("decimal_truncated_to_even", func(t *testing.T) {
+		// ISEVEN(2.5) truncates to 2, which is even → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(2.5)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(2.5) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("decimal_truncated_to_odd", func(t *testing.T) {
+		// ISEVEN(3.9) truncates to 3, which is odd → FALSE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(3.9)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(3.9) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("negative_decimal_truncated_to_even", func(t *testing.T) {
+		// ISEVEN(-2.7) truncates to -2, which is even → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-2.7)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(-2.7) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("negative_decimal_truncated_to_odd", func(t *testing.T) {
+		// ISEVEN(-3.1) truncates to -3, which is odd → FALSE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-3.1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(-3.1) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("large_even_number", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(1000000)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(1000000) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("large_odd_number", func(t *testing.T) {
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(999999)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(999999) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("string_coercion_even", func(t *testing.T) {
+		// ISEVEN("4") coerces "4" to 4 → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN("4")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf(`ISEVEN("4") = %v, want TRUE`, got)
+		}
+	})
+
+	t.Run("string_coercion_odd", func(t *testing.T) {
+		// ISEVEN("3") coerces "3" to 3 → FALSE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN("3")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf(`ISEVEN("3") = %v, want FALSE`, got)
+		}
+	})
+
+	t.Run("non_numeric_string_returns_value_error", func(t *testing.T) {
+		// ISEVEN("hello") → #VALUE!
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN("hello")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`ISEVEN("hello") = %v, want #VALUE!`, got)
+		}
+	})
+
+	t.Run("empty_string_returns_value_error", func(t *testing.T) {
+		// ISEVEN("") → #VALUE! (empty string is not numeric)
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN("")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`ISEVEN("") = %v, want #VALUE!`, got)
+		}
+	})
+
+	t.Run("boolean_true_returns_value_error", func(t *testing.T) {
+		// Excel: ISEVEN(TRUE) → #VALUE!
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(TRUE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("ISEVEN(TRUE) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("boolean_false_returns_value_error", func(t *testing.T) {
+		// Excel: ISEVEN(FALSE) → #VALUE!
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("ISEVEN(FALSE) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("error_propagation_div0", func(t *testing.T) {
+		// ISEVEN(1/0) → #DIV/0!
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("ISEVEN(1/0) = %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("expression_result_even", func(t *testing.T) {
+		// ISEVEN(2+2) → TRUE (4 is even)
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(2+2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(2+2) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("expression_result_odd", func(t *testing.T) {
+		// ISEVEN(2+1) → FALSE (3 is odd)
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(2+1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(2+1) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("string_coercion_decimal", func(t *testing.T) {
+		// ISEVEN("2.9") coerces to 2.9, truncated to 2 → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN("2.9")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf(`ISEVEN("2.9") = %v, want TRUE`, got)
+		}
+	})
+
+	// --- Cell reference tests ---
+
+	t.Run("cell_reference_even_number", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(6),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISEVEN(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(A1) with A1=6 = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("cell_reference_odd_number", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(7),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISEVEN(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISEVEN(A1) with A1=7 = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("cell_reference_empty_cell_coerces_to_zero", func(t *testing.T) {
+		// Empty cell → EmptyVal → CoerceNum returns 0 → even → TRUE
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISEVEN(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(A1) with empty A1 = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("cell_reference_with_error_propagates", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: ErrorVal(ErrValNA),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISEVEN(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("ISEVEN(A1) with A1=#N/A = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("very_small_decimal", func(t *testing.T) {
+		// ISEVEN(0.1) truncates to 0, which is even → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(0.1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(0.1) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("negative_zero", func(t *testing.T) {
+		// ISEVEN(-0) is even → TRUE
+		resolver := &mockResolver{}
+		cf := evalCompile(t, `ISEVEN(-0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISEVEN(-0) = %v, want TRUE", got)
+		}
+	})
 }
 
 func TestISODD(t *testing.T) {

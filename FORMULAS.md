@@ -221,7 +221,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | ISBLANK | Returns TRUE when a value is blank. | Information | 23 |
 | ISERR | Returns TRUE for any error except #N/A. | Information | 21 |
 | ISERROR | Returns TRUE for any error value. | Information | 22 |
-| ISEVEN | Returns TRUE when a number is even. | Information | 4 |
+| ISEVEN | Returns TRUE when a number is even. | Information | 33 |
 | ISFORMULA | Returns TRUE when a referenced cell contains a formula. | Information | 7 |
 | ISLOGICAL | Returns TRUE when a value is logical. | Information | 27 |
 | ISNA | Returns TRUE when a value is #N/A. | Information | 22 |
