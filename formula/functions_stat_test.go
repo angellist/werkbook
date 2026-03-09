@@ -25536,6 +25536,576 @@ func TestGROWTH(t *testing.T) {
 	})
 }
 
+func TestTREND(t *testing.T) {
+	const tol = 1e-6
+
+	// y = 2x + 1 for x = 1..5
+	linearResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// Column A: y values (3, 5, 7, 9, 11)
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(5),
+			{Col: 1, Row: 3}: NumberVal(7),
+			{Col: 1, Row: 4}: NumberVal(9),
+			{Col: 1, Row: 5}: NumberVal(11),
+			// Column B: x values (1, 2, 3, 4, 5)
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 4}: NumberVal(4),
+			{Col: 2, Row: 5}: NumberVal(5),
+			// Column C: new x values
+			{Col: 3, Row: 1}: NumberVal(6),
+			{Col: 3, Row: 2}: NumberVal(7),
+			{Col: 3, Row: 3}: NumberVal(10),
+		},
+	}
+
+	// Two data points: y = {10, 20}, x = {1, 2}
+	twoPtResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(20), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Single data point: y = {5}, x = {3}
+	singleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5), {Col: 2, Row: 1}: NumberVal(3),
+		},
+	}
+
+	// Mismatched dimensions
+	mismatchResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(30),
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// All y values the same: y = {5, 5, 5}, x = {1, 2, 3}
+	flatResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Error propagation: y contains #VALUE!
+	errResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: ErrorVal(ErrValVALUE), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Error in x
+	errXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(20), {Col: 2, Row: 2}: ErrorVal(ErrValNUM),
+		},
+	}
+
+	// Negative y values: y = {-3, -1, 1, 3}, x = {1, 2, 3, 4}
+	negYResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-3), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(-1), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(1), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(3), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	t.Run("basic_linear_fitted_values", func(t *testing.T) {
+		// y = 2x + 1 for x=1..5: TREND(A1:A5,B1:B5) should return {3,5,7,9,11}
+		cf := evalCompile(t, "TREND(A1:A5,B1:B5)")
+		got, err := Eval(cf, linearResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		expected := []float64{3, 5, 7, 9, 11}
+		flat := flattenArray(got)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("predict_new_x_values", func(t *testing.T) {
+		// y = 2x + 1: predict x=6 -> 13, x=7 -> 15, x=10 -> 21
+		cf := evalCompile(t, "TREND(A1:A5,B1:B5,C1:C3)")
+		got, err := Eval(cf, linearResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		expected := []float64{13, 15, 21}
+		flat := flattenArray(got)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("omit_known_x_defaults_to_1_2_3", func(t *testing.T) {
+		// TREND({3,5,7}) should use known_x={1,2,3}, giving y=2x+1
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		expected := []float64{3, 5, 7}
+		flat := flattenArray(v)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("omit_new_x_defaults_to_known_x", func(t *testing.T) {
+		// TREND(A1:A5,B1:B5) with no new_x's should predict for known_x
+		cf := evalCompile(t, "TREND(A1:A5,B1:B5)")
+		got, err := Eval(cf, linearResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		if len(flat) != 5 {
+			t.Fatalf("expected 5 values, got %d", len(flat))
+		}
+	})
+
+	t.Run("const_false", func(t *testing.T) {
+		// const=FALSE forces intercept=0, so model is y = slope*x
+		// With y={2,4,6}, x={1,2,3}: slope = sum(x*y)/sum(x^2) = (2+8+18)/(1+4+9) = 28/14 = 2
+		// Predict x=4 -> 2*4 = 8
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(6)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		flat := flattenArray(v)
+		if len(flat) != 1 {
+			t.Fatalf("expected 1 value, got %d", len(flat))
+		}
+		if math.Abs(flat[0]-8) > tol {
+			t.Errorf("got %f, want 8", flat[0])
+		}
+	})
+
+	t.Run("const_true_explicit", func(t *testing.T) {
+		// const=TRUE is same as default
+		v1, _ := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+			BoolVal(true),
+		})
+		v2, _ := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+		})
+		flat1 := flattenArray(v1)
+		flat2 := flattenArray(v2)
+		if len(flat1) != 1 || len(flat2) != 1 {
+			t.Fatalf("expected 1 value each")
+		}
+		if math.Abs(flat1[0]-flat2[0]) > 1e-10 {
+			t.Errorf("const=TRUE result %f differs from default %f", flat1[0], flat2[0])
+		}
+	})
+
+	t.Run("two_data_points_exact_fit", func(t *testing.T) {
+		// y={10,20}, x={1,2}: slope=10, intercept=0
+		// fitted should recover {10, 20}
+		cf := evalCompile(t, "TREND(A1:A2,B1:B2)")
+		got, err := Eval(cf, twoPtResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		if len(flat) != 2 {
+			t.Fatalf("expected 2 values, got %d", len(flat))
+		}
+		if math.Abs(flat[0]-10) > tol {
+			t.Errorf("index 0: got %f, want 10", flat[0])
+		}
+		if math.Abs(flat[1]-20) > tol {
+			t.Errorf("index 1: got %f, want 20", flat[1])
+		}
+	})
+
+	t.Run("single_data_point", func(t *testing.T) {
+		// With n=1, slope=0, intercept=y. Prediction for any x = 5.
+		cf := evalCompile(t, "TREND(A1:A1,B1:B1)")
+		got, err := Eval(cf, singleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		if len(flat) != 1 {
+			t.Fatalf("expected 1 value, got %d", len(flat))
+		}
+		if math.Abs(flat[0]-5) > tol {
+			t.Errorf("got %f, want 5", flat[0])
+		}
+	})
+
+	t.Run("negative_y_values_work", func(t *testing.T) {
+		// y={-3,-1,1,3}, x={1,2,3,4}: slope=2, intercept=-5
+		// fitted should recover {-3,-1,1,3}
+		cf := evalCompile(t, "TREND(A1:A4,B1:B4)")
+		got, err := Eval(cf, negYResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		expected := []float64{-3, -1, 1, 3}
+		flat := flattenArray(got)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("zero_y_values_work", func(t *testing.T) {
+		// y={0,0,0}, x={1,2,3}: slope=0, intercept=0
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(0), NumberVal(0), NumberVal(0)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		flat := flattenArray(v)
+		for i, val := range flat {
+			if math.Abs(val) > tol {
+				t.Errorf("index %d: got %f, want 0", i, val)
+			}
+		}
+	})
+
+	t.Run("zero_args", func(t *testing.T) {
+		v, err := fnTREND([]Value{})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("five_args", func(t *testing.T) {
+		v, err := fnTREND([]Value{NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(1)})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("mismatched_dimensions", func(t *testing.T) {
+		cf := evalCompile(t, "TREND(A1:A3,B1:B2)")
+		got, err := Eval(cf, mismatchResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("all_y_same_horizontal_line", func(t *testing.T) {
+		// y={5,5,5}, x={1,2,3}: slope=0, intercept=5
+		// All predictions should be 5
+		cf := evalCompile(t, "TREND(A1:A3,B1:B3)")
+		got, err := Eval(cf, flatResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		for i, v := range flat {
+			if math.Abs(v-5) > tol {
+				t.Errorf("index %d: got %f, want 5", i, v)
+			}
+		}
+	})
+
+	t.Run("error_propagation_y", func(t *testing.T) {
+		cf := evalCompile(t, "TREND(A1:A2,B1:B2)")
+		got, err := Eval(cf, errResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("error_propagation_x", func(t *testing.T) {
+		cf := evalCompile(t, "TREND(A1:A2,B1:B2)")
+		got, err := Eval(cf, errXResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("expected #NUM!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("array_literal_inputs", func(t *testing.T) {
+		// TREND({3,5,7},{1,2,3},{4,5})
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4), NumberVal(5)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		flat := flattenArray(v)
+		if len(flat) != 2 {
+			t.Fatalf("expected 2 values, got %d", len(flat))
+		}
+		// y=2x+1: predict x=4 -> 9, x=5 -> 11
+		if math.Abs(flat[0]-9) > tol {
+			t.Errorf("got %f, want 9", flat[0])
+		}
+		if math.Abs(flat[1]-11) > tol {
+			t.Errorf("got %f, want 11", flat[1])
+		}
+	})
+
+	t.Run("scalar_new_x_returns_scalar", func(t *testing.T) {
+		// TREND({3,5,7},{1,2,3},4) should return a single number, not array
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected scalar number, got type=%d", v.Type)
+		}
+		// y=2x+1: predict x=4 -> 9
+		if math.Abs(v.Num-9) > tol {
+			t.Errorf("got %f, want 9", v.Num)
+		}
+	})
+
+	t.Run("column_array_returns_column", func(t *testing.T) {
+		// new_x as column (3x1 array)
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4)},
+				{NumberVal(5)},
+				{NumberVal(6)},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(v.Array))
+		}
+		for _, row := range v.Array {
+			if len(row) != 1 {
+				t.Errorf("expected 1 column, got %d", len(row))
+			}
+		}
+		// Check values: y=2x+1 -> x=4:9, x=5:11, x=6:13
+		expected := []float64{9, 11, 13}
+		flat := flattenArray(v)
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("row_array_returns_row", func(t *testing.T) {
+		// new_x as row (1x3 array)
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4), NumberVal(5), NumberVal(6)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 {
+			t.Fatalf("expected 1 row, got %d", len(v.Array))
+		}
+		if len(v.Array[0]) != 3 {
+			t.Errorf("expected 3 columns, got %d", len(v.Array[0]))
+		}
+	})
+
+	t.Run("const_false_all_x_zero_div0", func(t *testing.T) {
+		// const=FALSE with all x=0 -> sum(x^2)=0 -> #DIV/0!
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(0), NumberVal(0)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1)}}},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValDIV0 {
+			t.Errorf("expected #DIV/0!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("predict_x_zero_with_intercept", func(t *testing.T) {
+		// y=2x+1: predict x=0 -> 1
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		if math.Abs(v.Num-1) > tol {
+			t.Errorf("got %f, want 1", v.Num)
+		}
+	})
+
+	t.Run("noisy_data_regression", func(t *testing.T) {
+		// Noisy data around y = 3x + 2:
+		// x={1,2,3,4,5}, y={5.1, 7.9, 11.2, 13.8, 17.1}
+		// Excel TREND gives fitted values via linear regression
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(5.1), NumberVal(7.9), NumberVal(11.2), NumberVal(13.8), NumberVal(17.1)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4), NumberVal(5)}}},
+			NumberVal(6),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		// Verify regression gives reasonable prediction around x=6
+		// slope ~ 2.99, intercept ~ 2.06 -> predict x=6 ~ 20.0
+		if v.Num < 18 || v.Num > 22 {
+			t.Errorf("got %f, expected roughly ~20 for x=6", v.Num)
+		}
+	})
+
+	t.Run("negative_slope", func(t *testing.T) {
+		// y = -2x + 10 for x=1..3: y={8,6,4}
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(8), NumberVal(6), NumberVal(4)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		// predict x=4 -> -2*4+10 = 2
+		if math.Abs(v.Num-2) > tol {
+			t.Errorf("got %f, want 2", v.Num)
+		}
+	})
+
+	t.Run("const_false_with_perfect_through_origin", func(t *testing.T) {
+		// y = 3x exactly through origin: x={1,2,3}, y={3,6,9}
+		// const=FALSE: slope = sum(x*y)/sum(x^2) = (3+12+27)/(1+4+9) = 42/14 = 3
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(3), NumberVal(6), NumberVal(9)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(5),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		// predict x=5 -> 3*5 = 15
+		if math.Abs(v.Num-15) > tol {
+			t.Errorf("got %f, want 15", v.Num)
+		}
+	})
+
+	t.Run("excel_verifiable_example", func(t *testing.T) {
+		// Excel: =TREND({1,9,5,7},{0,4,2,3},6)
+		// slope = cov(x,y)/var(x) = (1*(-2.5*-4.5)+...  let me compute:
+		// mean_x = (0+4+2+3)/4 = 2.25, mean_y = (1+9+5+7)/4 = 5.5
+		// cov = (-2.25)(-4.5) + (1.75)(3.5) + (-0.25)(-0.5) + (0.75)(1.5) = 10.125+6.125+0.125+1.125 = 17.5
+		// ssqx = 5.0625+3.0625+0.0625+0.5625 = 8.75
+		// slope = 17.5/8.75 = 2
+		// intercept = 5.5 - 2*2.25 = 1
+		// predict x=6 -> 1 + 2*6 = 13
+		v, err := fnTREND([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(9), NumberVal(5), NumberVal(7)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(0), NumberVal(4), NumberVal(2), NumberVal(3)}}},
+			NumberVal(6),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		if math.Abs(v.Num-13) > tol {
+			t.Errorf("got %f, want 13", v.Num)
+		}
+	})
+}
+
 // flattenArray is a test helper that extracts all float64 values from a Value.
 func flattenArray(v Value) []float64 {
 	if v.Type == ValueNumber {

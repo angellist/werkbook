@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **424** spreadsheet formula functions.
+Werkbook supports **425** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -390,6 +390,7 @@ Werkbook supports **424** spreadsheet formula functions.
 | TODAY | Date & Time | 2 |
 | TOROW | Lookup & Reference | 20 |
 | TRANSPOSE | Lookup & Reference | 35 |
+| TREND | Statistical | 10 |
 | TRIM | Text | 18 |
 | TRIMMEAN | Statistical | 23 |
 | TRUE | Logical | 10 |
@@ -431,7 +432,7 @@ Werkbook supports **424** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **46** functions are not yet supported.
+The following **45** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -479,5 +480,4 @@ The following **46** functions are not yet supported.
 | SEARCHB | Text |
 | SHEET | Information |
 | SHEETS | Information |
-| TREND | Statistical |
 | WEBSERVICE | Web |

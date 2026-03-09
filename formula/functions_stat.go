@@ -126,6 +126,7 @@ func init() {
 	Register("T.TEST", NoCtx(fnTTest))
 	Register("Z.TEST", NoCtx(fnZTEST))
 	Register("AGGREGATE", NoCtx(fnAggregate))
+	Register("TREND", NoCtx(fnTREND))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -5713,6 +5714,188 @@ func fnGROWTH(args []Value) (Value, error) {
 	}
 
 	// ---- 8. Return result ----
+	if isNewXScalar && len(predicted) == 1 {
+		return NumberVal(predicted[0]), nil
+	}
+
+	// Build array matching the shape of new_x's.
+	result := make([][]Value, newXRows)
+	idx := 0
+	for r := 0; r < newXRows; r++ {
+		row := make([]Value, newXCols)
+		for c := 0; c < newXCols; c++ {
+			if idx < len(predicted) {
+				row[c] = NumberVal(predicted[idx])
+				idx++
+			}
+		}
+		result[r] = row
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnTREND implements TREND(known_y's, [known_x's], [new_x's], [const]).
+// It returns predicted y-values for new x-values based on a linear
+// regression model y = slope*x + intercept.
+func fnTREND(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- arrayDims returns (rows, cols) for an array, or (1,1) for scalar. ----
+	arrayDims := func(v Value) (int, int) {
+		if v.Type == ValueArray {
+			rows := len(v.Array)
+			if rows == 0 {
+				return 0, 0
+			}
+			return rows, len(v.Array[0])
+		}
+		return 1, 1
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// Unlike GROWTH, y-values can be negative or zero.
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. new_x's ----
+	var newX []float64
+	newXRows, newXCols := 1, 1
+	isNewXScalar := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		newX, ev = flattenNums(args[2])
+		if ev != nil {
+			return *ev, nil
+		}
+		newXRows, newXCols = arrayDims(args[2])
+		isNewXScalar = args[2].Type != ValueArray
+	} else {
+		newX = make([]float64, len(knownX))
+		copy(newX, knownX)
+		// Shape matches known_x's shape.
+		if len(args) >= 2 && args[1].Type != ValueEmpty {
+			newXRows, newXCols = arrayDims(args[1])
+			isNewXScalar = args[1].Type != ValueArray
+		} else {
+			newXRows, newXCols = arrayDims(args[0])
+			isNewXScalar = args[0].Type != ValueArray
+		}
+	}
+
+	// ---- 4. const ----
+	useConst := true
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		cv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 5. Linear regression of knownY on knownX ----
+	var slope, intercept float64
+	if useConst {
+		// Compute means.
+		sumX, sumY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumY += knownY[i]
+		}
+		meanX := sumX / float64(n)
+		meanY := sumY / float64(n)
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX := 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (knownY[i] - meanY)
+			ssqX += dx * dx
+		}
+
+		if ssqX == 0 {
+			// All x values are the same. slope=0, intercept=meanY.
+			slope = 0
+			intercept = meanY
+		} else {
+			slope = cov / ssqX
+			intercept = meanY - slope*meanX
+		}
+	} else {
+		// const=FALSE: force intercept=0, so y = slope*x.
+		// slope = Σ(x*y) / Σ(x²)
+		sumXY := 0.0
+		sumXX := 0.0
+		for i := 0; i < n; i++ {
+			sumXY += knownX[i] * knownY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXY / sumXX
+		intercept = 0
+	}
+
+	// ---- 6. Predict ----
+	predicted := make([]float64, len(newX))
+	for i, x := range newX {
+		predicted[i] = intercept + slope*x
+	}
+
+	// ---- 7. Return result ----
 	if isNewXScalar && len(predicted) == 1 {
 		return NumberVal(predicted[0]), nil
 	}
