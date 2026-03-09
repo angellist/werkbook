@@ -14606,7 +14606,7 @@ func TestNORMSDIST_argcount(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNORMSINV(t *testing.T) {
-	const tol = 1e-5
+	const tol = 1e-12
 	resolver := &mockResolver{}
 
 	tests := []struct {
@@ -14617,25 +14617,25 @@ func TestNORMSINV(t *testing.T) {
 		wantErr   ErrorValue
 	}{
 		{"p_0.5", "NORM.S.INV(0.5)", 0, false, 0},
-		{"p_0.841344746", "NORM.S.INV(0.841344746)", 1.0, false, 0},
-		{"p_0.158655254", "NORM.S.INV(0.158655254)", -1.0, false, 0},
-		{"p_0.977249868", "NORM.S.INV(0.977249868)", 2.0, false, 0},
-		{"p_0.022750132", "NORM.S.INV(0.022750132)", -2.0, false, 0},
-		{"p_0.998650102", "NORM.S.INV(0.998650102)", 3.0, false, 0},
-		{"p_0.001349898", "NORM.S.INV(0.001349898)", -3.0, false, 0},
-		{"p_0.975", "NORM.S.INV(0.975)", 1.959964, false, 0},
-		{"p_0.025", "NORM.S.INV(0.025)", -1.959964, false, 0},
-		{"p_0.9", "NORM.S.INV(0.9)", 1.281552, false, 0},
-		{"p_0.1", "NORM.S.INV(0.1)", -1.281552, false, 0},
-		{"p_0.95", "NORM.S.INV(0.95)", 1.644854, false, 0},
-		{"p_0.05", "NORM.S.INV(0.05)", -1.644854, false, 0},
-		{"p_0.99", "NORM.S.INV(0.99)", 2.326348, false, 0},
-		{"p_0.01", "NORM.S.INV(0.01)", -2.326348, false, 0},
-		{"p_0.001", "NORM.S.INV(0.001)", -3.090232, false, 0},
-		{"p_0.999", "NORM.S.INV(0.999)", 3.090232, false, 0},
-		{"p_0.908789", "NORM.S.INV(0.908789)", 1.333335, false, 0},
-		{"p_0.75", "NORM.S.INV(0.75)", 0.674490, false, 0},
-		{"p_0.25", "NORM.S.INV(0.25)", -0.674490, false, 0},
+		{"p_0.841344746", "NORM.S.INV(0.841344746)", 0.9999999997167303, false, 0},
+		{"p_0.158655254", "NORM.S.INV(0.158655254)", -0.9999999997167306, false, 0},
+		{"p_0.977249868", "NORM.S.INV(0.977249868)", 1.999999999040196, false, 0},
+		{"p_0.022750132", "NORM.S.INV(0.022750132)", -1.999999999040195, false, 0},
+		{"p_0.998650102", "NORM.S.INV(0.998650102)", 3.000000007137002, false, 0},
+		{"p_0.001349898", "NORM.S.INV(0.001349898)", -3.000000007136999, false, 0},
+		{"p_0.975", "NORM.S.INV(0.975)", 1.959963984540054, false, 0},
+		{"p_0.025", "NORM.S.INV(0.025)", -1.959963984540054, false, 0},
+		{"p_0.9", "NORM.S.INV(0.9)", 1.281551565544601, false, 0},
+		{"p_0.1", "NORM.S.INV(0.1)", -1.281551565544601, false, 0},
+		{"p_0.95", "NORM.S.INV(0.95)", 1.644853626951472, false, 0},
+		{"p_0.05", "NORM.S.INV(0.05)", -1.644853626951473, false, 0},
+		{"p_0.99", "NORM.S.INV(0.99)", 2.326347874040841, false, 0},
+		{"p_0.01", "NORM.S.INV(0.01)", -2.326347874040841, false, 0},
+		{"p_0.001", "NORM.S.INV(0.001)", -3.090232306167814, false, 0},
+		{"p_0.999", "NORM.S.INV(0.999)", 3.090232306167823, false, 0},
+		{"p_0.908789", "NORM.S.INV(0.908789)", 1.333334673044107, false, 0},
+		{"p_0.75", "NORM.S.INV(0.75)", 0.674489750196082, false, 0},
+		{"p_0.25", "NORM.S.INV(0.25)", -0.6744897501960818, false, 0},
 
 		// Error: boundary values
 		{"err_p_zero", "NORM.S.INV(0)", 0, true, ErrValNUM},
@@ -14691,9 +14691,9 @@ func TestNORMSINV_argcount(t *testing.T) {
 }
 
 func TestNORMSINV_NORMSDIST_roundtrip(t *testing.T) {
-	// NORM.S.INV uses Acklam's approximation without refinement,
-	// so the roundtrip through NORM.S.DIST is only accurate to ~8 digits.
-	const tol = 1e-8
+	// With Newton-Raphson refinement, NORM.S.INV achieves ~15+ digits
+	// of precision, so the roundtrip through NORM.S.DIST is very tight.
+	const tol = 1e-14
 	resolver := &mockResolver{}
 
 	probs := []float64{0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.001, 0.999}
