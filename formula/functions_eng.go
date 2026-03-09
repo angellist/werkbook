@@ -10,6 +10,7 @@ import (
 func init() {
 	Register("BESSELI", NoCtx(fnBesselI))
 	Register("BESSELJ", NoCtx(fnBesselJ))
+	Register("BESSELK", NoCtx(fnBesselK))
 	Register("BIN2DEC", NoCtx(fnBin2Dec))
 	Register("BIN2HEX", NoCtx(fnBin2Hex))
 	Register("BIN2OCT", NoCtx(fnBin2Oct))
@@ -259,6 +260,115 @@ func fnBesselJ(args []Value) (Value, error) {
 	}
 
 	return NumberVal(math.Jn(n, x)), nil
+}
+
+// fnBesselK implements the BESSELK function.
+// BESSELK(X, N) — returns the modified Bessel function of the second kind, K_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!. If X <= 0, returns #NUM!.
+func fnBesselK(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// K_n(x) is undefined for x <= 0.
+	if x <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	result := besselK(n, x)
+	return NumberVal(result), nil
+}
+
+// besselK0 computes K_0(x) for x > 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.5 and 9.8.6).
+func besselK0(x float64) float64 {
+	if x <= 2 {
+		t := x / 2
+		t2 := t * t
+		return -math.Log(t)*besselI0(x) +
+			(-0.57721566 +
+				t2*(0.42278420+
+					t2*(0.23069756+
+						t2*(0.03488590+
+							t2*(0.00262698+
+								t2*(0.00010750+
+									t2*0.00000740))))))
+	}
+	t := 2.0 / x
+	return (math.Exp(-x) / math.Sqrt(x)) *
+		(1.25331414 +
+			t*(-0.07832358+
+				t*(0.02189568+
+					t*(-0.01062446+
+						t*(0.00587872+
+							t*(-0.00251540+
+								t*0.00053208))))))
+}
+
+// besselK1 computes K_1(x) for x > 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.7 and 9.8.8).
+func besselK1(x float64) float64 {
+	if x <= 2 {
+		t := x / 2
+		t2 := t * t
+		return math.Log(t)*besselI1(x) +
+			(1.0/x)*
+				(1.0+
+					t2*(0.15443144+
+						t2*(-0.67278579+
+							t2*(-0.18156897+
+								t2*(-0.01919402+
+									t2*(-0.00110404+
+										t2*(-0.00004686)))))))
+	}
+	t := 2.0 / x
+	return (math.Exp(-x) / math.Sqrt(x)) *
+		(1.25331414 +
+			t*(0.23498619+
+				t*(-0.03655620+
+					t*(0.01504268+
+						t*(-0.00780353+
+							t*(0.00325614+
+								t*(-0.00068245)))))))
+}
+
+// besselK computes K_n(x) for integer n >= 0 and x > 0.
+// For n=0 and n=1 it uses direct polynomial approximations (A&S).
+// For n >= 2 it uses forward recurrence: K_{n+1}(x) = K_{n-1}(x) + (2n/x)*K_n(x).
+func besselK(n int, x float64) float64 {
+	if n == 0 {
+		return besselK0(x)
+	}
+	if n == 1 {
+		return besselK1(x)
+	}
+
+	// Forward recurrence is stable for K_n (K_n grows with n).
+	k0 := besselK0(x)
+	k1 := besselK1(x)
+	tox := 2.0 / x
+	for i := 1; i < n; i++ {
+		k2 := k0 + float64(i)*tox*k1
+		k0 = k1
+		k1 = k2
+	}
+	return k1
 }
 
 // fnBin2Dec implements the BIN2DEC function.

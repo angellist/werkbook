@@ -5183,3 +5183,144 @@ func TestBESSELJ(t *testing.T) {
 		}
 	})
 }
+
+func TestBESSELK(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELK(1.5,1)", 0.277387804, 1e-8},
+
+			// Known values for n=0
+			{"BESSELK(1,0)", 0.4210244382, 1e-7},
+			{"BESSELK(2,0)", 0.1138938727, 1e-7},
+			{"BESSELK(0.5,0)", 0.9244190716, 1e-7},
+
+			// Known values for n=1
+			{"BESSELK(1,1)", 0.6019072169, 1e-7},
+			{"BESSELK(2,1)", 0.1398658818, 1e-7},
+
+			// Larger x for n=0
+			{"BESSELK(5,0)", 0.0036910982, 1e-8},
+			{"BESSELK(10,0)", 0.00001778006232, 1e-11},
+
+			// Larger x for n=1
+			{"BESSELK(5,1)", 0.004044613162, 1e-8},
+
+			// Higher order n
+			{"BESSELK(5,3)", 0.008291768520, 1e-8},
+			{"BESSELK(10,2)", 0.00002150982, 1e-9},
+			{"BESSELK(2,3)", 0.6473853909, 1e-8},
+
+			// Very small x (near divergence)
+			{"BESSELK(0.01,0)", 4.721244471, 1e-6},
+			{"BESSELK(0.01,1)", 99.97389659, 1e-4},
+
+			// n truncated: BESSELK(1.5, 1.9) same as BESSELK(1.5, 1)
+			{"BESSELK(1.5,1.9)", 0.277387804, 1e-8},
+			{"BESSELK(1.5,1.1)", 0.277387804, 1e-8},
+
+			// Large order n
+			{"BESSELK(1,5)", 360.9605896, 1e-3},
+			{"BESSELK(5,5)", 0.03270627362, 1e-7},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELK(TRUE,0)", 0.4210244382, 1e-7},
+			{"BESSELK(TRUE,FALSE)", 0.4210244382, 1e-7},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// x <= 0 → #NUM!
+			{"BESSELK(0,0)", ErrValNUM},
+			{"BESSELK(0,1)", ErrValNUM},
+			{"BESSELK(-1,0)", ErrValNUM},
+			{"BESSELK(-0.5,1)", ErrValNUM},
+			{"BESSELK(-5,2)", ErrValNUM},
+
+			// n < 0 → #NUM!
+			{"BESSELK(1,-1)", ErrValNUM},
+			{"BESSELK(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELK("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELK(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELK("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELK()", "BESSELK(1)", "BESSELK(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELK(1/0,1)", "BESSELK(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
