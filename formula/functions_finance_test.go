@@ -2690,6 +2690,98 @@ func TestPPMT_Comprehensive(t *testing.T) {
 			args: numArgs(0, 1, 10, 10000, 0, 1),
 			want: -1000.00,
 		},
+
+		// --- 6% mortgage (from task spec) ---
+		{
+			name: "6% mortgage first payment",
+			// PPMT(0.06/12, 1, 360, 200000)
+			args: numArgs(0.06/12, 1, 360, 200000),
+			want: -199.10,
+		},
+		{
+			name: "6% mortgage last payment",
+			// PPMT(0.06/12, 360, 360, 200000)
+			args: numArgs(0.06/12, 360, 360, 200000),
+			want: -1193.14,
+		},
+
+		// --- Period progression: principal grows over time (8%/12, 120 months) ---
+		{
+			name: "period progression first month",
+			// PPMT(0.08/12, 1, 120, 10000)
+			args: numArgs(0.08/12, 1, 120, 10000),
+			want: -54.66,
+		},
+		{
+			name: "period progression midpoint month 60",
+			// PPMT(0.08/12, 60, 120, 10000)
+			args: numArgs(0.08/12, 60, 120, 10000),
+			want: -80.90,
+		},
+		{
+			name: "period progression last month 120",
+			// PPMT(0.08/12, 120, 120, 10000)
+			args: numArgs(0.08/12, 120, 120, 10000),
+			want: -120.52,
+		},
+
+		// --- Future value with pv (task spec) ---
+		{
+			name: "pv=20000 fv=5000 first period",
+			// PPMT(0.05/12, 1, 60, 20000, 5000)
+			args: numArgs(0.05/12, 1, 60, 20000, 5000),
+			want: -367.61,
+		},
+
+		// --- Savings accumulation pv=0, fv=50000 ---
+		{
+			name: "savings accumulation pv=0 fv=50000 mid",
+			// PPMT(0.05/12, 30, 60, 0, 50000)
+			args: numArgs(0.05/12, 30, 60, 0, 50000),
+			want: -829.45,
+		},
+
+		// --- Beginning of period type=1 with 8% rate (task spec) ---
+		{
+			name: "type=1 8% monthly per=1",
+			// PPMT(0.08/12, 1, 24, 10000, 0, 1)
+			args: numArgs(0.08/12, 1, 24, 10000, 0, 1),
+			want: -449.28,
+		},
+		{
+			name: "type=1 8% monthly per=12",
+			// PPMT(0.08/12, 12, 24, 10000, 0, 1)
+			args: numArgs(0.08/12, 12, 24, 10000, 0, 1),
+			want: -412.10,
+		},
+
+		// --- Zero rate: 12000 over 12 periods (task spec) ---
+		{
+			name: "zero rate 12000 over 12 per=1",
+			// PPMT(0, 1, 12, 12000) — should be -1000
+			args: numArgs(0, 1, 12, 12000),
+			want: -1000.00,
+		},
+		{
+			name: "zero rate 12000 over 12 per=6",
+			// PPMT(0, 6, 12, 12000)
+			args: numArgs(0, 6, 12, 12000),
+			want: -1000.00,
+		},
+		{
+			name: "zero rate pv=0 fv=10000",
+			// PPMT(0, 1, 10, 0, 10000) — each period = -1000
+			args: numArgs(0, 1, 10, 0, 10000),
+			want: -1000.00,
+		},
+
+		// --- All-string coercion (task spec) ---
+		{
+			name: "all string coercion",
+			// PPMT("0.05", "1", "12", "1000")
+			args: []Value{StringVal("0.05"), StringVal("1"), StringVal("12"), StringVal("1000")},
+			want: -62.83,
+		},
 	}
 
 	for _, tc := range tests {
