@@ -315,7 +315,11 @@ func fnFORMULATEXT(args []Value, ctx *EvalContext) (Value, error) {
 	}
 	row := int(args[0].Num) / 100_000
 	col := int(args[0].Num) % 100_000
-	text := fi.GetFormulaText(ctx.CurrentSheet, col, row)
+	sheet := args[0].Str
+	if sheet == "" {
+		sheet = ctx.CurrentSheet
+	}
+	text := fi.GetFormulaText(sheet, col, row)
 	if text == "" {
 		return ErrorVal(ErrValNA), nil
 	}

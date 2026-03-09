@@ -1424,73 +1424,414 @@ func TestISFORMULA(t *testing.T) {
 }
 
 func TestFORMULATEXT(t *testing.T) {
+	// Set up a rich mock with many formula cells for comprehensive testing.
 	resolver := &mockFormulaResolver{
 		mockResolver: mockResolver{
 			cells: map[CellAddr]Value{
-				{Col: 1, Row: 1}: NumberVal(42),  // A1: constant
-				{Col: 2, Row: 1}: NumberVal(100), // B1: has formula
+				{Col: 1, Row: 1}: NumberVal(42),           // A1: constant number
+				{Col: 2, Row: 1}: NumberVal(100),          // B1: has formula =A1+58
+				{Col: 3, Row: 1}: StringVal("hello"),      // C1: constant text
+				{Col: 4, Row: 1}: BoolVal(true),           // D1: constant boolean
+				{Col: 1, Row: 2}: NumberVal(600),          // A2: has formula =SUM(A1:A1)
+				{Col: 2, Row: 2}: NumberVal(7),            // B2: has formula =IF(A1>10,7,0)
+				{Col: 3, Row: 2}: StringVal("helloworld"), // C2: has formula =CONCATENATE("hello","world")
+				{Col: 4, Row: 2}: NumberVal(99),           // D2: has formula =SUM(IF(A1>0,A1,0))
+				{Col: 1, Row: 3}: NumberVal(42),           // A3: has formula =$A$1
+				{Col: 2, Row: 3}: NumberVal(42),           // B3: has formula =A$1+$B1
+				{Col: 3, Row: 3}: ErrorVal(ErrValDIV0),    // C3: constant error (no formula)
+				{Col: 4, Row: 3}: ErrorVal(ErrValDIV0),    // D3: has formula =1/0
+				{Col: 1, Row: 4}: StringVal("=A1+58"),     // A4: has formula =FORMULATEXT(B1)
+				{Col: 2, Row: 4}: StringVal(`she said "hi"`), // B4: has formula =CONCATENATE("she said ",CHAR(34),"hi",CHAR(34))
+				{Col: 3, Row: 4}: NumberVal(6),            // C4: has formula =LEN(FORMULATEXT(B1))
+				{Col: 4, Row: 4}: NumberVal(1),            // D4: has formula =COLUMN(A1)
+				{Col: 1, Row: 5}: NumberVal(10),           // A5: has formula =AVERAGE(A1,B1)
+				{Col: 2, Row: 5}: NumberVal(3),            // B5: has formula =MAX(1,2,3)
+				{Col: 3, Row: 5}: NumberVal(0),            // C5: has formula =MIN(A1,0)
+				{Col: 4, Row: 5}: StringVal("HELLO"),      // D5: has formula =UPPER("hello")
+				// E1 (Col:5, Row:1) intentionally missing — empty cell
+				// Cross-sheet cell
+				{Sheet: "Sheet2", Col: 1, Row: 1}: NumberVal(99), // Sheet2!A1: has formula =Sheet1!A1*2+15
 			},
 		},
 		formulas: map[CellAddr]string{
-			{Col: 2, Row: 1}: "A1+58", // B1 has a formula
+			{Col: 2, Row: 1}: "A1+58",
+			{Col: 1, Row: 2}: "SUM(A1:A1)",
+			{Col: 2, Row: 2}: "IF(A1>10,7,0)",
+			{Col: 3, Row: 2}: `CONCATENATE("hello","world")`,
+			{Col: 4, Row: 2}: "SUM(IF(A1>0,A1,0))",
+			{Col: 1, Row: 3}: "$A$1",
+			{Col: 2, Row: 3}: "A$1+$B1",
+			{Col: 4, Row: 3}: "1/0",
+			{Col: 1, Row: 4}: "FORMULATEXT(B1)",
+			{Col: 2, Row: 4}: `CONCATENATE("she said ",CHAR(34),"hi",CHAR(34))`,
+			{Col: 3, Row: 4}: "LEN(FORMULATEXT(B1))",
+			{Col: 4, Row: 4}: "COLUMN(A1)",
+			{Col: 1, Row: 5}: "AVERAGE(A1,B1)",
+			{Col: 2, Row: 5}: "MAX(1,2,3)",
+			{Col: 3, Row: 5}: "MIN(A1,0)",
+			{Col: 4, Row: 5}: `UPPER("hello")`,
+			{Sheet: "Sheet2", Col: 1, Row: 1}: "Sheet1!A1*2+15",
 		},
 	}
 	ctx := &EvalContext{
-		CurrentCol:   3,
-		CurrentRow:   1,
+		CurrentCol:   10,
+		CurrentRow:   10,
 		CurrentSheet: "",
 		Resolver:     resolver,
 	}
 
-	// FORMULATEXT(B1) = "=A1+58" (cell with formula)
-	cf := evalCompile(t, `FORMULATEXT(B1)`)
-	got, err := Eval(cf, resolver, ctx)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueString || got.Str != "=A1+58" {
-		t.Errorf("FORMULATEXT(B1) = %v, want =A1+58", got)
-	}
+	// --- Sub-tests returning formula text (string) ---
 
-	// FORMULATEXT(A1) = #N/A (constant value, no formula)
-	cf = evalCompile(t, `FORMULATEXT(A1)`)
-	got, err = Eval(cf, resolver, ctx)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValNA {
-		t.Errorf("FORMULATEXT(A1) = %v, want #N/A", got)
-	}
+	t.Run("simple_addition_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(B1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=A1+58" {
+			t.Errorf("FORMULATEXT(B1) = %v, want =A1+58", got)
+		}
+	})
 
-	// FORMULATEXT(C1) = #N/A (empty cell)
-	cf = evalCompile(t, `FORMULATEXT(C1)`)
-	got, err = Eval(cf, resolver, ctx)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValNA {
-		t.Errorf("FORMULATEXT(C1) = %v, want #N/A", got)
-	}
+	t.Run("SUM_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(A2)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=SUM(A1:A1)" {
+			t.Errorf("FORMULATEXT(A2) = %v, want =SUM(A1:A1)", got)
+		}
+	})
 
-	// FORMULATEXT(123) = #VALUE! (non-reference argument)
-	cf = evalCompile(t, `FORMULATEXT(123)`)
-	got, err = Eval(cf, resolver, ctx)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValVALUE {
-		t.Errorf("FORMULATEXT(123) = %v, want #VALUE!", got)
-	}
+	t.Run("IF_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(B2)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=IF(A1>10,7,0)" {
+			t.Errorf("FORMULATEXT(B2) = %v, want =IF(A1>10,7,0)", got)
+		}
+	})
 
-	// FORMULATEXT() with no args = #VALUE!
-	cf = evalCompile(t, `FORMULATEXT()`)
-	got, err = Eval(cf, resolver, ctx)
-	if err != nil {
-		t.Fatalf("Eval: %v", err)
-	}
-	if got.Type != ValueError || got.Err != ErrValVALUE {
-		t.Errorf("FORMULATEXT() = %v, want #VALUE!", got)
-	}
+	t.Run("CONCATENATE_string_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(C2)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != `=CONCATENATE("hello","world")` {
+			t.Errorf("FORMULATEXT(C2) = %v, want =CONCATENATE(\"hello\",\"world\")", got)
+		}
+	})
+
+	t.Run("nested_functions_SUM_IF", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(D2)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=SUM(IF(A1>0,A1,0))" {
+			t.Errorf("FORMULATEXT(D2) = %v, want =SUM(IF(A1>0,A1,0))", got)
+		}
+	})
+
+	t.Run("absolute_reference_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(A3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=$A$1" {
+			t.Errorf("FORMULATEXT(A3) = %v, want =$A$1", got)
+		}
+	})
+
+	t.Run("mixed_absolute_relative_reference", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(B3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=A$1+$B1" {
+			t.Errorf("FORMULATEXT(B3) = %v, want =A$1+$B1", got)
+		}
+	})
+
+	t.Run("formula_returning_error_still_shows_text", func(t *testing.T) {
+		// D3 has formula =1/0 which evaluates to #DIV/0!, but
+		// FORMULATEXT should return the formula text, not the error.
+		cf := evalCompile(t, `FORMULATEXT(D3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=1/0" {
+			t.Errorf("FORMULATEXT(D3) = %v, want =1/0", got)
+		}
+	})
+
+	t.Run("FORMULATEXT_of_FORMULATEXT", func(t *testing.T) {
+		// A4 has formula =FORMULATEXT(B1)
+		cf := evalCompile(t, `FORMULATEXT(A4)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=FORMULATEXT(B1)" {
+			t.Errorf("FORMULATEXT(A4) = %v, want =FORMULATEXT(B1)", got)
+		}
+	})
+
+	t.Run("formula_with_string_containing_quotes", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(B4)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		want := `=CONCATENATE("she said ",CHAR(34),"hi",CHAR(34))`
+		if got.Type != ValueString || got.Str != want {
+			t.Errorf("FORMULATEXT(B4) = %v, want %s", got, want)
+		}
+	})
+
+	t.Run("LEN_of_FORMULATEXT", func(t *testing.T) {
+		// C4 has formula =LEN(FORMULATEXT(B1))
+		cf := evalCompile(t, `FORMULATEXT(C4)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=LEN(FORMULATEXT(B1))" {
+			t.Errorf("FORMULATEXT(C4) = %v, want =LEN(FORMULATEXT(B1))", got)
+		}
+	})
+
+	t.Run("COLUMN_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(D4)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=COLUMN(A1)" {
+			t.Errorf("FORMULATEXT(D4) = %v, want =COLUMN(A1)", got)
+		}
+	})
+
+	t.Run("AVERAGE_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(A5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=AVERAGE(A1,B1)" {
+			t.Errorf("FORMULATEXT(A5) = %v, want =AVERAGE(A1,B1)", got)
+		}
+	})
+
+	t.Run("MAX_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(B5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=MAX(1,2,3)" {
+			t.Errorf("FORMULATEXT(B5) = %v, want =MAX(1,2,3)", got)
+		}
+	})
+
+	t.Run("MIN_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(C5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=MIN(A1,0)" {
+			t.Errorf("FORMULATEXT(C5) = %v, want =MIN(A1,0)", got)
+		}
+	})
+
+	t.Run("UPPER_text_function_formula", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(D5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != `=UPPER("hello")` {
+			t.Errorf(`FORMULATEXT(D5) = %v, want =UPPER("hello")`, got)
+		}
+	})
+
+	t.Run("cross_sheet_reference", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(Sheet2!A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "=Sheet1!A1*2+15" {
+			t.Errorf("FORMULATEXT(Sheet2!A1) = %v, want =Sheet1!A1*2+15", got)
+		}
+	})
+
+	t.Run("formula_text_always_has_leading_equals", func(t *testing.T) {
+		// Verify every formula cell returns text starting with '='.
+		cf := evalCompile(t, `FORMULATEXT(B1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || len(got.Str) == 0 || got.Str[0] != '=' {
+			t.Errorf("FORMULATEXT(B1) = %v, expected string starting with '='", got)
+		}
+	})
+
+	// --- Sub-tests returning #N/A (cell without formula) ---
+
+	t.Run("constant_number_returns_NA", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(A1) = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("constant_text_returns_NA", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(C1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(C1) = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("constant_boolean_returns_NA", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(D1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(D1) = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("empty_cell_returns_NA", func(t *testing.T) {
+		// E1 is not in the cells map at all — empty cell.
+		cf := evalCompile(t, `FORMULATEXT(E1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(E1) = %v, want #N/A", got)
+		}
+	})
+
+	t.Run("constant_error_returns_NA", func(t *testing.T) {
+		// C3 has a #DIV/0! error but no formula — should return #N/A.
+		cf := evalCompile(t, `FORMULATEXT(C3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(C3) = %v, want #N/A", got)
+		}
+	})
+
+	// --- Error handling sub-tests ---
+
+	t.Run("no_args_returns_VALUE_error", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT()`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("FORMULATEXT() = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("numeric_literal_arg_returns_VALUE_error", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(123)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("FORMULATEXT(123) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("string_literal_arg_returns_VALUE_error", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT("hello")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`FORMULATEXT("hello") = %v, want #VALUE!`, got)
+		}
+	})
+
+	t.Run("boolean_literal_arg_returns_VALUE_error", func(t *testing.T) {
+		cf := evalCompile(t, `FORMULATEXT(TRUE)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("FORMULATEXT(TRUE) = %v, want #VALUE!", got)
+		}
+	})
+
+	// --- Consistency: ISFORMULA and FORMULATEXT agree ---
+
+	t.Run("ISFORMULA_FORMULATEXT_consistency_formula_cell", func(t *testing.T) {
+		// B1 has a formula — ISFORMULA returns TRUE, FORMULATEXT returns text.
+		cfIs := evalCompile(t, `ISFORMULA(B1)`)
+		gotIs, err := Eval(cfIs, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval ISFORMULA: %v", err)
+		}
+		if gotIs.Type != ValueBool || !gotIs.Bool {
+			t.Errorf("ISFORMULA(B1) = %v, want TRUE", gotIs)
+		}
+		cfFt := evalCompile(t, `FORMULATEXT(B1)`)
+		gotFt, err := Eval(cfFt, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval FORMULATEXT: %v", err)
+		}
+		if gotFt.Type != ValueString {
+			t.Errorf("FORMULATEXT(B1) = %v, want a string value", gotFt)
+		}
+	})
+
+	t.Run("ISFORMULA_FORMULATEXT_consistency_constant_cell", func(t *testing.T) {
+		// A1 is a constant — ISFORMULA returns FALSE, FORMULATEXT returns #N/A.
+		cfIs := evalCompile(t, `ISFORMULA(A1)`)
+		gotIs, err := Eval(cfIs, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval ISFORMULA: %v", err)
+		}
+		if gotIs.Type != ValueBool || gotIs.Bool {
+			t.Errorf("ISFORMULA(A1) = %v, want FALSE", gotIs)
+		}
+		cfFt := evalCompile(t, `FORMULATEXT(A1)`)
+		gotFt, err := Eval(cfFt, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval FORMULATEXT: %v", err)
+		}
+		if gotFt.Type != ValueError || gotFt.Err != ErrValNA {
+			t.Errorf("FORMULATEXT(A1) = %v, want #N/A", gotFt)
+		}
+	})
 }
 
 func TestISFORMULA_NoIntrospector(t *testing.T) {
