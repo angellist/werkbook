@@ -141,3 +141,13 @@ install: ## Install the wb CLI locally
 clean: ## Remove generated artifacts
 	$(call print_stage,Cleaning)
 	rm -f coverage.out coverage.html
+
+.PHONY: interop
+interop: ## Fast parity rerun against ../testdata (use ONLY=fixture/id)
+	@if [ ! -d ../testdata ]; then echo "missing ../testdata sibling repo"; exit 1; fi
+	cd ../testdata && go run ./cmd/community-loop --skip-gen --skip-excel $(if $(ONLY),--only $(ONLY),)
+
+.PHONY: interop-full
+interop-full: ## Full fixture -> Excel -> parity -> issue sync loop (use ONLY=fixture/id)
+	@if [ ! -d ../testdata ]; then echo "missing ../testdata sibling repo"; exit 1; fi
+	cd ../testdata && go run ./cmd/community-loop $(if $(ONLY),--only $(ONLY),)

@@ -359,6 +359,287 @@ func TestDSUM(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  40, // "Apple" and "apple" match (case-insensitive), not "Apple Pie"
 		},
+		{
+			name: "single record match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "negative numbers in sum field",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(-10)},
+				{StringVal("B"), NumberVal(-20)},
+				{StringVal("C"), NumberVal(5)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  -25, // -10 + -20 + 5
+		},
+		{
+			name: "sum of zeros",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(0)},
+				{StringVal("B"), NumberVal(0)},
+				{StringVal("C"), NumberVal(0)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		{
+			name: "large database - 50 rows",
+			db: func() [][]Value {
+				rows := [][]Value{
+					{StringVal("Category"), StringVal("Amount")},
+				}
+				for i := 1; i <= 50; i++ {
+					cat := "A"
+					if i%2 == 0 {
+						cat = "B"
+					}
+					rows = append(rows, []Value{StringVal(cat), NumberVal(float64(i))})
+				}
+				return rows
+			}(),
+			crit: [][]Value{
+				{StringVal("Category")},
+				{StringVal("A")}, // odd numbers: 1+3+5+...+49 = 625
+			},
+			field:    `"Amount"`,
+			wantType: ValueNumber,
+			wantNum:  625,
+		},
+		{
+			name: "boolean criteria - match TRUE",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Active"), StringVal("Value")},
+				{StringVal("A"), BoolVal(true), NumberVal(10)},
+				{StringVal("B"), BoolVal(false), NumberVal(20)},
+				{StringVal("C"), BoolVal(true), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Active")},
+				{BoolVal(true)},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  40, // 10 + 30
+		},
+		{
+			name: "boolean criteria - match FALSE",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Active"), StringVal("Value")},
+				{StringVal("A"), BoolVal(true), NumberVal(10)},
+				{StringVal("B"), BoolVal(false), NumberVal(20)},
+				{StringVal("C"), BoolVal(true), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Active")},
+				{BoolVal(false)},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  20,
+		},
+		{
+			name: "criteria header not in database - no match",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), NumberVal(20)},
+			},
+			crit: [][]Value{
+				{StringVal("NonExistentColumn")},
+				{StringVal("A")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0, // criteria column not found -> never matches
+		},
+		{
+			name: "criteria on different column than summed field",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Age")},
+				{StringVal(">14")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  24, // Age>14: age 20 yield 14, age 15 yield 10 -> 24
+		},
+		{
+			name: "numeric criteria value (not string comparison)",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score"), StringVal("Value")},
+				{StringVal("A"), NumberVal(100), NumberVal(10)},
+				{StringVal("B"), NumberVal(200), NumberVal(20)},
+				{StringVal("C"), NumberVal(100), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Score")},
+				{NumberVal(100)}, // exact numeric match
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  40, // 10 + 30
+		},
+		{
+			name: "field specified as 1 (first column)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "1", // first column = Tree (text, so sum ignores it)
+			wantType: ValueNumber,
+			wantNum:  0, // Tree column is text, DSUM ignores text
+		},
+		{
+			name: "field index negative returns #VALUE!",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "-1",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name: "combined AND/OR - (Apple AND Height>10) OR (Cherry)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},  // row 1: Apple AND Height>10
+				{StringVal("Cherry"), StringVal("")},     // row 2: Cherry (blank Height = match all)
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  285, // Apple h>10: 105+75=180, Cherry: 105 -> 285
+		},
+		{
+			name: "wildcard * matches all trees starting with letter",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("*e*")}, // contains 'e': Apple, Pear, Cherry
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  502.8, // all trees contain 'e'
+		},
+		{
+			name: "wildcard ? single char - Pea? matches Pear only",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("Pear"), NumberVal(10)},
+				{StringVal("Peas"), NumberVal(20)},
+				{StringVal("Peak"), NumberVal(30)},
+				{StringVal("Pearl"), NumberVal(40)}, // 5 chars, no match for Pea?
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Pea?")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  60, // Pear(10) + Peas(20) + Peak(30)
+		},
+		{
+			name: "sum Yield where Profit > 100",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Profit")},
+				{StringVal(">100")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  23, // Profit>100: Apple(105,yield=14), Cherry(105,yield=9) -> 23
+		},
+		{
+			name: "text in summed column ignored",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Amount")},
+				{StringVal("A"), NumberVal(100)},
+				{StringVal("B"), StringVal("N/A")},
+				{StringVal("C"), NumberVal(200)},
+				{StringVal("D"), StringVal("pending")},
+				{StringVal("E"), NumberVal(50)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Amount"`,
+			wantType: ValueNumber,
+			wantNum:  350, // 100 + 200 + 50
+		},
+		{
+			name: "three column AND criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10"), StringVal("<20")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // Apple, Height>10, Age<20: only Apple h=14 age=15
+		},
+		{
+			name: "criteria with <> on text - not Apple",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("<>Apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  277.8, // Pear(96+76.8) + Cherry(105) = 277.8
+		},
+		{
+			name: "decimal values in sum",
+			db: [][]Value{
+				{StringVal("Item"), StringVal("Price")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.75)},
+				{StringVal("C"), NumberVal(3.25)},
+			},
+			crit: [][]Value{
+				{StringVal("Item")},
+				{StringVal("")},
+			},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  7.5,
+		},
+		{
+			name: "multiple OR rows with same column value",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("=18")},
+				{StringVal("=8")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  150, // h=18 profit 105, h=8 profit 45
+		},
 	}
 
 	for _, tt := range tests {

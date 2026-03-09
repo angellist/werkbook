@@ -91,6 +91,17 @@ Werkbook includes a formula engine with 198 built-in functions. See [FORMULAS.md
 
 Werkbook targets `.xlsx` workbook interoperability and spreadsheet formula behavior compatibility.
 
+## Local interop loop
+
+When working in the sibling workspace with `../testdata`, use:
+
+```bash
+make interop ONLY=exceljs/02_lookup_model
+make interop-full ONLY=exceljs/02_lookup_model
+```
+
+`interop` is the fast loop for community-only code changes. `interop-full` regenerates fixtures, refreshes Excel-backed specs, reruns parity, and syncs the current issue queue into [`testdata_issues/`](/Users/jpoz/Developer/werkbook/community/testdata_issues).
+
 ## License
 
 No license has been granted yet. Until a `LICENSE` file is added, all rights are reserved.
