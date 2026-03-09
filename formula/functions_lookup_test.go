@@ -7506,3 +7506,482 @@ func TestLOOKUPDecimalValues(t *testing.T) {
 		}
 	})
 }
+
+// ---- EXPAND tests ----
+
+func TestEXPAND_Basic2x2To3x3(t *testing.T) {
+	// EXPAND({1,2;3,4}, 3, 3) → 3×3 with #N/A padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(3),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	// Original values
+	if got.Array[0][0].Num != 1 || got.Array[0][1].Num != 2 {
+		t.Errorf("row 0: got {%g,%g}, want {1,2}", got.Array[0][0].Num, got.Array[0][1].Num)
+	}
+	if got.Array[1][0].Num != 3 || got.Array[1][1].Num != 4 {
+		t.Errorf("row 1: got {%g,%g}, want {3,4}", got.Array[1][0].Num, got.Array[1][1].Num)
+	}
+	// Padding cells should be #N/A
+	if got.Array[0][2].Type != ValueError || got.Array[0][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][2], got %v", got.Array[0][2])
+	}
+	if got.Array[2][0].Type != ValueError || got.Array[2][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][0], got %v", got.Array[2][0])
+	}
+	if got.Array[2][2].Type != ValueError || got.Array[2][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][2], got %v", got.Array[2][2])
+	}
+}
+
+func TestEXPAND_ScalarTo3x3WithCustomPad(t *testing.T) {
+	// EXPAND(1, 3, 3, "-") → 3×3 with 1 in [0][0], "-" elsewhere
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(3),
+		NumberVal(3),
+		StringVal("-"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+	if got.Array[0][1].Type != ValueString || got.Array[0][1].Str != "-" {
+		t.Errorf("expected '-' at [0][1], got %v", got.Array[0][1])
+	}
+	if got.Array[2][2].Type != ValueString || got.Array[2][2].Str != "-" {
+		t.Errorf("expected '-' at [2][2], got %v", got.Array[2][2])
+	}
+}
+
+func TestEXPAND_NoDimensionChange(t *testing.T) {
+	// EXPAND({1,2;3,4}, 2, 2) → same 2×2 array
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][1].Num != 4 {
+		t.Errorf("values mismatch")
+	}
+}
+
+func TestEXPAND_OnlyRowsExpanded(t *testing.T) {
+	// EXPAND({1,2}, 3, 2) → 3×2 with row padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+		}},
+		NumberVal(3),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 3x2 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Num != 1 || got.Array[0][1].Num != 2 {
+		t.Errorf("row 0 mismatch")
+	}
+	if got.Array[1][0].Type != ValueError || got.Array[1][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [1][0], got %v", got.Array[1][0])
+	}
+}
+
+func TestEXPAND_OnlyColsExpanded(t *testing.T) {
+	// EXPAND({1;2}, 2, 3) → 2×3 with col padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+			{NumberVal(2)},
+		}},
+		NumberVal(2),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 2x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][0].Num != 2 {
+		t.Errorf("original values mismatch")
+	}
+	if got.Array[0][1].Type != ValueError || got.Array[0][1].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][1], got %v", got.Array[0][1])
+	}
+}
+
+func TestEXPAND_CustomPadNumber(t *testing.T) {
+	// EXPAND({1}, 2, 2, 0) → {{1,0},{0,0}}
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][1].Num != 0 || got.Array[1][0].Num != 0 || got.Array[1][1].Num != 0 {
+		t.Errorf("pad values not 0")
+	}
+}
+
+func TestEXPAND_CustomPadBoolean(t *testing.T) {
+	// EXPAND({1}, 2, 2, TRUE) → {{1,TRUE},{TRUE,TRUE}}
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][1].Type != ValueBool || got.Array[0][1].Bool != true {
+		t.Errorf("expected TRUE at [0][1], got %v", got.Array[0][1])
+	}
+	if got.Array[1][0].Type != ValueBool || got.Array[1][0].Bool != true {
+		t.Errorf("expected TRUE at [1][0], got %v", got.Array[1][0])
+	}
+}
+
+func TestEXPAND_RowsLessThanArrayRows(t *testing.T) {
+	// EXPAND({1;2;3}, 2) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+			{NumberVal(2)},
+			{NumberVal(3)},
+		}},
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_ColsLessThanArrayCols(t *testing.T) {
+	// EXPAND({1,2,3}, 1, 2) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(3)},
+		}},
+		NumberVal(1),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_RowsZero(t *testing.T) {
+	// EXPAND({1}, 0) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_ColsZero(t *testing.T) {
+	// EXPAND({1}, 1, 0) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_NegativeRows(t *testing.T) {
+	// EXPAND({1}, -1) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(-1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_NegativeCols(t *testing.T) {
+	// EXPAND({1}, 1, -1) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		NumberVal(-1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_EmptyRowsArg(t *testing.T) {
+	// EXPAND({1,2;3,4}, , 3) → keeps 2 rows, expands to 3 cols
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		EmptyVal(),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 2x3 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	if got.Array[0][2].Type != ValueError || got.Array[0][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][2], got %v", got.Array[0][2])
+	}
+}
+
+func TestEXPAND_EmptyColsArg(t *testing.T) {
+	// EXPAND({1,2;3,4}, 3) → keeps 2 cols, expands to 3 rows
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 3x2 array, got type=%v rows=%d cols=%d", got.Type, len(got.Array), len(got.Array[0]))
+	}
+	if got.Array[2][0].Type != ValueError || got.Array[2][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][0], got %v", got.Array[2][0])
+	}
+}
+
+func TestEXPAND_SingleElementNoDimensionChange(t *testing.T) {
+	// EXPAND(42, 1, 1) → 42 (scalar returned)
+	got, err := fnEXPAND([]Value{
+		NumberVal(42),
+		NumberVal(1),
+		NumberVal(1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 42 {
+		t.Errorf("expected 42, got %v", got)
+	}
+}
+
+func TestEXPAND_LargeExpansion(t *testing.T) {
+	// EXPAND(1, 100, 50, 0) → 100×50 array
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(100),
+		NumberVal(50),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 100 || len(got.Array[0]) != 50 {
+		t.Fatalf("expected 100x50 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+	if got.Array[99][49].Num != 0 {
+		t.Errorf("expected 0 at [99][49], got %v", got.Array[99][49])
+	}
+}
+
+func TestEXPAND_ErrorPropagationInArray(t *testing.T) {
+	// EXPAND(#REF!, 3, 3) → #REF!
+	got, err := fnEXPAND([]Value{
+		ErrorVal(ErrValREF),
+		NumberVal(3),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("expected #REF!, got %v", got)
+	}
+}
+
+func TestEXPAND_ErrorInRowsArg(t *testing.T) {
+	// EXPAND({1}, "abc") → #VALUE! (non-numeric rows)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		StringVal("abc"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("expected error, got %v", got)
+	}
+}
+
+func TestEXPAND_ErrorInColsArg(t *testing.T) {
+	// EXPAND({1}, 1, "xyz") → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		StringVal("xyz"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("expected error, got %v", got)
+	}
+}
+
+func TestEXPAND_TooFewArgs(t *testing.T) {
+	// EXPAND(1) → #VALUE! (only 1 arg)
+	got, err := fnEXPAND([]Value{NumberVal(1)})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_TooManyArgs(t *testing.T) {
+	// EXPAND(1, 1, 1, 0, extra) → #VALUE! (5 args)
+	got, err := fnEXPAND([]Value{NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(0), NumberVal(99)})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_StringCoercionForRows(t *testing.T) {
+	// EXPAND(1, "3", "3") → 3×3 array (string "3" coerced to number)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		StringVal("3"),
+		StringVal("3"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+}
+
+func TestEXPAND_BoolCoercionForRows(t *testing.T) {
+	// EXPAND(1, TRUE) → 1 (TRUE coerced to 1, same as scalar dimensions)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("expected 1, got %v", got)
+	}
+}
+
+func TestEXPAND_TruncatesDecimalDimensions(t *testing.T) {
+	// EXPAND({1}, 2.9, 2.9) → 2×2 array (truncated to 2)
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2.9),
+		NumberVal(2.9),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+}
+
+func TestEXPAND_ViaEval(t *testing.T) {
+	// Test via the formula evaluator: EXPAND({1,2;3,4},3,3)
+	cf := evalCompile(t, "EXPAND({1,2;3,4},3,3)")
+	got, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][1].Num != 4 {
+		t.Errorf("original values mismatch")
+	}
+	if got.Array[2][2].Type != ValueError || got.Array[2][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][2], got %v", got.Array[2][2])
+	}
+}

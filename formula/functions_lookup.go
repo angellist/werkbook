@@ -2,6 +2,7 @@ package formula
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ func init() {
 	Register("VLOOKUP", NoCtx(fnVLOOKUP))
 	Register("TAKE", NoCtx(fnTAKE))
 	Register("DROP", NoCtx(fnDROP))
+	Register("EXPAND", NoCtx(fnEXPAND))
 	Register("CHOOSECOLS", NoCtx(fnCHOOSECOLS))
 	Register("CHOOSEROWS", NoCtx(fnCHOOSEROWS))
 	Register("TOCOL", NoCtx(fnTOCOL))
@@ -1387,6 +1389,78 @@ func fnDROP(args []Value) (Value, error) {
 
 	if len(result) == 1 && len(result[0]) == 1 {
 		return result[0][0], nil
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnEXPAND implements EXPAND(array, rows, [columns], [pad_with]).
+// It expands an array to specified dimensions, padding new cells with pad_with
+// (default #N/A).
+func fnEXPAND(args []Value) (Value, error) {
+	if len(args) < 2 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	grid, errVal := normalizeToGrid(args[0])
+	if errVal != nil {
+		return *errVal, nil
+	}
+	srcRows, srcCols := gridDims(grid)
+
+	// Parse rows argument.
+	targetRows := srcRows
+	if args[1].Type != ValueEmpty {
+		r, e := CoerceNum(args[1])
+		if e != nil {
+			return *e, nil
+		}
+		targetRows = int(math.Trunc(r))
+	}
+
+	// Parse optional columns argument.
+	targetCols := srcCols
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		c, e := CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+		targetCols = int(math.Trunc(c))
+	}
+
+	// Validate dimensions.
+	if targetRows <= 0 || targetCols <= 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	if targetRows < srcRows || targetCols < srcCols {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Determine pad value.
+	pad := Value{Type: ValueError, Err: ErrValNA}
+	if len(args) >= 4 {
+		pad = args[3]
+	}
+
+	// If no expansion needed, return original.
+	if targetRows == srcRows && targetCols == srcCols {
+		if srcRows == 1 && srcCols == 1 {
+			return grid[0][0], nil
+		}
+		return Value{Type: ValueArray, Array: grid}, nil
+	}
+
+	// Build expanded grid.
+	result := make([][]Value, targetRows)
+	for r := 0; r < targetRows; r++ {
+		row := make([]Value, targetCols)
+		for c := 0; c < targetCols; c++ {
+			if r < srcRows && c < srcCols {
+				row[c] = grid[r][c]
+			} else {
+				row[c] = pad
+			}
+		}
+		result[r] = row
 	}
 	return Value{Type: ValueArray, Array: result}, nil
 }
