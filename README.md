@@ -89,9 +89,18 @@ Werkbook includes a formula engine with 198 built-in functions. See [FORMULAS.md
 
 ## Compatibility
 
-Werkbook targets `.xlsx` workbook interoperability and formula behavior compatibility with Microsoft Excel.
+Werkbook targets `.xlsx` workbook interoperability and spreadsheet formula behavior compatibility.
 
-Excel is a trademark of Microsoft Corporation. Werkbook is not affiliated with or endorsed by Microsoft.
+## Local interop loop
+
+When working in the sibling workspace with `../testdata`, use:
+
+```bash
+make interop ONLY=exceljs/02_lookup_model
+make interop-full ONLY=exceljs/02_lookup_model
+```
+
+`interop` is the fast loop for community-only code changes. `interop-full` regenerates fixtures, refreshes Excel-backed specs, reruns parity, and syncs the current issue queue into [`testdata_issues/`](/Users/jpoz/Developer/werkbook/community/testdata_issues).
 
 ## License
 

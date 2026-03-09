@@ -73,16 +73,16 @@ var infixBP = map[string]bindingPower{
 	"-":  {6, 7},
 	"*":  {8, 9},
 	"/":  {8, 9},
-	"^":  {10, 11}, // left-associative (matches Excel)
+	"^":  {10, 11}, // left-associative (matches expected behavior)
 }
 
 const (
 	colonLeftBP  = 14
 	colonRightBP = 15
-	prefixRBP    = 11 // unary - and + bind tighter than ^ (Excel convention: -2^2 = 4)
+	prefixRBP    = 11 // unary - and + bind tighter than ^ (convention: -2^2 = 4)
 
-	maxExcelRow = maxExcelRows // maximum row number in Excel
-	maxExcelCol = maxExcelCols // maximum column number in Excel (XFD)
+	maxRow = maxRows // maximum row number
+	maxCol = maxCols // maximum column number (XFD)
 )
 
 // parseExpression is the core Pratt parsing loop.
@@ -165,7 +165,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 
 			// If the right side has an explicit sheet qualifier that differs
 			// from the left side, this is a cross-sheet range which is invalid
-			// in Excel (e.g. S1:S3!A1 or Sheet1!A1:Sheet2!B5). Return #VALUE!.
+			// (e.g. S1:S3!A1 or Sheet1!A1:Sheet2!B5). Return #VALUE!.
 			// Note: Sheet1!A1:B5 is valid — B5 has no sheet and inherits Sheet1.
 			if toRef.Sheet != "" && toRef.Sheet != fromRef.Sheet {
 				left = &ErrorLit{Code: ErrVALUE}
@@ -182,7 +182,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 				fromRef.Row = 1
 			}
 			if toRef.Row == 0 {
-				toRef.Row = maxExcelRow
+				toRef.Row = maxRow
 			}
 			// Expand row-only references (Col==0) into full-row ranges.
 			// 5:6 becomes A5:XFD6.
@@ -190,7 +190,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 				fromRef.Col = 1
 			}
 			if toRef.Col == 0 {
-				toRef.Col = maxExcelCol
+				toRef.Col = maxCol
 			}
 			left = &RangeRef{From: fromRef, To: toRef}
 			for p.peek().Type == TokPercent {
@@ -326,6 +326,10 @@ func (p *Parser) parseFunc() (Node, error) {
 		return desugarLambdaInvocation(args, callArgs)
 	}
 
+	if isLetFuncName(name) {
+		return desugarLET(args)
+	}
+
 	return call, nil
 }
 
@@ -394,6 +398,37 @@ func desugarLambdaInvocation(lambdaArgs, callArgs []Node) (Node, error) {
 	}
 
 	return substituteLambdaNames(body, subst), nil
+}
+
+func isLetFuncName(name string) bool {
+	upper := strings.ToUpper(name)
+	return upper == "LET" || upper == "_XLFN.LET"
+}
+
+func desugarLET(args []Node) (Node, error) {
+	if len(args) < 3 || len(args)%2 == 0 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	// Process name/value pairs sequentially.
+	for i := 0; i < len(args)-1; i += 2 {
+		nameNode := args[i]
+		valueNode := args[i+1]
+
+		name, ok := lambdaParamName(nameNode)
+		if !ok {
+			return &ErrorLit{Code: ErrVALUE}, nil
+		}
+
+		// Substitute this name with its value in all subsequent args.
+		subst := map[string]Node{name: valueNode}
+		for j := i + 2; j < len(args); j++ {
+			args[j] = substituteLambdaNames(args[j], subst)
+		}
+	}
+
+	// Return the final (fully substituted) calculation.
+	return args[len(args)-1], nil
 }
 
 func lambdaParamName(n Node) (string, bool) {

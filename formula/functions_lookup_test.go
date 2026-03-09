@@ -839,7 +839,7 @@ func TestMATCHDescending(t *testing.T) {
 }
 
 func TestMATCHDescendingUnsortedReturnsNA(t *testing.T) {
-	// When match_type=-1 is used on unsorted data, Excel's binary search
+	// When match_type=-1 is used on unsorted data, the binary search
 	// typically returns #N/A. Our binary search should replicate that.
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -1055,7 +1055,7 @@ func TestINDEXEdgeCases(t *testing.T) {
 		t.Errorf(`INDEX({"OUT","IN"},2): got %v, want "IN"`, got)
 	}
 
-	// With column_num=0, Excel returns the full single row.
+	// With column_num=0, the full single row is returned.
 	cf = evalCompile(t, `INDEX({"OUT","IN"},0)`)
 	got, err = Eval(cf, resolver, nil)
 	if err != nil {
@@ -1246,9 +1246,9 @@ func TestINDIRECTRowRange(t *testing.T) {
 		t.Errorf("INDIRECT(1:3): range rows = %d:%d, want 1:3",
 			got.RangeOrigin.FromRow, got.RangeOrigin.ToRow)
 	}
-	if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxExcelCols {
+	if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxCols {
 		t.Errorf("INDIRECT(1:3): range cols = %d:%d, want 1:%d",
-			got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxExcelCols)
+			got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxCols)
 	}
 }
 
@@ -4180,6 +4180,197 @@ func TestCHOOSECOLS(t *testing.T) {
 			args: nil,
 			want: ErrorVal(ErrValVALUE),
 		},
+		// --- additional coverage ---
+		{
+			name: "single_column_array_select_col1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10)},
+					{NumberVal(20)},
+					{NumberVal(30)},
+				}},
+				NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10)},
+				{NumberVal(20)},
+				{NumberVal(30)},
+			}},
+		},
+		{
+			name: "single_column_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10)},
+					{NumberVal(20)},
+				}},
+				NumberVal(-1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10)},
+				{NumberVal(20)},
+			}},
+		},
+		{
+			name: "single_row_wide_array",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4), NumberVal(5)},
+				}},
+				NumberVal(2), NumberVal(4),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2), NumberVal(4)},
+			}},
+		},
+		{
+			name: "all_columns_selected",
+			args: []Value{base, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name: "all_columns_reversed",
+			args: []Value{base, NumberVal(3), NumberVal(2), NumberVal(1)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(3), NumberVal(2), NumberVal(1)},
+				{NumberVal(6), NumberVal(5), NumberVal(4)},
+			}},
+		},
+		{
+			name: "multiple_negative_indices",
+			args: []Value{base, NumberVal(-1), NumberVal(-2), NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(3), NumberVal(2), NumberVal(1)},
+				{NumberVal(6), NumberVal(5), NumberVal(4)},
+			}},
+		},
+		{
+			name: "large_array_select_boundary_cols",
+			args: func() []Value {
+				row := make([]Value, 100)
+				for i := range row {
+					row[i] = NumberVal(float64(i + 1))
+				}
+				arr := Value{Type: ValueArray, Array: [][]Value{row}}
+				return []Value{arr, NumberVal(1), NumberVal(50), NumberVal(100)}
+			}(),
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(50), NumberVal(100)},
+			}},
+		},
+		{
+			name: "string_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("alpha"), StringVal("beta"), StringVal("gamma")},
+					{StringVal("delta"), StringVal("epsilon"), StringVal("zeta")},
+				}},
+				NumberVal(2),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("beta")},
+				{StringVal("epsilon")},
+			}},
+		},
+		{
+			name: "boolean_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{BoolVal(true), BoolVal(false)},
+					{BoolVal(false), BoolVal(true)},
+				}},
+				NumberVal(2), NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{BoolVal(false), BoolVal(true)},
+				{BoolVal(true), BoolVal(false)},
+			}},
+		},
+		{
+			name: "mixed_type_array_preserve_types",
+			args: []Value{mixed, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("a"), BoolVal(true), ErrorVal(ErrValNA)},
+				{EmptyVal(), NumberVal(2), StringVal("z")},
+			}},
+		},
+		{
+			name: "bool_false_index_coerces_to_zero_errors",
+			args: []Value{base, BoolVal(false)},
+			want: ErrorVal(ErrValVALUE),
+		},
+		{
+			name: "negative_exact_boundary",
+			args: []Value{base, NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1)},
+				{NumberVal(4)},
+			}},
+		},
+		{
+			name: "positive_exact_boundary",
+			args: []Value{base, NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(3)},
+				{NumberVal(6)},
+			}},
+		},
+		{
+			name: "duplicate_same_column_three_times",
+			args: []Value{base, NumberVal(2), NumberVal(2), NumberVal(2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2), NumberVal(2), NumberVal(2)},
+				{NumberVal(5), NumberVal(5), NumberVal(5)},
+			}},
+		},
+		{
+			name: "single_cell_array_col1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(42)},
+				}},
+				NumberVal(1),
+			},
+			want: NumberVal(42),
+		},
+		{
+			name: "single_cell_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("hello")},
+				}},
+				NumberVal(-1),
+			},
+			want: StringVal("hello"),
+		},
+		{
+			name: "error_in_second_index_propagates",
+			args: []Value{base, NumberVal(1), ErrorVal(ErrValNA)},
+			want: ErrorVal(ErrValNA),
+		},
+		{
+			name: "negative_two_on_three_col_array",
+			args: []Value{base, NumberVal(-2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2)},
+				{NumberVal(5)},
+			}},
+		},
+		{
+			name: "large_array_negative_last",
+			args: func() []Value {
+				row := make([]Value, 50)
+				for i := range row {
+					row[i] = NumberVal(float64(i + 1))
+				}
+				arr := Value{Type: ValueArray, Array: [][]Value{row}}
+				return []Value{arr, NumberVal(-1)}
+			}(),
+			want: NumberVal(50), // single-row single-col result unwraps to scalar
+		},
 	}
 
 	for _, tt := range tests {
@@ -4251,6 +4442,77 @@ func TestCHOOSECOLS_ViaEval(t *testing.T) {
 			name:    "too_few_args_formula",
 			formula: "CHOOSECOLS(A1:C2)",
 			want:    ErrorVal(ErrValVALUE),
+		},
+		// --- additional eval coverage ---
+		{
+			name:    "index_into_choosecols_result",
+			formula: "INDEX(CHOOSECOLS(A1:C2,3,1),1,2)",
+			want:    NumberVal(1),
+		},
+		{
+			name:    "index_into_choosecols_row2",
+			formula: "INDEX(CHOOSECOLS(A1:C2,3,1),2,1)",
+			want:    NumberVal(6),
+		},
+		{
+			name:    "out_of_range_column_formula",
+			formula: "CHOOSECOLS(A1:C2,4)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "zero_column_formula",
+			formula: "CHOOSECOLS(A1:C2,0)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "negative_out_of_range_formula",
+			formula: "CHOOSECOLS(A1:C2,-4)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "duplicate_columns_formula",
+			formula: "CHOOSECOLS(A1:C2,1,1)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(1)},
+				{NumberVal(4), NumberVal(4)},
+			}},
+		},
+		{
+			name:    "all_columns_formula",
+			formula: "CHOOSECOLS(A1:C2,1,2,3)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "mix_positive_and_negative_formula",
+			formula: "CHOOSECOLS(A1:C2,1,-1)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(3)},
+				{NumberVal(4), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "fractional_index_formula",
+			formula: "CHOOSECOLS(A1:C2,2.7)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2)},
+				{NumberVal(5)},
+			}},
+		},
+		{
+			name:    "single_cell_ref_formula",
+			formula: "CHOOSECOLS(A1,1)",
+			want:    NumberVal(1),
+		},
+		{
+			name:    "multiple_negative_indices_formula",
+			formula: "CHOOSECOLS(A1:C2,-1,-2,-3)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(3), NumberVal(2), NumberVal(1)},
+				{NumberVal(6), NumberVal(5), NumberVal(4)},
+			}},
 		},
 	}
 
@@ -4428,6 +4690,214 @@ func TestCHOOSEROWS(t *testing.T) {
 			args: nil,
 			want: ErrorVal(ErrValVALUE),
 		},
+		// --- additional coverage ---
+		{
+			name: "single_row_array_select_row1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10), NumberVal(20), NumberVal(30)},
+				}},
+				NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(20), NumberVal(30)},
+			}},
+		},
+		{
+			name: "single_row_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10), NumberVal(20)},
+				}},
+				NumberVal(-1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(20)},
+			}},
+		},
+		{
+			name: "single_column_tall_array",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(1)},
+					{NumberVal(2)},
+					{NumberVal(3)},
+					{NumberVal(4)},
+					{NumberVal(5)},
+				}},
+				NumberVal(2), NumberVal(4),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2)},
+				{NumberVal(4)},
+			}},
+		},
+		{
+			name: "all_rows_selected",
+			args: []Value{base, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+			}},
+		},
+		{
+			name: "all_rows_reversed",
+			args: []Value{base, NumberVal(3), NumberVal(2), NumberVal(1)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "multiple_negative_indices",
+			args: []Value{base, NumberVal(-1), NumberVal(-2), NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "large_array_select_boundary_rows",
+			args: func() []Value {
+				rows := make([][]Value, 100)
+				for i := range rows {
+					rows[i] = []Value{NumberVal(float64(i + 1))}
+				}
+				arr := Value{Type: ValueArray, Array: rows}
+				return []Value{arr, NumberVal(1), NumberVal(50), NumberVal(100)}
+			}(),
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1)},
+				{NumberVal(50)},
+				{NumberVal(100)},
+			}},
+		},
+		{
+			name: "string_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("alpha"), StringVal("beta")},
+					{StringVal("gamma"), StringVal("delta")},
+					{StringVal("epsilon"), StringVal("zeta")},
+				}},
+				NumberVal(2),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("gamma"), StringVal("delta")},
+			}},
+		},
+		{
+			name: "boolean_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{BoolVal(true), BoolVal(false)},
+					{BoolVal(false), BoolVal(true)},
+				}},
+				NumberVal(2), NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{BoolVal(false), BoolVal(true)},
+				{BoolVal(true), BoolVal(false)},
+			}},
+		},
+		{
+			name: "mixed_type_array_all_rows",
+			args: []Value{mixed, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("a"), BoolVal(true), ErrorVal(ErrValNA)},
+				{EmptyVal(), NumberVal(2), StringVal("z")},
+				{NumberVal(9), StringVal("tail"), BoolVal(false)},
+			}},
+		},
+		{
+			name: "bool_false_index_coerces_to_zero_errors",
+			args: []Value{base, BoolVal(false)},
+			want: ErrorVal(ErrValVALUE),
+		},
+		{
+			name: "negative_exact_boundary",
+			args: []Value{base, NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "positive_exact_boundary",
+			args: []Value{base, NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+			}},
+		},
+		{
+			name: "duplicate_same_row_three_times",
+			args: []Value{base, NumberVal(2), NumberVal(2), NumberVal(2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name: "single_cell_array_row1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(42)},
+				}},
+				NumberVal(1),
+			},
+			want: NumberVal(42),
+		},
+		{
+			name: "single_cell_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("hello")},
+				}},
+				NumberVal(-1),
+			},
+			want: StringVal("hello"),
+		},
+		{
+			name: "error_in_second_index_propagates",
+			args: []Value{base, NumberVal(1), ErrorVal(ErrValNA)},
+			want: ErrorVal(ErrValNA),
+		},
+		{
+			name: "negative_two_on_three_row_array",
+			args: []Value{base, NumberVal(-2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name: "large_array_negative_last",
+			args: func() []Value {
+				rows := make([][]Value, 50)
+				for i := range rows {
+					rows[i] = []Value{NumberVal(float64(i + 1))}
+				}
+				arr := Value{Type: ValueArray, Array: rows}
+				return []Value{arr, NumberVal(-1)}
+			}(),
+			want: NumberVal(50), // single-row single-col result unwraps to scalar
+		},
+		{
+			name: "multi_column_preserves_all_columns",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4), NumberVal(5)},
+					{NumberVal(6), NumberVal(7), NumberVal(8), NumberVal(9), NumberVal(10)},
+					{NumberVal(11), NumberVal(12), NumberVal(13), NumberVal(14), NumberVal(15)},
+				}},
+				NumberVal(2),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(6), NumberVal(7), NumberVal(8), NumberVal(9), NumberVal(10)},
+			}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -4503,6 +4973,80 @@ func TestCHOOSEROWS_ViaEval(t *testing.T) {
 			name:    "too_few_args_formula",
 			formula: "CHOOSEROWS(A1:C4)",
 			want:    ErrorVal(ErrValVALUE),
+		},
+		// --- additional eval coverage ---
+		{
+			name:    "index_into_chooserows_result",
+			formula: "INDEX(CHOOSEROWS(A1:C4,4,1),1,2)",
+			want:    NumberVal(11),
+		},
+		{
+			name:    "index_into_chooserows_row2",
+			formula: "INDEX(CHOOSEROWS(A1:C4,4,1),2,3)",
+			want:    NumberVal(3),
+		},
+		{
+			name:    "out_of_range_row_formula",
+			formula: "CHOOSEROWS(A1:C4,5)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "zero_row_formula",
+			formula: "CHOOSEROWS(A1:C4,0)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "negative_out_of_range_formula",
+			formula: "CHOOSEROWS(A1:C4,-5)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "duplicate_rows_formula",
+			formula: "CHOOSEROWS(A1:C4,2,2)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "all_rows_formula",
+			formula: "CHOOSEROWS(A1:C4,1,2,3,4)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+			}},
+		},
+		{
+			name:    "mix_positive_and_negative_formula",
+			formula: "CHOOSEROWS(A1:C4,1,-1)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+			}},
+		},
+		{
+			name:    "fractional_index_formula",
+			formula: "CHOOSEROWS(A1:C4,2.7)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "single_cell_ref_formula",
+			formula: "CHOOSEROWS(A1,1)",
+			want:    NumberVal(1),
+		},
+		{
+			name:    "multiple_negative_indices_formula",
+			formula: "CHOOSEROWS(A1:C4,-1,-2,-3,-4)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
 		},
 	}
 
@@ -7456,7 +8000,7 @@ func TestLOOKUPSingleElement(t *testing.T) {
 }
 
 func TestLOOKUPDecimalValues(t *testing.T) {
-	// Fractional/decimal lookup values (from Excel docs example)
+	// Fractional/decimal lookup values (from docs example)
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(4.14),
@@ -7505,4 +8049,1337 @@ func TestLOOKUPDecimalValues(t *testing.T) {
 			t.Errorf("got %v, want blue", got)
 		}
 	})
+}
+
+// ---- EXPAND tests ----
+
+func TestEXPAND_Basic2x2To3x3(t *testing.T) {
+	// EXPAND({1,2;3,4}, 3, 3) → 3×3 with #N/A padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(3),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	// Original values
+	if got.Array[0][0].Num != 1 || got.Array[0][1].Num != 2 {
+		t.Errorf("row 0: got {%g,%g}, want {1,2}", got.Array[0][0].Num, got.Array[0][1].Num)
+	}
+	if got.Array[1][0].Num != 3 || got.Array[1][1].Num != 4 {
+		t.Errorf("row 1: got {%g,%g}, want {3,4}", got.Array[1][0].Num, got.Array[1][1].Num)
+	}
+	// Padding cells should be #N/A
+	if got.Array[0][2].Type != ValueError || got.Array[0][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][2], got %v", got.Array[0][2])
+	}
+	if got.Array[2][0].Type != ValueError || got.Array[2][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][0], got %v", got.Array[2][0])
+	}
+	if got.Array[2][2].Type != ValueError || got.Array[2][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][2], got %v", got.Array[2][2])
+	}
+}
+
+func TestEXPAND_ScalarTo3x3WithCustomPad(t *testing.T) {
+	// EXPAND(1, 3, 3, "-") → 3×3 with 1 in [0][0], "-" elsewhere
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(3),
+		NumberVal(3),
+		StringVal("-"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+	if got.Array[0][1].Type != ValueString || got.Array[0][1].Str != "-" {
+		t.Errorf("expected '-' at [0][1], got %v", got.Array[0][1])
+	}
+	if got.Array[2][2].Type != ValueString || got.Array[2][2].Str != "-" {
+		t.Errorf("expected '-' at [2][2], got %v", got.Array[2][2])
+	}
+}
+
+func TestEXPAND_NoDimensionChange(t *testing.T) {
+	// EXPAND({1,2;3,4}, 2, 2) → same 2×2 array
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][1].Num != 4 {
+		t.Errorf("values mismatch")
+	}
+}
+
+func TestEXPAND_OnlyRowsExpanded(t *testing.T) {
+	// EXPAND({1,2}, 3, 2) → 3×2 with row padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+		}},
+		NumberVal(3),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 3x2 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Num != 1 || got.Array[0][1].Num != 2 {
+		t.Errorf("row 0 mismatch")
+	}
+	if got.Array[1][0].Type != ValueError || got.Array[1][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [1][0], got %v", got.Array[1][0])
+	}
+}
+
+func TestEXPAND_OnlyColsExpanded(t *testing.T) {
+	// EXPAND({1;2}, 2, 3) → 2×3 with col padding
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+			{NumberVal(2)},
+		}},
+		NumberVal(2),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 2x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][0].Num != 2 {
+		t.Errorf("original values mismatch")
+	}
+	if got.Array[0][1].Type != ValueError || got.Array[0][1].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][1], got %v", got.Array[0][1])
+	}
+}
+
+func TestEXPAND_CustomPadNumber(t *testing.T) {
+	// EXPAND({1}, 2, 2, 0) → {{1,0},{0,0}}
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][1].Num != 0 || got.Array[1][0].Num != 0 || got.Array[1][1].Num != 0 {
+		t.Errorf("pad values not 0")
+	}
+}
+
+func TestEXPAND_CustomPadBoolean(t *testing.T) {
+	// EXPAND({1}, 2, 2, TRUE) → {{1,TRUE},{TRUE,TRUE}}
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2),
+		NumberVal(2),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+	if got.Array[0][1].Type != ValueBool || got.Array[0][1].Bool != true {
+		t.Errorf("expected TRUE at [0][1], got %v", got.Array[0][1])
+	}
+	if got.Array[1][0].Type != ValueBool || got.Array[1][0].Bool != true {
+		t.Errorf("expected TRUE at [1][0], got %v", got.Array[1][0])
+	}
+}
+
+func TestEXPAND_RowsLessThanArrayRows(t *testing.T) {
+	// EXPAND({1;2;3}, 2) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+			{NumberVal(2)},
+			{NumberVal(3)},
+		}},
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_ColsLessThanArrayCols(t *testing.T) {
+	// EXPAND({1,2,3}, 1, 2) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(3)},
+		}},
+		NumberVal(1),
+		NumberVal(2),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_RowsZero(t *testing.T) {
+	// EXPAND({1}, 0) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_ColsZero(t *testing.T) {
+	// EXPAND({1}, 1, 0) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_NegativeRows(t *testing.T) {
+	// EXPAND({1}, -1) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(-1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_NegativeCols(t *testing.T) {
+	// EXPAND({1}, 1, -1) → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		NumberVal(-1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_EmptyRowsArg(t *testing.T) {
+	// EXPAND({1,2;3,4}, , 3) → keeps 2 rows, expands to 3 cols
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		EmptyVal(),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 2x3 array, got type=%v rows=%d", got.Type, len(got.Array))
+	}
+	if got.Array[0][2].Type != ValueError || got.Array[0][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [0][2], got %v", got.Array[0][2])
+	}
+}
+
+func TestEXPAND_EmptyColsArg(t *testing.T) {
+	// EXPAND({1,2;3,4}, 3) → keeps 2 cols, expands to 3 rows
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2)},
+			{NumberVal(3), NumberVal(4)},
+		}},
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 3x2 array, got type=%v rows=%d cols=%d", got.Type, len(got.Array), len(got.Array[0]))
+	}
+	if got.Array[2][0].Type != ValueError || got.Array[2][0].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][0], got %v", got.Array[2][0])
+	}
+}
+
+func TestEXPAND_SingleElementNoDimensionChange(t *testing.T) {
+	// EXPAND(42, 1, 1) → 42 (scalar returned)
+	got, err := fnEXPAND([]Value{
+		NumberVal(42),
+		NumberVal(1),
+		NumberVal(1),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 42 {
+		t.Errorf("expected 42, got %v", got)
+	}
+}
+
+func TestEXPAND_LargeExpansion(t *testing.T) {
+	// EXPAND(1, 100, 50, 0) → 100×50 array
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(100),
+		NumberVal(50),
+		NumberVal(0),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 100 || len(got.Array[0]) != 50 {
+		t.Fatalf("expected 100x50 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+	if got.Array[99][49].Num != 0 {
+		t.Errorf("expected 0 at [99][49], got %v", got.Array[99][49])
+	}
+}
+
+func TestEXPAND_ErrorPropagationInArray(t *testing.T) {
+	// EXPAND(#REF!, 3, 3) → #REF!
+	got, err := fnEXPAND([]Value{
+		ErrorVal(ErrValREF),
+		NumberVal(3),
+		NumberVal(3),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("expected #REF!, got %v", got)
+	}
+}
+
+func TestEXPAND_ErrorInRowsArg(t *testing.T) {
+	// EXPAND({1}, "abc") → #VALUE! (non-numeric rows)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		StringVal("abc"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("expected error, got %v", got)
+	}
+}
+
+func TestEXPAND_ErrorInColsArg(t *testing.T) {
+	// EXPAND({1}, 1, "xyz") → #VALUE!
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		NumberVal(1),
+		StringVal("xyz"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("expected error, got %v", got)
+	}
+}
+
+func TestEXPAND_TooFewArgs(t *testing.T) {
+	// EXPAND(1) → #VALUE! (only 1 arg)
+	got, err := fnEXPAND([]Value{NumberVal(1)})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_TooManyArgs(t *testing.T) {
+	// EXPAND(1, 1, 1, 0, extra) → #VALUE! (5 args)
+	got, err := fnEXPAND([]Value{NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(0), NumberVal(99)})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got %v", got)
+	}
+}
+
+func TestEXPAND_StringCoercionForRows(t *testing.T) {
+	// EXPAND(1, "3", "3") → 3×3 array (string "3" coerced to number)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		StringVal("3"),
+		StringVal("3"),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 {
+		t.Errorf("expected 1 at [0][0], got %v", got.Array[0][0])
+	}
+}
+
+func TestEXPAND_BoolCoercionForRows(t *testing.T) {
+	// EXPAND(1, TRUE) → 1 (TRUE coerced to 1, same as scalar dimensions)
+	got, err := fnEXPAND([]Value{
+		NumberVal(1),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("expected 1, got %v", got)
+	}
+}
+
+func TestEXPAND_TruncatesDecimalDimensions(t *testing.T) {
+	// EXPAND({1}, 2.9, 2.9) → 2×2 array (truncated to 2)
+	got, err := fnEXPAND([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1)},
+		}},
+		NumberVal(2.9),
+		NumberVal(2.9),
+	})
+	if err != nil {
+		t.Fatalf("fnEXPAND: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 || len(got.Array[0]) != 2 {
+		t.Fatalf("expected 2x2 array, got type=%v", got.Type)
+	}
+}
+
+func TestEXPAND_ViaEval(t *testing.T) {
+	// Test via the formula evaluator: EXPAND({1,2;3,4},3,3)
+	cf := evalCompile(t, "EXPAND({1,2;3,4},3,3)")
+	got, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 || len(got.Array[0]) != 3 {
+		t.Fatalf("expected 3x3 array, got type=%v", got.Type)
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][1].Num != 4 {
+		t.Errorf("original values mismatch")
+	}
+	if got.Array[2][2].Type != ValueError || got.Array[2][2].Err != ErrValNA {
+		t.Errorf("expected #N/A at [2][2], got %v", got.Array[2][2])
+	}
+}
+
+func TestHYPERLINK(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("http://example.com"),
+			{Col: 2, Row: 1}: StringVal("Example Site"),
+			{Col: 1, Row: 2}: NumberVal(42),
+			{Col: 2, Row: 2}: NumberVal(100),
+			{Col: 1, Row: 3}: BoolVal(true),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		formula  string
+		wantType ValueType
+		wantStr  string
+		wantNum  float64
+		wantBool bool
+		wantErr  ErrorValue
+	}{
+		{
+			name:     "basic with friendly name",
+			formula:  `HYPERLINK("http://example.com","Click me")`,
+			wantType: ValueString,
+			wantStr:  "Click me",
+		},
+		{
+			name:     "URL only no friendly name",
+			formula:  `HYPERLINK("http://example.com")`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "numeric friendly name",
+			formula:  `HYPERLINK("http://example.com",42)`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		{
+			name:     "boolean friendly name TRUE",
+			formula:  `HYPERLINK("http://example.com",TRUE)`,
+			wantType: ValueBool,
+			wantBool: true,
+		},
+		{
+			name:     "boolean friendly name FALSE",
+			formula:  `HYPERLINK("http://example.com",FALSE)`,
+			wantType: ValueBool,
+			wantBool: false,
+		},
+		{
+			name:     "empty string friendly name",
+			formula:  `HYPERLINK("http://example.com","")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "empty string link location",
+			formula:  `HYPERLINK("")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "error in link location",
+			formula:  `HYPERLINK(1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "error in friendly name",
+			formula:  `HYPERLINK("http://example.com",1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "error in both args propagates link_location error",
+			formula:  `HYPERLINK(1/0,1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "zero args returns VALUE error",
+			formula:  `HYPERLINK()`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "numeric link location no friendly name",
+			formula:  `HYPERLINK(12345)`,
+			wantType: ValueString,
+			wantStr:  "12345",
+		},
+		{
+			name:     "boolean link location no friendly name",
+			formula:  `HYPERLINK(TRUE)`,
+			wantType: ValueString,
+			wantStr:  "TRUE",
+		},
+		{
+			name:     "cell reference for link location",
+			formula:  `HYPERLINK(A1)`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "cell reference for friendly name",
+			formula:  `HYPERLINK("http://example.com",B1)`,
+			wantType: ValueString,
+			wantStr:  "Example Site",
+		},
+		{
+			name:     "cell reference numeric friendly name",
+			formula:  `HYPERLINK("http://example.com",B2)`,
+			wantType: ValueNumber,
+			wantNum:  100,
+		},
+		{
+			name:     "nested CONCATENATE in link location",
+			formula:  `HYPERLINK(CONCATENATE("http://","example.com"))`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "nested UPPER in friendly name",
+			formula:  `HYPERLINK("http://example.com",UPPER("click"))`,
+			wantType: ValueString,
+			wantStr:  "CLICK",
+		},
+		{
+			name:     "string concatenation with ampersand in link",
+			formula:  `HYPERLINK("http://"&"example.com")`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "friendly name with number from cell",
+			formula:  `HYPERLINK(A1,A2)`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		{
+			name:     "friendly name empty cell returns empty",
+			formula:  `HYPERLINK("http://example.com",C5)`,
+			wantType: ValueEmpty,
+		},
+		{
+			name:     "link location with empty friendly name string",
+			formula:  `HYPERLINK("http://example.com","")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "numeric link and numeric friendly",
+			formula:  `HYPERLINK(123,456)`,
+			wantType: ValueNumber,
+			wantNum:  456,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.wantType {
+				t.Fatalf("got type %v, want %v (value=%v)", got.Type, tt.wantType, got)
+			}
+			switch tt.wantType {
+			case ValueString:
+				if got.Str != tt.wantStr {
+					t.Errorf("got %q, want %q", got.Str, tt.wantStr)
+				}
+			case ValueNumber:
+				if got.Num != tt.wantNum {
+					t.Errorf("got %g, want %g", got.Num, tt.wantNum)
+				}
+			case ValueBool:
+				if got.Bool != tt.wantBool {
+					t.Errorf("got %v, want %v", got.Bool, tt.wantBool)
+				}
+			case ValueError:
+				if got.Err != tt.wantErr {
+					t.Errorf("got %v, want %v", got.Err, tt.wantErr)
+				}
+			case ValueEmpty:
+				// nothing to check beyond type
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// OFFSET
+// ---------------------------------------------------------------------------
+
+func TestOFFSETBasicSingleCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 1, Row: 2}: NumberVal(30),
+			{Col: 2, Row: 2}: NumberVal(40),
+			{Col: 3, Row: 3}: NumberVal(99),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1) → B2 = 40
+	cf := evalCompile(t, "OFFSET(A1,1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 40 {
+		t.Errorf("OFFSET(A1,1,1): got %v, want 40", got)
+	}
+}
+
+func TestOFFSETZeroOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(42),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0) → A1 = 42
+	cf := evalCompile(t, "OFFSET(A1,0,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 42 {
+		t.Errorf("OFFSET(A1,0,0): got %v, want 42", got)
+	}
+}
+
+func TestOFFSETNegativeOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 3, Row: 3}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(C3,-2,-2) → A1 = 10
+	cf := evalCompile(t, "OFFSET(C3,-2,-2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("OFFSET(C3,-2,-2): got %v, want 10", got)
+	}
+}
+
+func TestOFFSETWithHeightWidth(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 3, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 3, Row: 3}: NumberVal(4),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1,2,2) → B2:C3 range, SUM should be 10
+	cf := evalCompile(t, "SUM(OFFSET(A1,1,1,2,2))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("SUM(OFFSET(A1,1,1,2,2)): got %v, want 10", got)
+	}
+}
+
+func TestOFFSETDefaultHeightWidthFromRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(6),
+			{Col: 1, Row: 4}: NumberVal(7),
+			{Col: 2, Row: 4}: NumberVal(8),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,0) → uses default height=2, width=2 from reference
+	// → A3:B4, SUM = 5+6+7+8 = 26
+	cf := evalCompile(t, "SUM(OFFSET(A1:B2,2,0))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 26 {
+		t.Errorf("SUM(OFFSET(A1:B2,2,0)): got %v, want 26", got)
+	}
+}
+
+func TestOFFSETCustomHeightOverridesDefault(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,3) → A1:A3, SUM = 60
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,3))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 60 {
+		t.Errorf("SUM(OFFSET(A1,0,0,3)): got %v, want 60", got)
+	}
+}
+
+func TestOFFSETCustomWidthOnly(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 3, Row: 1}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,1,3) → A1:C1, SUM = 60
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,1,3))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 60 {
+		t.Errorf("SUM(OFFSET(A1,0,0,1,3)): got %v, want 60", got)
+	}
+}
+
+func TestOFFSETOffEdgeNegativeRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,-1,0) → row 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,-1,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,-1,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETOffEdgeNegativeCol(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,-1) → col 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,-1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,-1): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETHeightZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Height = 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETHeightNegative(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Height = -1 with OFFSET(A1,0,0,-1): anchor at row 1, range extends
+	// upward 1 row → row 1 to row 1 → returns A1 value (matches Excel).
+	cf := evalCompile(t, "OFFSET(A1,0,0,-1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("OFFSET(A1,0,0,-1): got %v, want 1", got)
+	}
+}
+
+func TestOFFSETWidthZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Width = 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,1,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,1,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETWidthNegative(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Width = -2 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,1,-2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,1,-2): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETTooFewArgs(t *testing.T) {
+	resolver := &mockResolver{}
+	ctx := &EvalContext{Resolver: resolver}
+
+	cf := evalCompile(t, "OFFSET(A1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("OFFSET(A1,1): got %v, want #VALUE!", got)
+	}
+}
+
+func TestOFFSETSingleCellResultFromRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 3, Row: 3}: NumberVal(99),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,2,1,1) → C3 = 99 (single cell from range ref)
+	cf := evalCompile(t, "OFFSET(A1:B2,2,2,1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 99 {
+		t.Errorf("OFFSET(A1:B2,2,2,1,1): got %v, want 99", got)
+	}
+}
+
+func TestOFFSETUsedInSUM(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4),
+			{Col: 1, Row: 5}: NumberVal(5),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// SUM(OFFSET(A1,0,0,5,1)) → sum of A1:A5 = 15
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,5,1))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 15 {
+		t.Errorf("SUM(OFFSET(A1,0,0,5,1)): got %v, want 15", got)
+	}
+}
+
+func TestOFFSETEmptyCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 which is empty
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueEmpty {
+		t.Errorf("OFFSET(A1,0,1): got type %v, want ValueEmpty", got.Type)
+	}
+}
+
+func TestOFFSETStringCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("hello"),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 = "hello"
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "hello" {
+		t.Errorf("OFFSET(A1,0,1): got %v, want hello", got)
+	}
+}
+
+func TestOFFSETBooleanCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: BoolVal(true),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 = TRUE
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueBool || !got.Bool {
+		t.Errorf("OFFSET(A1,0,1): got %v, want TRUE", got)
+	}
+}
+
+func TestOFFSETLargeOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}:     NumberVal(1),
+			{Col: 100, Row: 200}: NumberVal(999),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,199,99) → CV200 = 999
+	cf := evalCompile(t, "OFFSET(A1,199,99)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 999 {
+		t.Errorf("OFFSET(A1,199,99): got %v, want 999", got)
+	}
+}
+
+func TestOFFSETRowsColsTruncated(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1.9,1.9) → rows=1, cols=1 → B2 = 20
+	cf := evalCompile(t, "OFFSET(A1,1.9,1.9)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,1.9,1.9): got %v, want 20", got)
+	}
+}
+
+func TestOFFSETHeightWidthTruncated(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 1, Row: 2}: NumberVal(30),
+			{Col: 2, Row: 2}: NumberVal(40),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,2.9,2.9) → height=2, width=2 → A1:B2, SUM=100
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,2.9,2.9))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 100 {
+		t.Errorf("SUM(OFFSET(A1,0,0,2.9,2.9)): got %v, want 100", got)
+	}
+}
+
+func TestOFFSETExceedsMaxRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Offset to beyond max row
+	cf := evalCompile(t, "OFFSET(A1,1048576,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,1048576,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETExceedsMaxCol(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Offset to beyond max col
+	cf := evalCompile(t, "OFFSET(A1,0,16384)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,16384): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETRangeOverflowsMaxRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Starting near max row with height that overflows
+	cf := evalCompile(t, "OFFSET(A1,1048575,0,2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,1048575,0,2): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETErrorInRowsArg(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("abc"),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// String that can't be converted to number → #VALUE!
+	cf := evalCompile(t, `OFFSET(A1,B1,0)`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("OFFSET(A1,B1,0): got %v, want #VALUE!", got)
+	}
+}
+
+func TestOFFSETNilContext(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+
+	cf := evalCompile(t, "OFFSET(A1,0,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET with nil ctx: got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETRangeRefDefaultDimensions(t *testing.T) {
+	// When using a range ref, omitting height/width should inherit
+	// the dimensions of the reference range.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 3, Row: 3}: NumberVal(10),
+			{Col: 4, Row: 3}: NumberVal(20),
+			{Col: 3, Row: 4}: NumberVal(30),
+			{Col: 4, Row: 4}: NumberVal(40),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,2) → C3:D4 (same 2x2 size), SUM = 100
+	cf := evalCompile(t, "SUM(OFFSET(A1:B2,2,2))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 100 {
+		t.Errorf("SUM(OFFSET(A1:B2,2,2)): got %v, want 100", got)
+	}
+}
+
+func TestOFFSETFromCellFlag(t *testing.T) {
+	// Single cell result should have FromCell=true for proper coercion
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(42),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if !got.FromCell {
+		t.Errorf("OFFSET single cell result should have FromCell=true")
+	}
+}
+
+func TestOFFSETRangeResultHasRangeOrigin(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 3, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 3, Row: 3}: NumberVal(4),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1,2,2) should return array with proper RangeOrigin
+	cf := evalCompile(t, "OFFSET(A1,1,1,2,2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("expected ValueArray, got %v", got.Type)
+	}
+	if got.RangeOrigin == nil {
+		t.Fatal("RangeOrigin should not be nil for range result")
+	}
+	ro := got.RangeOrigin
+	if ro.FromCol != 2 || ro.FromRow != 2 || ro.ToCol != 3 || ro.ToRow != 3 {
+		t.Errorf("RangeOrigin: got %+v, want B2:C3", ro)
+	}
+}
+
+func TestOFFSETBooleanCoercionForRows(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,TRUE,0) → TRUE coerces to 1, so A2=20
+	cf := evalCompile(t, "OFFSET(A1,TRUE,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,TRUE,0): got %v, want 20", got)
+	}
+}
+
+func TestOFFSETBooleanCoercionForCols(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,TRUE) → TRUE coerces to 1, so B1=20
+	cf := evalCompile(t, "OFFSET(A1,0,TRUE)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,0,TRUE): got %v, want 20", got)
+	}
 }

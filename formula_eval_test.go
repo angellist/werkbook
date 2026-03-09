@@ -59,8 +59,8 @@ func TestTEXTWithStringFormatCell(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
 
-	s.SetValue("B1", "0.00")   // Format string that looks like a number
-	s.SetValue("C1", 12.344)   // Number to format
+	s.SetValue("B1", "0.00") // Format string that looks like a number
+	s.SetValue("C1", 12.344) // Number to format
 	s.SetFormula("A1", `TEXT(C1, B1)`)
 
 	val, err := s.GetValue("A1")
@@ -81,7 +81,7 @@ func TestArithmeticWithStringCell(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
 
-	s.SetValue("A1", "42")  // String that looks like a number
+	s.SetValue("A1", "42") // String that looks like a number
 	s.SetValue("A2", 8)
 	s.SetFormula("B1", "A1+A2")
 
@@ -98,13 +98,13 @@ func TestArithmeticWithStringCell(t *testing.T) {
 }
 
 // TestEmptyRefReturnsZero verifies that a formula referencing an empty cell
-// returns 0 (TypeNumber), matching Excel behavior where empty formula results
+// returns 0 (TypeNumber), matching expected behavior where empty formula results
 // are coerced to numeric zero.
 func TestEmptyRefReturnsZero(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
 
-	// B1 references A1 which is empty — Excel would show/cache 0.
+	// B1 references A1 which is empty — shows/caches 0.
 	s.SetFormula("B1", "A1")
 
 	val, err := s.GetValue("B1")
@@ -214,7 +214,7 @@ func TestWholeColumnRefCrossSheet(t *testing.T) {
 }
 
 // TestCrossSheetEmptyRefReturnsZero verifies that a cross-sheet reference to
-// an empty cell returns 0, not empty. This matches Excel behavior where
+// an empty cell returns 0, not empty. This matches expected behavior where
 // formulas like ='Sheet2'!A1 (with A1 empty) cache 0.
 func TestCrossSheetEmptyRefReturnsZero(t *testing.T) {
 	f := werkbook.New()
@@ -241,7 +241,7 @@ func TestCrossSheetEmptyRefReturnsZero(t *testing.T) {
 
 // TestFILTER_ArrayResultReturnsTopLeft verifies that FILTER formulas that
 // return an array produce the top-left element in the anchor cell, matching
-// Excel's dynamic array spill behavior for the formula cell.
+// dynamic array spill behavior for the formula cell.
 func TestFILTER_ArrayResultReturnsTopLeft(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
@@ -351,7 +351,7 @@ func TestFILTER_NumericArrayResult(t *testing.T) {
 }
 
 // TestINDEX_RowZero_ReturnsValueError verifies that INDEX(range,0) returns
-// #VALUE! in a non-array cell, matching Excel behaviour.
+// #VALUE! in a non-array cell, matching expected behaviour.
 func TestINDEX_RowZero_ReturnsValueError(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")

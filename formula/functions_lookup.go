@@ -2,6 +2,7 @@ package formula
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,9 +17,11 @@ func init() {
 	Register("INDIRECT", fnINDIRECT)
 	Register("LOOKUP", NoCtx(fnLOOKUP))
 	Register("MATCH", NoCtx(fnMATCH))
+	Register("OFFSET", fnOFFSET)
 	Register("VLOOKUP", NoCtx(fnVLOOKUP))
 	Register("TAKE", NoCtx(fnTAKE))
 	Register("DROP", NoCtx(fnDROP))
+	Register("EXPAND", NoCtx(fnEXPAND))
 	Register("CHOOSECOLS", NoCtx(fnCHOOSECOLS))
 	Register("CHOOSEROWS", NoCtx(fnCHOOSEROWS))
 	Register("TOCOL", NoCtx(fnTOCOL))
@@ -29,6 +32,7 @@ func init() {
 	Register("WRAPROWS", NoCtx(fnWRAPROWS))
 	Register("HSTACK", NoCtx(fnHSTACK))
 	Register("VSTACK", NoCtx(fnVSTACK))
+	Register("HYPERLINK", NoCtx(fnHyperlink))
 	Register("XLOOKUP", NoCtx(fnXLOOKUP))
 	Register("XMATCH", NoCtx(fnXMATCH))
 }
@@ -373,14 +377,14 @@ func fnINDEX(args []Value) (Value, error) {
 		}
 		colNum = int(cn)
 	} else if len(arr.Array) == 1 {
-		// Excel treats INDEX(single_row_array, n) as INDEX(array, 1, n).
+		// INDEX(single_row_array, n) is treated as INDEX(array, 1, n).
 		// This also preserves the row/column zero semantics in the special
 		// handling below: INDEX(single_row_array, 0) returns the full row.
 		ri = 1
 		colNum = int(rowNum)
 	}
 
-	// Negative indices are invalid and return #VALUE! in Excel.
+	// Negative indices are invalid and return #VALUE!.
 	if ri < 0 || colNum < 0 {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -484,10 +488,10 @@ func fnMATCH(args []Value) (Value, error) {
 		return NumberVal(float64(last + 1)), nil
 
 	case -1:
-		// Approximate match (descending). Excel uses a binary search
+		// Approximate match (descending). Uses a binary search
 		// expecting descending-sorted data. We replicate that binary
 		// search so that unsorted data produces the same result (often
-		// #N/A) as Excel.
+		// #N/A) as expected.
 		n := len(values)
 		if n == 0 {
 			return ErrorVal(ErrValNA), nil
@@ -725,7 +729,7 @@ func fnXLOOKUP(args []Value) (Value, error) {
 	case 2:
 		// Wildcard match: * matches any sequence, ? matches single char, ~ escapes.
 		pattern := ValueToString(lookup)
-		re, err := excelPatternToRegexp(pattern)
+		re, err := patternToRegexp(pattern)
 		if err != nil {
 			return ErrorVal(ErrValVALUE), nil
 		}
@@ -806,8 +810,8 @@ func fnINDIRECT(args []Value, ctx *EvalContext) (Value, error) {
 		if err != nil {
 			return ErrorVal(ErrValREF), nil
 		}
-		isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
-		isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+		isFullCol := addr.FromRow == 1 && addr.ToRow >= maxRows
+		isFullRow := addr.FromCol == 1 && addr.ToCol >= maxCols
 		// For full-row or full-column ranges (e.g. "1:20", "A:C"), return
 		// only the RangeOrigin metadata without resolving cell values.
 		// Functions like ROW() and COLUMN() only need the metadata, and
@@ -867,11 +871,11 @@ func indirectParseCell(s string) (col, row int, err error) {
 		return 0, 0, fmt.Errorf("invalid cell reference %q", s)
 	}
 	col = colLettersToNumber(s[:i])
-	if col < 1 || col > maxExcelCols {
+	if col < 1 || col > maxCols {
 		return 0, 0, fmt.Errorf("column out of range in %q", s)
 	}
 	row, err = strconv.Atoi(s[i:])
-	if err != nil || row < 1 || row > maxExcelRows {
+	if err != nil || row < 1 || row > maxRows {
 		return 0, 0, fmt.Errorf("invalid row in %q", s)
 	}
 	return col, row, nil
@@ -901,7 +905,7 @@ func indirectParseRange(left, right, sheet string) (RangeAddr, error) {
 		return RangeAddr{
 			Sheet:   sheet,
 			FromCol: 1, FromRow: r1,
-			ToCol: maxExcelCols, ToRow: r2,
+			ToCol: maxCols, ToRow: r2,
 		}, nil
 	}
 
@@ -918,7 +922,7 @@ func indirectParseRange(left, right, sheet string) (RangeAddr, error) {
 		return RangeAddr{
 			Sheet:   sheet,
 			FromCol: c1, FromRow: 1,
-			ToCol: c2, ToRow: maxExcelRows,
+			ToCol: c2, ToRow: maxRows,
 		}, nil
 	}
 
@@ -962,11 +966,11 @@ func parseR1C1Cell(s string) (col, row int, err error) {
 		return 0, 0, fmt.Errorf("invalid R1C1 reference %q: empty row or col", s)
 	}
 	row, err = strconv.Atoi(rowStr)
-	if err != nil || row < 1 || row > maxExcelRows {
+	if err != nil || row < 1 || row > maxRows {
 		return 0, 0, fmt.Errorf("invalid row in R1C1 reference %q", s)
 	}
 	col, err = strconv.Atoi(colStr)
-	if err != nil || col < 1 || col > maxExcelCols {
+	if err != nil || col < 1 || col > maxCols {
 		return 0, 0, fmt.Errorf("invalid col in R1C1 reference %q", s)
 	}
 	return col, row, nil
@@ -1387,6 +1391,78 @@ func fnDROP(args []Value) (Value, error) {
 
 	if len(result) == 1 && len(result[0]) == 1 {
 		return result[0][0], nil
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnEXPAND implements EXPAND(array, rows, [columns], [pad_with]).
+// It expands an array to specified dimensions, padding new cells with pad_with
+// (default #N/A).
+func fnEXPAND(args []Value) (Value, error) {
+	if len(args) < 2 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	grid, errVal := normalizeToGrid(args[0])
+	if errVal != nil {
+		return *errVal, nil
+	}
+	srcRows, srcCols := gridDims(grid)
+
+	// Parse rows argument.
+	targetRows := srcRows
+	if args[1].Type != ValueEmpty {
+		r, e := CoerceNum(args[1])
+		if e != nil {
+			return *e, nil
+		}
+		targetRows = int(math.Trunc(r))
+	}
+
+	// Parse optional columns argument.
+	targetCols := srcCols
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		c, e := CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+		targetCols = int(math.Trunc(c))
+	}
+
+	// Validate dimensions.
+	if targetRows <= 0 || targetCols <= 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	if targetRows < srcRows || targetCols < srcCols {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Determine pad value.
+	pad := Value{Type: ValueError, Err: ErrValNA}
+	if len(args) >= 4 {
+		pad = args[3]
+	}
+
+	// If no expansion needed, return original.
+	if targetRows == srcRows && targetCols == srcCols {
+		if srcRows == 1 && srcCols == 1 {
+			return grid[0][0], nil
+		}
+		return Value{Type: ValueArray, Array: grid}, nil
+	}
+
+	// Build expanded grid.
+	result := make([][]Value, targetRows)
+	for r := 0; r < targetRows; r++ {
+		row := make([]Value, targetCols)
+		for c := 0; c < targetCols; c++ {
+			if r < srcRows && c < srcCols {
+				row[c] = grid[r][c]
+			} else {
+				row[c] = pad
+			}
+		}
+		result[r] = row
 	}
 	return Value{Type: ValueArray, Array: result}, nil
 }
@@ -1997,7 +2073,7 @@ func xmatchExact(lookup Value, values []Value, searchMode int) Value {
 // xmatchWildcard performs wildcard match (match_mode 2) with the given search_mode.
 func xmatchWildcard(lookup Value, values []Value, searchMode int) Value {
 	pattern := ValueToString(lookup)
-	re, err := excelPatternToRegexp(pattern)
+	re, err := patternToRegexp(pattern)
 	if err != nil {
 		return ErrorVal(ErrValVALUE)
 	}
@@ -2204,4 +2280,202 @@ func xmatchNextLargest(lookup Value, values []Value, searchMode int) Value {
 		}
 	}
 	return ErrorVal(ErrValNA)
+}
+
+// fnHyperlink implements HYPERLINK(link_location, [friendly_name]).
+// It returns the friendly_name (or link_location if omitted) as the display value.
+func fnHyperlink(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Evaluate link_location — propagate errors.
+	loc := args[0]
+	if loc.Type == ValueError {
+		return loc, nil
+	}
+
+	// If friendly_name is provided, return it as-is (propagating errors).
+	if len(args) == 2 {
+		fn := args[1]
+		if fn.Type == ValueError {
+			return fn, nil
+		}
+		return fn, nil
+	}
+
+	// No friendly_name — return link_location coerced to string.
+	return StringVal(ValueToString(loc)), nil
+}
+
+// fnOFFSET implements OFFSET(reference, rows, cols, [height], [width]).
+// It returns a reference to a range offset from the given reference.
+func fnOFFSET(args []Value, ctx *EvalContext) (Value, error) {
+	if len(args) < 3 || len(args) > 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	if ctx == nil || ctx.Resolver == nil {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Parse the reference argument.
+	var (
+		sheet   string
+		fromRow int
+		fromCol int
+		toRow   int
+		toCol   int
+	)
+
+	ref := args[0]
+	switch ref.Type {
+	case ValueError:
+		return ref, nil
+	case ValueRef:
+		// Single cell reference: encoded as col + row*100_000, sheet in Str.
+		encoded := int(ref.Num)
+		fromCol = encoded % 100_000
+		fromRow = encoded / 100_000
+		toCol = fromCol
+		toRow = fromRow
+		sheet = ref.Str
+	case ValueArray:
+		if ref.RangeOrigin == nil {
+			return ErrorVal(ErrValVALUE), nil
+		}
+		fromCol = ref.RangeOrigin.FromCol
+		fromRow = ref.RangeOrigin.FromRow
+		toCol = ref.RangeOrigin.ToCol
+		toRow = ref.RangeOrigin.ToRow
+		sheet = ref.RangeOrigin.Sheet
+	default:
+		// A value produced by another function (e.g. nested OFFSET) may
+		// carry a CellOrigin that records its source cell address.
+		if ref.CellOrigin != nil {
+			fromCol = ref.CellOrigin.Col
+			fromRow = ref.CellOrigin.Row
+			toCol = fromCol
+			toRow = fromRow
+			sheet = ref.CellOrigin.Sheet
+		} else {
+			return ErrorVal(ErrValVALUE), nil
+		}
+	}
+
+	// Parse rows offset.
+	rowsN, errV := CoerceNum(args[1])
+	if errV != nil {
+		return *errV, nil
+	}
+	rowsOff := int(math.Trunc(rowsN))
+
+	// Parse cols offset.
+	colsN, errV := CoerceNum(args[2])
+	if errV != nil {
+		return *errV, nil
+	}
+	colsOff := int(math.Trunc(colsN))
+
+	// Default height and width from reference dimensions.
+	refHeight := toRow - fromRow + 1
+	refWidth := toCol - fromCol + 1
+
+	height := refHeight
+	width := refWidth
+
+	// Parse optional height.
+	if len(args) >= 4 {
+		if args[3].Type == ValueEmpty {
+			// Omitted — keep default.
+		} else {
+			hN, errV := CoerceNum(args[3])
+			if errV != nil {
+				return *errV, nil
+			}
+			height = int(math.Trunc(hN))
+		}
+	}
+
+	// Parse optional width.
+	if len(args) >= 5 {
+		if args[4].Type == ValueEmpty {
+			// Omitted — keep default.
+		} else {
+			wN, errV := CoerceNum(args[4])
+			if errV != nil {
+				return *errV, nil
+			}
+			width = int(math.Trunc(wN))
+		}
+	}
+
+	// Height and width of zero are errors.
+	if height == 0 || width == 0 {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Compute new range origin.
+	// Negative height/width reverses the direction (range extends upward/left).
+	newFromRow := fromRow + rowsOff
+	newFromCol := fromCol + colsOff
+	var newToRow, newToCol int
+	if height > 0 {
+		newToRow = newFromRow + height - 1
+	} else {
+		// Negative: anchor is at newFromRow, range extends upward.
+		newToRow = newFromRow
+		newFromRow = newFromRow + height + 1
+	}
+	if width > 0 {
+		newToCol = newFromCol + width - 1
+	} else {
+		// Negative: anchor is at newFromCol, range extends left.
+		newToCol = newFromCol
+		newFromCol = newFromCol + width + 1
+	}
+	// Use absolute values for subsequent size checks.
+	if height < 0 {
+		height = -height
+	}
+	if width < 0 {
+		width = -width
+	}
+
+	// Validate bounds.
+	if newFromRow < 1 || newFromCol < 1 || newToRow > maxRows || newToCol > maxCols {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Single cell result — return the cell value directly, with the source
+	// cell address attached so nested OFFSET can extract it.
+	if height == 1 && width == 1 {
+		val := ctx.Resolver.GetCellValue(CellAddr{Sheet: sheet, Col: newFromCol, Row: newFromRow})
+		val.FromCell = true
+		val.CellOrigin = &CellAddr{Sheet: sheet, Col: newFromCol, Row: newFromRow}
+		return val, nil
+	}
+
+	// Range result — resolve via GetRangeValues.
+	addr := RangeAddr{
+		Sheet:   sheet,
+		FromCol: newFromCol,
+		FromRow: newFromRow,
+		ToCol:   newToCol,
+		ToRow:   newToRow,
+	}
+	rows := ctx.Resolver.GetRangeValues(addr)
+
+	// Pad trailing blank rows for bounded ranges.
+	expectedRows := addr.ToRow - addr.FromRow + 1
+	cols := addr.ToCol - addr.FromCol + 1
+	for len(rows) < expectedRows {
+		emptyRow := make([]Value, cols)
+		for j := range emptyRow {
+			emptyRow[j] = EmptyVal()
+		}
+		rows = append(rows, emptyRow)
+	}
+
+	return Value{Type: ValueArray, Array: rows, RangeOrigin: &addr}, nil
 }

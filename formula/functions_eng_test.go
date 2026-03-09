@@ -558,7 +558,7 @@ func TestDELTA(t *testing.T) {
 			formula string
 			want    float64
 		}{
-			// Excel doc examples
+			// Doc examples
 			{"DELTA(5,4)", 0},
 			{"DELTA(5,5)", 1},
 			{"DELTA(0.5,0)", 0},
@@ -1289,9 +1289,9 @@ func TestHEX2BIN(t *testing.T) {
 			{"HEX2BIN(10)", "10000"},
 
 			// Negative numbers (two's complement hex → binary)
-			{`HEX2BIN("FFFFFFFFFF")`, "1111111111"},   // -1
-			{`HEX2BIN("FFFFFFFFFE")`, "1111111110"},   // -2
-			{`HEX2BIN("FFFFFFFE00")`, "1000000000"},   // -512
+			{`HEX2BIN("FFFFFFFFFF")`, "1111111111"}, // -1
+			{`HEX2BIN("FFFFFFFFFE")`, "1111111110"}, // -2
+			{`HEX2BIN("FFFFFFFE00")`, "1000000000"}, // -512
 
 			// Max positive
 			{`HEX2BIN("1FF")`, "111111111"}, // 511
@@ -1863,7 +1863,7 @@ func TestGESTEP(t *testing.T) {
 			formula string
 			want    float64
 		}{
-			// Excel doc examples
+			// Doc examples
 			{"GESTEP(5,4)", 1},
 			{"GESTEP(5,5)", 1},
 			{"GESTEP(-4,-5)", 1},
@@ -4363,6 +4363,134 @@ func TestIMCOSH(t *testing.T) {
 	})
 }
 
+func TestIMSEC(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns string", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    string
+		}{
+			// known result: IMSEC("4+3i")
+			{`IMSEC("4+3i")`, "-0.0652940278579471-0.0752249603027732i"},
+
+			// Pure real: zero → sec(0) = 1/cos(0) = 1
+			{`IMSEC("0")`, "1"},
+
+			// Pure real: positive
+			{`IMSEC("1")`, "1.8508157176809252"},
+
+			// Pure real: negative (sec is even)
+			{`IMSEC("-1")`, "1.8508157176809252"},
+
+			// Pure imaginary: positive
+			{`IMSEC("i")`, "0.6480542736638853"},
+
+			// Pure imaginary: negative (sech is even)
+			{`IMSEC("-i")`, "0.6480542736638853"},
+
+			// Complex: 1+i
+			{`IMSEC("1+i")`, "0.4983370305551868+0.591083841721045i"},
+
+			// Complex: 1-i
+			{`IMSEC("1-i")`, "0.4983370305551868-0.591083841721045i"},
+
+			// Complex: 2+3i
+			{`IMSEC("2+3i")`, "-0.041674964411144266+0.0906111371962376i"},
+
+			// j suffix
+			{`IMSEC("3+4j")`, "-0.03625349691586887+0.00516434460775318j"},
+
+			// Numeric input
+			{`IMSEC(1)`, "1.8508157176809252"},
+			{`IMSEC(0)`, "1"},
+
+			// Negative numeric input
+			{`IMSEC(-1)`, "1.8508157176809252"},
+
+			// COMPLEX composition
+			{`IMSEC(COMPLEX(1,1))`, "0.4983370305551868+0.591083841721045i"},
+			{`IMSEC(COMPLEX(0,0))`, "1"},
+
+			// Large imaginary part
+			{`IMSEC("0+10i")`, "0.00009079985933781"},
+
+			// Pure imaginary with j suffix
+			{`IMSEC("2j")`, "0.2658022288340797"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				assertComplexStringClose(t, tt.formula, got, tt.want)
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// Invalid complex number strings
+			{`IMSEC("invalid")`, ErrValNUM},
+			{`IMSEC("")`, ErrValNUM},
+			{`IMSEC("abc")`, ErrValNUM},
+			{`IMSEC("3+4")`, ErrValNUM},
+			{`IMSEC("3+4k")`, ErrValNUM},
+			{`IMSEC("+")`, ErrValNUM},
+
+			// Boolean → #VALUE!
+			{`IMSEC(TRUE)`, ErrValVALUE},
+			{`IMSEC(FALSE)`, ErrValVALUE},
+
+			// Wrong arg count
+			{`IMSEC()`, ErrValVALUE},
+			{`IMSEC("1","2")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		cf := evalCompile(t, `IMSEC(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("IMSEC(1/0) = %v, want error", got)
+		}
+	})
+
+	t.Run("array input", func(t *testing.T) {
+		cf := evalCompile(t, `IMSEC({"1","i"})`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+	})
+}
+
 func TestIMSECH(t *testing.T) {
 	resolver := &mockResolver{}
 
@@ -4779,6 +4907,564 @@ func TestIMCSCH(t *testing.T) {
 		}
 		if got.Type != ValueError {
 			t.Errorf("IMCSCH(1/0) = %v, want error", got)
+		}
+	})
+}
+
+func TestBESSELI(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELI(1.5,1)", 0.981666428475166, 1e-12},
+
+			// x = 0 cases
+			{"BESSELI(0,0)", 1, 0},
+			{"BESSELI(0,1)", 0, 0},
+			{"BESSELI(0,5)", 0, 0},
+
+			// Known values for n=0 (Excel-verified)
+			{"BESSELI(1,0)", 1.2660658480342601, 1e-12},
+			{"BESSELI(2,0)", 2.279585307296026, 1e-12},
+
+			// Known values for n=1 (Excel-verified)
+			{"BESSELI(1,1)", 0.5651590975819435, 1e-12},
+			{"BESSELI(2,1)", 1.5906368572633083, 1e-12},
+
+			// Negative x, odd n → negative result
+			{"BESSELI(-1.5,1)", -0.981666428475166, 1e-12},
+			{"BESSELI(-1,1)", -0.5651590975819435, 1e-12},
+
+			// Negative x, even n → positive result
+			{"BESSELI(-1.5,0)", 1.6467232021476756, 1e-12},
+			{"BESSELI(-1.5,2)", 0.33783462087443816, 1e-12},
+			{"BESSELI(-2,0)", 2.279585307296026, 1e-12},
+
+			// n truncated: BESSELI(1.5, 1.9) same as BESSELI(1.5, 1)
+			{"BESSELI(1.5,1.9)", 0.981666428475166, 1e-12},
+			{"BESSELI(1.5,1.1)", 0.981666428475166, 1e-12},
+
+			// Larger n
+			{"BESSELI(1,5)", 0.0002714631559, 1e-9},
+			{"BESSELI(1,10)", 2.752948e-10, 1e-15},
+
+			// Larger x (Excel-verified)
+			{"BESSELI(5,0)", 27.239871894394888, 1e-9},
+			{"BESSELI(5,2)", 17.50561501211748, 1e-9},
+			{"BESSELI(20,0)", 4.355828255628764e7, 1e2},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELI(TRUE,0)", 1.2660658480342601, 1e-12},
+			{"BESSELI(1,FALSE)", 1.2660658480342601, 1e-12},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// n < 0 → #NUM!
+			{"BESSELI(1,-1)", ErrValNUM},
+			{"BESSELI(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELI("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELI(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELI("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELI()", "BESSELI(1)", "BESSELI(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELI(1/0,1)", "BESSELI(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
+
+func TestBESSELJ(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELJ(1.9,2)", 0.329925727692387, 1e-12},
+
+			// x = 0 cases
+			{"BESSELJ(0,0)", 1, 0},
+			{"BESSELJ(0,1)", 0, 0},
+			{"BESSELJ(0,5)", 0, 0},
+
+			// Known values for n=0
+			{"BESSELJ(1,0)", 0.765197686557967, 1e-12},
+			{"BESSELJ(2,0)", 0.223890779141236, 1e-12},
+
+			// Known values for n=1
+			{"BESSELJ(1,1)", 0.440050585744934, 1e-12},
+			{"BESSELJ(2,1)", 0.576724807756874, 1e-12},
+
+			// Negative x, even n → positive (same as positive x)
+			{"BESSELJ(-1.9,2)", 0.329925727692387, 1e-12},
+			{"BESSELJ(-2,0)", 0.223890779141236, 1e-12},
+
+			// Negative x, odd n → negative
+			{"BESSELJ(-1.9,1)", -0.581157072713434, 1e-12},
+			{"BESSELJ(-1,1)", -0.440050585744934, 1e-12},
+
+			// n truncated: BESSELJ(1.9, 2.7) same as BESSELJ(1.9, 2)
+			{"BESSELJ(1.9,2.7)", 0.329925727692387, 1e-12},
+			{"BESSELJ(1.9,2.1)", 0.329925727692387, 1e-12},
+
+			// Oscillating region: larger x
+			{"BESSELJ(5,0)", -0.177596771314338, 1e-12},
+			{"BESSELJ(5,2)", 0.046565116277752, 1e-12},
+			{"BESSELJ(10,0)", -0.245935764451321, 1e-12},
+			{"BESSELJ(10,2)", 0.254630313685208, 1e-12},
+			{"BESSELJ(20,0)", 0.167024664372723, 1e-9},
+
+			// Higher order n
+			{"BESSELJ(1,5)", 0.000249757730211234, 1e-14},
+			{"BESSELJ(5,5)", 0.261140546120170, 1e-12},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELJ(TRUE,0)", 0.765197686557967, 1e-12},
+			{"BESSELJ(1,FALSE)", 0.765197686557967, 1e-12},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// n < 0 → #NUM!
+			{"BESSELJ(1,-1)", ErrValNUM},
+			{"BESSELJ(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELJ("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELJ(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELJ("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELJ()", "BESSELJ(1)", "BESSELJ(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELJ(1/0,1)", "BESSELJ(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
+
+func TestBESSELK(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELK(1.5,1)", 0.277387804, 1e-8},
+
+			// Known values for n=0
+			{"BESSELK(1,0)", 0.4210244382, 1e-7},
+			{"BESSELK(2,0)", 0.1138938727, 1e-7},
+			{"BESSELK(0.5,0)", 0.9244190716, 1e-7},
+
+			// Known values for n=1
+			{"BESSELK(1,1)", 0.6019072169, 1e-7},
+			{"BESSELK(2,1)", 0.1398658818, 1e-7},
+
+			// Larger x for n=0
+			{"BESSELK(5,0)", 0.0036910982, 1e-8},
+			{"BESSELK(10,0)", 0.00001778006232, 1e-11},
+
+			// Larger x for n=1
+			{"BESSELK(5,1)", 0.004044613162, 1e-8},
+
+			// Higher order n
+			{"BESSELK(5,3)", 0.008291768520, 1e-8},
+			{"BESSELK(10,2)", 0.00002150982, 1e-9},
+			{"BESSELK(2,3)", 0.6473853909, 1e-8},
+
+			// Very small x (near divergence)
+			{"BESSELK(0.01,0)", 4.721244471, 1e-6},
+			{"BESSELK(0.01,1)", 99.97389659, 1e-4},
+
+			// n truncated: BESSELK(1.5, 1.9) same as BESSELK(1.5, 1)
+			{"BESSELK(1.5,1.9)", 0.277387804, 1e-8},
+			{"BESSELK(1.5,1.1)", 0.277387804, 1e-8},
+
+			// Large order n
+			{"BESSELK(1,5)", 360.9605896, 1e-3},
+			{"BESSELK(5,5)", 0.03270627362, 1e-7},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELK(TRUE,0)", 0.4210244382, 1e-7},
+			{"BESSELK(TRUE,FALSE)", 0.4210244382, 1e-7},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// x <= 0 → #NUM!
+			{"BESSELK(0,0)", ErrValNUM},
+			{"BESSELK(0,1)", ErrValNUM},
+			{"BESSELK(-1,0)", ErrValNUM},
+			{"BESSELK(-0.5,1)", ErrValNUM},
+			{"BESSELK(-5,2)", ErrValNUM},
+
+			// n < 0 → #NUM!
+			{"BESSELK(1,-1)", ErrValNUM},
+			{"BESSELK(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELK("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELK(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELK("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELK()", "BESSELK(1)", "BESSELK(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELK(1/0,1)", "BESSELK(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}
+
+func TestBESSELY(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELY(2.5,1)", 0.145918138, 1e-8},
+
+			// Known values for n=0
+			{"BESSELY(1,0)", 0.0882569642, 1e-9},
+			{"BESSELY(2,0)", 0.5103756726, 1e-9},
+			{"BESSELY(0.5,0)", -0.4445187335, 1e-9},
+
+			// Known values for n=1
+			{"BESSELY(1,1)", -0.7812128213, 1e-9},
+			{"BESSELY(2,1)", -0.1070324315, 1e-9},
+
+			// Larger x for n=0
+			{"BESSELY(5,0)", -0.3085176252, 1e-9},
+			{"BESSELY(10,0)", 0.0556711673, 1e-9},
+
+			// Larger x for n=2
+			{"BESSELY(5,2)", 0.3676628826, 1e-9},
+
+			// Higher order n
+			{"BESSELY(10,3)", -0.2513626571838373, 1e-12},
+			{"BESSELY(20,5)", -0.10003576788953243, 1e-12},
+
+			// n truncated: BESSELY(2.5, 1.9) same as BESSELY(2.5, 1)
+			{"BESSELY(2.5,1.9)", 0.145918138, 1e-8},
+			{"BESSELY(2.5,1.1)", 0.145918138, 1e-8},
+
+			// Very small x (near divergence)
+			{"BESSELY(0.01,0)", -3.005455698, 1e-6},
+
+			// Large order n
+			{"BESSELY(1,5)", -260.4058666, 1e-3},
+			{"BESSELY(5,5)", -0.4536948225, 1e-8},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELY(TRUE,0)", 0.0882569642, 1e-9},
+			{"BESSELY(TRUE,FALSE)", 0.0882569642, 1e-9},
+
+			// Additional values
+			{"BESSELY(3,0)", 0.3768500100, 1e-9},
+			{"BESSELY(3,1)", 0.3246744248, 1e-9},
+			{"BESSELY(0.1,0)", -1.5342386513, 1e-8},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// x <= 0 → #NUM!
+			{"BESSELY(0,0)", ErrValNUM},
+			{"BESSELY(0,1)", ErrValNUM},
+			{"BESSELY(-1,0)", ErrValNUM},
+			{"BESSELY(-0.5,1)", ErrValNUM},
+			{"BESSELY(-5,2)", ErrValNUM},
+
+			// n < 0 → #NUM!
+			{"BESSELY(1,-1)", ErrValNUM},
+			{"BESSELY(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELY("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELY(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELY("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELY()", "BESSELY(1)", "BESSELY(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELY(1/0,1)", "BESSELY(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
 		}
 	})
 }

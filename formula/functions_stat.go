@@ -34,6 +34,7 @@ func init() {
 	Register("GAMMALN", NoCtx(fnGAMMALN))
 	Register("GAMMALN.PRECISE", NoCtx(fnGAMMALN))
 	Register("GEOMEAN", NoCtx(fnGEOMEAN))
+	Register("GROWTH", NoCtx(fnGROWTH))
 	Register("HARMEAN", NoCtx(fnHARMEAN))
 	Register("LARGE", NoCtx(fnLARGE))
 	Register("MAX", NoCtx(fnMAX))
@@ -44,6 +45,7 @@ func init() {
 	Register("MINA", NoCtx(fnMINA))
 	Register("MINIFS", NoCtx(fnMINIFS))
 	Register("MODE", NoCtx(fnMODE))
+	Register("MODE.MULT", NoCtx(fnModeMult))
 	Register("MODE.SNGL", NoCtx(fnMODE))
 	Register("PERMUTATIONA", NoCtx(fnPERMUTATIONA))
 	Register("PEARSON", NoCtx(fnCORREL))
@@ -64,8 +66,10 @@ func init() {
 	Register("SMALL", NoCtx(fnSMALL))
 	Register("STDEV", NoCtx(fnSTDEV))
 	Register("STDEV.S", NoCtx(fnSTDEV))
+	Register("STDEVA", NoCtx(fnSTDEVA))
 	Register("STDEVP", NoCtx(fnSTDEVP))
 	Register("STDEV.P", NoCtx(fnSTDEVP))
+	Register("STDEVPA", NoCtx(fnSTDEVPA))
 	Register("STANDARDIZE", NoCtx(fnSTANDARDIZE))
 	Register("STEYX", NoCtx(fnSTEYX))
 	Register("SUM", NoCtx(fnSUM))
@@ -88,6 +92,7 @@ func init() {
 	Register("NORM.S.DIST", NoCtx(fnNormSDist))
 	Register("NORM.S.INV", NoCtx(fnNormSInv))
 	Register("BINOM.DIST", NoCtx(fnBinomDist))
+	Register("BINOM.DIST.RANGE", NoCtx(fnBinomDistRange))
 	Register("BINOM.INV", NoCtx(fnBinomInv))
 	Register("POISSON.DIST", NoCtx(fnPoissonDist))
 	Register("EXPON.DIST", NoCtx(fnExponDist))
@@ -107,6 +112,8 @@ func init() {
 	Register("BETA.INV", NoCtx(fnBetaInv))
 	Register("CHISQ.DIST.RT", NoCtx(fnChisqDistRT))
 	Register("CHISQ.INV.RT", NoCtx(fnChisqInvRT))
+	Register("CHISQ.TEST", NoCtx(fnChisqTest))
+	Register("F.TEST", NoCtx(fnFTest))
 	Register("F.DIST", NoCtx(fnFDist))
 	Register("F.DIST.RT", NoCtx(fnFDistRT))
 	Register("F.INV", NoCtx(fnFInv))
@@ -115,6 +122,13 @@ func init() {
 	Register("HYPGEOM.DIST", NoCtx(fnHypgeomDist))
 	Register("NEGBINOM.DIST", NoCtx(fnNegbinomDist))
 	Register("PHI", NoCtx(fnPhi))
+	Register("PROB", NoCtx(fnPROB))
+	Register("T.TEST", NoCtx(fnTTest))
+	Register("Z.TEST", NoCtx(fnZTEST))
+	Register("AGGREGATE", NoCtx(fnAggregate))
+	Register("TREND", NoCtx(fnTREND))
+	Register("LINEST", NoCtx(fnLINEST))
+	Register("LOGEST", NoCtx(fnLOGEST))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -218,7 +232,7 @@ func fnCOUNT(args []Value) (Value, error) {
 		case ValueBool:
 			// Direct boolean args (e.g. COUNT(TRUE)) are counted,
 			// but booleans from cell references (e.g. COUNT(A1) where
-			// A1=TRUE) are not — matching Excel behavior.
+			// A1=TRUE) are not — matching expected behavior.
 			if !arg.FromCell {
 				count++
 			}
@@ -540,9 +554,9 @@ func fnCOUNTBLANK(args []Value) (Value, error) {
 	return NumberVal(float64(count)), nil
 }
 
-// MatchesCriteria checks if a value matches Excel-style criteria.
+// MatchesCriteria checks if a value matches criteria.
 //
-// In Excel, booleans and numbers are distinct types for criteria matching:
+// Booleans and numbers are distinct types for criteria matching:
 //   - Numeric criteria (e.g. 1) only match numeric cells, not booleans.
 //   - Boolean criteria (e.g. TRUE) only match boolean cells, not numbers.
 //   - String criteria with comparison operators (e.g. ">0") only compare
@@ -588,7 +602,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 	}
 
 	// Numeric criteria: match numeric cells, and also string cells whose
-	// content parses as the same number (Excel coerces strings to numbers
+	// content parses as the same number (strings are coerced to numbers
 	// for COUNTIF/SUMIF criteria matching). Booleans are excluded.
 	if criteria.Type == ValueNumber {
 		if v.Type == ValueNumber {
@@ -603,7 +617,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 	}
 
 	// String criteria "TRUE"/"FALSE": coerce to boolean for matching.
-	// In Excel, =COUNTIF(range,"TRUE") counts only boolean TRUE cells,
+	// =COUNTIF(range,"TRUE") counts only boolean TRUE cells,
 	// not cells containing the string "TRUE".
 	upper := strings.ToUpper(strings.TrimSpace(critStr))
 	if upper == "TRUE" {
@@ -618,7 +632,7 @@ func MatchesCriteria(v Value, criteria Value) bool {
 }
 
 // matchOperator applies a comparison operator to a cell value and an operand
-// string, respecting Excel's type separation between booleans and numbers.
+// string, respecting the type separation between booleans and numbers.
 func matchOperator(v Value, op, operand string) bool {
 	// "=" with empty operand matches only truly empty cells (TypeEmpty).
 	// This differs from bare "" criteria which matches both empty and empty-string cells.
@@ -626,7 +640,7 @@ func matchOperator(v Value, op, operand string) bool {
 		return v.Type == ValueEmpty
 	}
 	// "<>" with empty operand: everything except truly empty cells.
-	// In Excel, empty-string cells are considered non-blank for <>.
+	// Empty-string cells are considered non-blank for <>.
 	if op == "<>" && operand == "" {
 		return v.Type != ValueEmpty
 	}
@@ -657,7 +671,7 @@ func matchOperator(v Value, op, operand string) bool {
 
 	// If the operand is numeric, compare against numeric cells.
 	// For the "=" operator only, also match string cells whose content
-	// parses as the same number (Excel coerces text-numbers for equality
+	// parses as the same number (text-numbers are coerced for equality
 	// in *IF criteria, but not for ordering operators like >, <, etc.).
 	// Booleans are excluded from numeric comparisons.
 	if cn, err := strconv.ParseFloat(operand, 64); err == nil {
@@ -725,7 +739,7 @@ const (
 // classifyWildcard examines a criteria string and returns what kind of
 // wildcard processing it needs.
 //
-// In Excel, ~* escapes a single literal *, ~? escapes a single literal ?,
+// ~* escapes a single literal *, ~? escapes a single literal ?,
 // and ~~ escapes a single literal ~.  So "~**" has an escaped * followed
 // by an unescaped wildcard *, meaning it matches strings starting with
 // a literal '*'.
@@ -1160,6 +1174,11 @@ func collectNumeric(args []Value) ([]float64, *Value) {
 			if arg.Type == ValueError {
 				return nil, &arg
 			}
+			// Single-cell references to text, booleans, or empty cells
+			// are ignored, matching the range/array behavior above.
+			if arg.FromCell && (arg.Type == ValueString || arg.Type == ValueBool || arg.Type == ValueEmpty) {
+				continue
+			}
 			n, e := CoerceNum(arg)
 			if e != nil {
 				return nil, e
@@ -1403,6 +1422,54 @@ func fnMODE(args []Value) (Value, error) {
 		return ErrorVal(ErrValNA), nil
 	}
 	return NumberVal(bestVal), nil
+}
+
+func fnModeMult(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nums, e := collectNumeric(args)
+	if e != nil {
+		return *e, nil
+	}
+	if len(nums) == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// Count frequency and track insertion order.
+	freq := make(map[float64]int)
+	for _, n := range nums {
+		freq[n]++
+	}
+
+	// Find the maximum frequency.
+	maxFreq := 0
+	for _, c := range freq {
+		if c > maxFreq {
+			maxFreq = c
+		}
+	}
+	if maxFreq < 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// Collect all values with the maximum frequency.
+	modes := make([]float64, 0)
+	for v, c := range freq {
+		if c == maxFreq {
+			modes = append(modes, v)
+		}
+	}
+
+	// Sort in ascending order (matches Excel behaviour).
+	sort.Float64s(modes)
+
+	// Return as a vertical array (each mode in its own row).
+	result := make([][]Value, len(modes))
+	for i, m := range modes {
+		result[i] = []Value{NumberVal(m)}
+	}
+	return Value{Type: ValueArray, Array: result}, nil
 }
 
 func fnPERCENTILE(args []Value) (Value, error) {
@@ -1742,7 +1809,7 @@ func fnPERCENTRANKEXC(args []Value) (Value, error) {
 
 // truncToSig truncates a float to sig decimal digits.
 func truncToSig(v float64, sig int) float64 {
-	// Round to 15 significant digits first (matching Excel precision)
+	// Round to 15 significant digits first (matching expected precision)
 	// to eliminate FP noise before truncating.
 	v = roundTo15SigFigs(v)
 	pow := math.Pow(10, float64(sig))
@@ -1901,6 +1968,56 @@ func fnVARA(args []Value) (Value, error) {
 		ssq += d * d
 	}
 	return NumberVal(ssq / float64(n-1)), nil
+}
+
+func fnSTDEVA(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nums, ev := collectNumericA(args)
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(nums)
+	if n < 2 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	sum := 0.0
+	for _, v := range nums {
+		sum += v
+	}
+	mean := sum / float64(n)
+	ssq := 0.0
+	for _, v := range nums {
+		d := v - mean
+		ssq += d * d
+	}
+	return NumberVal(math.Sqrt(ssq / float64(n-1))), nil
+}
+
+func fnSTDEVPA(args []Value) (Value, error) {
+	if len(args) == 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nums, ev := collectNumericA(args)
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(nums)
+	if n < 1 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	sum := 0.0
+	for _, v := range nums {
+		sum += v
+	}
+	mean := sum / float64(n)
+	ssq := 0.0
+	for _, v := range nums {
+		d := v - mean
+		ssq += d * d
+	}
+	return NumberVal(math.Sqrt(ssq / float64(n))), nil
 }
 
 func fnVARPA(args []Value) (Value, error) {
@@ -2570,7 +2687,7 @@ func fnPERMUTATIONA(args []Value) (Value, error) {
 	return NumberVal(math.Pow(number, numberChosen)), nil
 }
 
-// fnFREQUENCY implements the Excel FREQUENCY(data_array, bins_array) function.
+// fnFREQUENCY implements the FREQUENCY(data_array, bins_array) function.
 // It counts how many values in data_array fall into each interval defined by
 // bins_array. The result is a vertical array with len(bins)+1 rows.
 func fnFREQUENCY(args []Value) (Value, error) {
@@ -2579,7 +2696,7 @@ func fnFREQUENCY(args []Value) (Value, error) {
 	}
 
 	// collectNums flattens an argument into a slice of float64 values,
-	// ignoring text, booleans, and empty cells (matching Excel behaviour
+	// ignoring text, booleans, and empty cells (matching expected behaviour
 	// for array arguments). Propagates errors.
 	collectNums := func(v Value) ([]float64, *Value) {
 		var nums []float64
@@ -2727,7 +2844,7 @@ func fnNormInv(args []Value) (Value, error) {
 	}
 	x := mean + stdev*normSInv(p)
 	// When mean=0 and stdev=1 the result must equal NORM.S.INV exactly
-	// (Excel treats NORM.INV(p,0,1) identically to NORM.S.INV(p)).
+	// (NORM.INV(p,0,1) is treated identically to NORM.S.INV(p)).
 	// For all other parameters, refine with Newton-Raphson on the full
 	// normal distribution. The Acklam approximation gives ~8 digits;
 	// two iterations bring us to ~16 digits of precision.
@@ -2874,7 +2991,7 @@ func normSInv(p float64) float64 {
 			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
 	}
 
-	// One Halley step closes the remaining gap to Excel's float64 results.
+	// One Halley step closes the remaining gap to the expected float64 results.
 	e := 0.5*math.Erfc(-x/math.Sqrt2) - p
 	u := e * math.Sqrt(2*math.Pi) * math.Exp(x*x/2)
 	x = x - u/(1+x*u/2)
@@ -2952,6 +3069,50 @@ func binomPMF(n, k int, p float64) float64 {
 	logBinom := logC - logK - logNK
 	logProb := logBinom + float64(k)*math.Log(p) + float64(n-k)*math.Log(1-p)
 	return math.Exp(logProb)
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.DIST.RANGE — Binomial distribution range probability
+// ---------------------------------------------------------------------------
+
+// fnBinomDistRange implements BINOM.DIST.RANGE(trials, probability_s, number_s, [number_s2]).
+// Returns the probability of a trial result using a binomial distribution.
+// When number_s2 is omitted it equals number_s (single-point probability).
+func fnBinomDistRange(args []Value) (Value, error) {
+	if len(args) < 3 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sf, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	n := int(nf)
+	s := int(sf)
+	s2 := s
+	if len(args) == 4 {
+		s2f, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		s2 = int(s2f)
+	}
+	// Validate constraints.
+	if n < 0 || p < 0 || p > 1 || s < 0 || s > n || s2 < s || s2 > n {
+		return ErrorVal(ErrValNUM), nil
+	}
+	sum := 0.0
+	for k := s; k <= s2; k++ {
+		sum += binomPMF(n, k, p)
+	}
+	return NumberVal(sum), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -3136,7 +3297,7 @@ func fnWeibullDist(args []Value) (Value, error) {
 	}
 	// PDF: f(x) = (alpha/beta) * (x/beta)^(alpha-1) * exp(-(x/beta)^alpha)
 	if x == 0 {
-		// Excel returns 0 for all PDF evaluations at x=0.
+		// Returns 0 for all PDF evaluations at x=0.
 		return NumberVal(0), nil
 	}
 	return NumberVal((alpha / beta) * math.Pow(x/beta, alpha-1) * math.Exp(-math.Pow(x/beta, alpha))), nil
@@ -3333,8 +3494,8 @@ func fnGammaDist(args []Value) (Value, error) {
 		if alpha > 1 {
 			return NumberVal(0), nil
 		}
-		// alpha <= 1: Excel returns #NUM! at x=0 (PDF diverges for alpha<1,
-		// and Excel also returns #NUM! for the alpha==1 boundary case).
+		// alpha <= 1: returns #NUM! at x=0 (PDF diverges for alpha<1,
+		// and also returns #NUM! for the alpha==1 boundary case).
 		return ErrorVal(ErrValNUM), nil
 	}
 
@@ -3380,7 +3541,7 @@ func fnGammaInv(args []Value) (Value, error) {
 	if p == 0 {
 		return NumberVal(0), nil
 	}
-	// Excel returns #NUM! for probability = 1.
+	// Returns #NUM! for probability = 1.
 	if p == 1 {
 		return ErrorVal(ErrValNUM), nil
 	}
@@ -3510,7 +3671,7 @@ func fnChisqDist(args []Value) (Value, error) {
 	if x == 0 {
 		if df == 1 {
 			// PDF diverges at x=0 for df=1 (alpha=0.5).
-			// Excel returns Inf.
+			// Returns Inf.
 			return NumberVal(math.Inf(1)), nil
 		}
 		if df == 2 {
@@ -3642,6 +3803,71 @@ func fnChisqInvRT(args []Value) (Value, error) {
 
 	// Delegate to CHISQ.INV(1-p, df) = GAMMA.INV(1-p, df/2, 2).
 	return fnGammaInv([]Value{NumberVal(1 - p), NumberVal(df / 2), NumberVal(2)})
+}
+
+// ---------------------------------------------------------------------------
+// CHISQ.TEST — Chi-squared test for independence
+// ---------------------------------------------------------------------------
+// CHISQ.TEST(actual_range, expected_range)
+//   actual_range   – observed data (2D range)
+//   expected_range – expected data (2D range, same dimensions)
+// Returns the p-value from the chi-squared goodness-of-fit test.
+//   χ² = Σ (Aij - Eij)² / Eij
+//   df = (r-1)(c-1) when both r>1 and c>1; otherwise max(r,c)-1.
+//   p  = 1 - regLowerGamma(df/2, χ²/2)
+
+func fnChisqTest(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	actual, ev := normalizeToGrid(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	expected, ev := normalizeToGrid(args[1])
+	if ev != nil {
+		return *ev, nil
+	}
+	ar, ac := gridDims(actual)
+	er, ec := gridDims(expected)
+	if ar != er || ac != ec {
+		return ErrorVal(ErrValNA), nil
+	}
+	if ar == 1 && ac == 1 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// Compute chi-squared statistic.
+	chiSq := 0.0
+	for i := 0; i < ar; i++ {
+		for j := 0; j < ac; j++ {
+			a, e1 := CoerceNum(actual[i][j])
+			if e1 != nil {
+				return *e1, nil
+			}
+			e, e2 := CoerceNum(expected[i][j])
+			if e2 != nil {
+				return *e2, nil
+			}
+			if e == 0 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			d := a - e
+			chiSq += d * d / e
+		}
+	}
+	// Degrees of freedom.
+	var df int
+	if ar > 1 && ac > 1 {
+		df = (ar - 1) * (ac - 1)
+	} else if ar == 1 {
+		df = ac - 1
+	} else {
+		df = ar - 1
+	}
+	// Right-tail probability using regularized lower incomplete gamma.
+	alpha := float64(df) / 2.0
+	p := 1 - regLowerGamma(alpha, chiSq/2.0)
+	return NumberVal(p), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -4593,7 +4819,7 @@ func fnBetaInv(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 	if p <= 0 || p > 1 {
-		// Excel: probability <= 0 or > 1 ⇒ #NUM!
+		// probability <= 0 or > 1 ⇒ #NUM!
 		// But p == 0 returns A in practice.
 		if p == 0 {
 			return NumberVal(a), nil
@@ -4848,4 +5074,1464 @@ func negbinomPMF(f, r int, p float64) float64 {
 	logC := lgFR - lgR - lgF1
 	logProb := logC + float64(r)*math.Log(p) + float64(f)*math.Log(1-p)
 	return math.Exp(logProb)
+}
+
+// fnPROB implements the PROB function.
+// PROB(x_range, prob_range, lower_limit, [upper_limit])
+// Returns the probability that values in x_range fall between lower_limit and
+// upper_limit (inclusive). If upper_limit is omitted, returns the probability
+// of being exactly equal to lower_limit.
+func fnPROB(args []Value) (Value, error) {
+	if len(args) < 3 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Flatten x_range and prob_range into 1-D slices.
+	flatX := flattenValuesGeneric(args[0])
+	flatP := flattenValuesGeneric(args[1])
+
+	// x_range and prob_range must have the same number of data points.
+	if len(flatX) != len(flatP) {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// Both ranges must be non-empty.
+	if len(flatX) == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// Extract numeric values, propagating errors.
+	xs := make([]float64, 0, len(flatX))
+	ps := make([]float64, 0, len(flatP))
+	probSum := 0.0
+	for i := range flatX {
+		xv, yv := flatX[i], flatP[i]
+		if xv.Type == ValueError {
+			return xv, nil
+		}
+		if yv.Type == ValueError {
+			return yv, nil
+		}
+		// Both must be numeric.
+		if xv.Type != ValueNumber || yv.Type != ValueNumber {
+			return ErrorVal(ErrValVALUE), nil
+		}
+		xs = append(xs, xv.Num)
+		ps = append(ps, yv.Num)
+		probSum += yv.Num
+	}
+
+	// Sum of probabilities must equal 1 (with floating-point tolerance).
+	if math.Abs(probSum-1.0) > 1e-10 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Parse lower_limit.
+	lower, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Parse optional upper_limit; if omitted, match exactly lower_limit.
+	upper := lower
+	if len(args) == 4 {
+		u, e2 := CoerceNum(args[3])
+		if e2 != nil {
+			return *e2, nil
+		}
+		upper = u
+	}
+
+	// Sum probabilities for x values in [lower, upper].
+	result := 0.0
+	for i, x := range xs {
+		if x >= lower && x <= upper {
+			result += ps[i]
+		}
+	}
+
+	return NumberVal(result), nil
+}
+
+// aggregateFuncNames maps AGGREGATE function_num (1-19) to the sub-function
+// name. Indices 1-13 are reference-form functions; 14-19 are array-form
+// functions that require a k/quart argument.
+var aggregateFuncNames = [20]string{
+	1: "AVERAGE", 2: "COUNT", 3: "COUNTA", 4: "MAX", 5: "MIN",
+	6: "PRODUCT", 7: "STDEV.S", 8: "STDEV.P", 9: "SUM", 10: "VAR.S", 11: "VAR.P",
+	12: "MEDIAN", 13: "MODE.SNGL", 14: "LARGE", 15: "SMALL",
+	16: "PERCENTILE.INC", 17: "QUARTILE.INC", 18: "PERCENTILE.EXC", 19: "QUARTILE.EXC",
+}
+
+// fnAggregate implements the AGGREGATE function.
+// AGGREGATE(function_num, options, ref1, [ref2], ...) — reference form
+// AGGREGATE(function_num, options, array, [k])          — array form
+//
+// It applies one of 19 aggregate functions to the supplied data, with the
+// ability to ignore error values (hidden-row options are accepted but treated
+// as no-ops because the formula engine has no UI state).
+func fnAggregate(args []Value) (Value, error) {
+	if len(args) < 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Parse function_num (must be 1-19).
+	fnRaw, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	fnNum := int(fnRaw)
+	if fnNum < 1 || fnNum > 19 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Parse options (must be 0-7).
+	optRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	opt := int(optRaw)
+	if opt < 0 || opt > 7 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Determine whether to ignore error values (options 2, 3, 6, 7).
+	ignoreErrors := opt == 2 || opt == 3 || opt == 6 || opt == 7
+
+	// Functions 14-19 require a k/quart argument (the last positional arg).
+	needsK := fnNum >= 14
+
+	dataArgs := args[2:]
+	var kArg Value
+	if needsK {
+		if len(dataArgs) < 2 {
+			return ErrorVal(ErrValVALUE), nil
+		}
+		kArg = dataArgs[len(dataArgs)-1]
+		dataArgs = dataArgs[:len(dataArgs)-1]
+	}
+
+	// Flatten all data arguments into a single list of values, optionally
+	// filtering out error values.
+	var vals []Value
+	for _, arg := range dataArgs {
+		if arg.Type == ValueArray {
+			for _, row := range arg.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						if ignoreErrors {
+							continue
+						}
+						return cell, nil
+					}
+					vals = append(vals, cell)
+				}
+			}
+		} else {
+			if arg.Type == ValueError {
+				if ignoreErrors {
+					continue
+				}
+				return arg, nil
+			}
+			vals = append(vals, arg)
+		}
+	}
+
+	// Build a single-row ValueArray from the filtered values.
+	arr := Value{Type: ValueArray, Array: [][]Value{vals}}
+
+	// Look up and call the sub-function.
+	name := aggregateFuncNames[fnNum]
+	id := LookupFunc(name)
+	if id < 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	var callArgs []Value
+	if needsK {
+		callArgs = []Value{arr, kArg}
+	} else {
+		callArgs = []Value{arr}
+	}
+	return CallFunc(id, callArgs, nil)
+}
+
+// ---------------------------------------------------------------------------
+// T.TEST — Student's t-Test
+// ---------------------------------------------------------------------------
+// T.TEST(array1, array2, tails, type)
+//   array1 – first data set
+//   array2 – second data set
+//   tails  – 1 = one-tailed, 2 = two-tailed
+//   type   – 1 = Paired, 2 = Two-sample equal variance (homoscedastic),
+//            3 = Two-sample unequal variance (heteroscedastic)
+
+func fnTTest(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Extract tails and type, coerce to numeric.
+	tailsRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	typeRaw, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate to integers.
+	tails := int(math.Trunc(tailsRaw))
+	ttype := int(math.Trunc(typeRaw))
+
+	// Validate tails and type.
+	if tails != 1 && tails != 2 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if ttype < 1 || ttype > 3 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	var tStat, df float64
+
+	switch ttype {
+	case 1: // Paired t-test.
+		// For paired tests, we must iterate both arrays in lockstep and
+		// only include pairs where BOTH values are numeric.
+		flat1 := flattenValues(args[0])
+		flat2 := flattenValues(args[1])
+		// Check for errors in either array.
+		for i := range flat1 {
+			if flat1[i].Type == ValueError {
+				return flat1[i], nil
+			}
+		}
+		for i := range flat2 {
+			if flat2[i].Type == ValueError {
+				return flat2[i], nil
+			}
+		}
+		if len(flat1) != len(flat2) {
+			return ErrorVal(ErrValNA), nil
+		}
+		// Collect paired numeric values.
+		var nums1, nums2 []float64
+		for i := range flat1 {
+			if flat1[i].Type == ValueNumber && flat2[i].Type == ValueNumber {
+				nums1 = append(nums1, flat1[i].Num)
+				nums2 = append(nums2, flat2[i].Num)
+			}
+		}
+		n := len(nums1)
+		if n < 2 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		// Compute differences and their mean/stdev.
+		diffs := make([]float64, n)
+		sumD := 0.0
+		for i := 0; i < n; i++ {
+			diffs[i] = nums1[i] - nums2[i]
+			sumD += diffs[i]
+		}
+		meanD := sumD / float64(n)
+		ssq := 0.0
+		for _, d := range diffs {
+			ssq += (d - meanD) * (d - meanD)
+		}
+		sdD := math.Sqrt(ssq / float64(n-1))
+		if sdD == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		tStat = meanD / (sdD / math.Sqrt(float64(n)))
+		df = float64(n - 1)
+
+	case 2, 3: // Two-sample tests: collect numeric values independently.
+		nums1, ev := collectNumeric(args[:1])
+		if ev != nil {
+			return *ev, nil
+		}
+		nums2, ev := collectNumeric(args[1:2])
+		if ev != nil {
+			return *ev, nil
+		}
+		n1 := len(nums1)
+		n2 := len(nums2)
+
+		if ttype == 2 { // Equal variance (homoscedastic).
+			if n1 < 2 || n2 < 2 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			mean1 := mean(nums1)
+			mean2 := mean(nums2)
+			ssq1 := sumSqDev(nums1, mean1)
+			ssq2 := sumSqDev(nums2, mean2)
+			// Pooled variance.
+			sp2 := (ssq1 + ssq2) / float64(n1+n2-2)
+			denom := math.Sqrt(sp2 * (1.0/float64(n1) + 1.0/float64(n2)))
+			if denom == 0 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			tStat = (mean1 - mean2) / denom
+			df = float64(n1 + n2 - 2)
+		} else { // Unequal variance (Welch's t-test).
+			if n1 < 2 || n2 < 2 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			mean1 := mean(nums1)
+			mean2 := mean(nums2)
+			var1 := sumSqDev(nums1, mean1) / float64(n1-1)
+			var2 := sumSqDev(nums2, mean2) / float64(n2-1)
+			se := math.Sqrt(var1/float64(n1) + var2/float64(n2))
+			if se == 0 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			tStat = (mean1 - mean2) / se
+			// Welch-Satterthwaite degrees of freedom.
+			vn1 := var1 / float64(n1)
+			vn2 := var2 / float64(n2)
+			num := (vn1 + vn2) * (vn1 + vn2)
+			den := vn1*vn1/float64(n1-1) + vn2*vn2/float64(n2-1)
+			df = num / den
+		}
+	}
+
+	// Compute p-value from the t-distribution.
+	// p = P(|T| >= |t|) for two-tailed, or P(T >= |t|) for one-tailed.
+	// Using: P(T >= |t|) = 1 - tDistCDF(|t|, df) = 0.5 * I_x(df/2, 0.5)
+	// where x = df / (df + t²).
+	absT := math.Abs(tStat)
+	bx := df / (df + absT*absT)
+	p := 0.5 * regBetaInc(bx, df/2, 0.5)
+
+	if tails == 2 {
+		p = 2 * p
+	}
+
+	return NumberVal(p), nil
+}
+
+// mean computes the arithmetic mean of a slice of floats.
+func mean(vals []float64) float64 {
+	s := 0.0
+	for _, v := range vals {
+		s += v
+	}
+	return s / float64(len(vals))
+}
+
+// sumSqDev computes the sum of squared deviations from the mean.
+func sumSqDev(vals []float64, m float64) float64 {
+	s := 0.0
+	for _, v := range vals {
+		d := v - m
+		s += d * d
+	}
+	return s
+}
+
+// fnZTEST implements Z.TEST(array, x, [sigma]).
+// Returns the one-tailed p-value of a z-test.
+func fnZTEST(args []Value) (Value, error) {
+	if len(args) < 2 || len(args) > 3 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	// Collect numeric values from the array (first arg only).
+	nums, ev := collectNumeric(args[:1])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(nums)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	x, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	// Compute mean.
+	sum := 0.0
+	for _, v := range nums {
+		sum += v
+	}
+	mean := sum / float64(n)
+
+	var sigma float64
+	if len(args) == 3 {
+		sigma, e = CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+	} else {
+		// Sample standard deviation.
+		if n < 2 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		ssq := 0.0
+		for _, v := range nums {
+			d := v - mean
+			ssq += d * d
+		}
+		sigma = math.Sqrt(ssq / float64(n-1))
+	}
+	if sigma == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	z := (mean - x) / (sigma / math.Sqrt(float64(n)))
+	return NumberVal(1 - normSDistCDF(z)), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.TEST — F-test (two-tailed probability that variances are not different)
+// ---------------------------------------------------------------------------
+// F.TEST(array1, array2)
+//
+//	array1 – first array or range of data
+//	array2 – second array or range of data
+//
+// Returns the two-tailed probability of the F-distribution. Text, logical
+// values, and empty cells in the arrays are ignored; zeros are included.
+// If either array has fewer than 2 numeric data points or either variance
+// is zero, returns #DIV/0!.
+
+func fnFTest(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	nums1, ev := collectNumeric(args[:1])
+	if ev != nil {
+		return *ev, nil
+	}
+	nums2, ev := collectNumeric(args[1:2])
+	if ev != nil {
+		return *ev, nil
+	}
+
+	n1 := len(nums1)
+	n2 := len(nums2)
+	if n1 < 2 || n2 < 2 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	// Compute sample variances (with n-1 denominator).
+	mean1 := mean(nums1)
+	mean2 := mean(nums2)
+	var1 := sumSqDev(nums1, mean1) / float64(n1-1)
+	var2 := sumSqDev(nums2, mean2) / float64(n2-1)
+
+	if var1 == 0 || var2 == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	// F-statistic: var1/var2 with df1=n1-1, df2=n2-1.
+	f := var1 / var2
+	df1 := float64(n1 - 1)
+	df2 := float64(n2 - 1)
+
+	// CDF of the F-distribution at f: I(d1*f/(d1*f+d2), d1/2, d2/2).
+	z := df1 * f / (df1*f + df2)
+	cdf := regBetaInc(z, df1/2.0, df2/2.0)
+
+	// Two-tailed p-value.
+	tail := cdf
+	if 1-cdf < tail {
+		tail = 1 - cdf
+	}
+	p := 2 * tail
+	if p > 1 {
+		p = 1
+	}
+
+	return NumberVal(p), nil
+}
+
+// fnGROWTH implements GROWTH(known_y's, [known_x's], [new_x's], [const]).
+// It returns predicted y-values for new x-values based on an exponential
+// regression model y = b * m^x (equivalently, linear regression on ln(y) vs x).
+func fnGROWTH(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- arrayDims returns (rows, cols) for an array, or (1,1) for scalar. ----
+	arrayDims := func(v Value) (int, int) {
+		if v.Type == ValueArray {
+			rows := len(v.Array)
+			if rows == 0 {
+				return 0, 0
+			}
+			return rows, len(v.Array[0])
+		}
+		return 1, 1
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// All known_y must be > 0.
+	for _, y := range knownY {
+		if y <= 0 {
+			return ErrorVal(ErrValNUM), nil
+		}
+	}
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. new_x's ----
+	var newX []float64
+	newXRows, newXCols := 1, 1
+	isNewXScalar := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		newX, ev = flattenNums(args[2])
+		if ev != nil {
+			return *ev, nil
+		}
+		newXRows, newXCols = arrayDims(args[2])
+		isNewXScalar = args[2].Type != ValueArray
+	} else {
+		newX = make([]float64, len(knownX))
+		copy(newX, knownX)
+		// Shape matches known_x's shape.
+		if len(args) >= 2 && args[1].Type != ValueEmpty {
+			newXRows, newXCols = arrayDims(args[1])
+			isNewXScalar = args[1].Type != ValueArray
+		} else {
+			newXRows, newXCols = arrayDims(args[0])
+			isNewXScalar = args[0].Type != ValueArray
+		}
+	}
+
+	// ---- 4. const ----
+	useConst := true
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		cv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 5. Compute ln(y) ----
+	lnY := make([]float64, n)
+	for i, y := range knownY {
+		lnY[i] = math.Log(y)
+	}
+
+	// ---- 6. Linear regression of lnY on knownX ----
+	var slope, intercept float64
+	if useConst {
+		// Compute means.
+		sumX, sumLnY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumLnY += lnY[i]
+		}
+		meanX := sumX / float64(n)
+		meanLnY := sumLnY / float64(n)
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX := 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (lnY[i] - meanLnY)
+			ssqX += dx * dx
+		}
+
+		if ssqX == 0 {
+			// All x values are the same. slope=0, intercept=meanLnY.
+			slope = 0
+			intercept = meanLnY
+		} else {
+			slope = cov / ssqX
+			intercept = meanLnY - slope*meanX
+		}
+	} else {
+		// const=FALSE: force intercept=0, so lnY = slope*x.
+		// slope = Σ(x*lnY) / Σ(x²)
+		sumXLnY := 0.0
+		sumXX := 0.0
+		for i := 0; i < n; i++ {
+			sumXLnY += knownX[i] * lnY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXLnY / sumXX
+		intercept = 0
+	}
+
+	// ---- 7. Predict ----
+	predicted := make([]float64, len(newX))
+	for i, x := range newX {
+		predicted[i] = math.Exp(intercept + slope*x)
+	}
+
+	// ---- 8. Return result ----
+	if isNewXScalar && len(predicted) == 1 {
+		return NumberVal(predicted[0]), nil
+	}
+
+	// Build array matching the shape of new_x's.
+	result := make([][]Value, newXRows)
+	idx := 0
+	for r := 0; r < newXRows; r++ {
+		row := make([]Value, newXCols)
+		for c := 0; c < newXCols; c++ {
+			if idx < len(predicted) {
+				row[c] = NumberVal(predicted[idx])
+				idx++
+			}
+		}
+		result[r] = row
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnTREND implements TREND(known_y's, [known_x's], [new_x's], [const]).
+// It returns predicted y-values for new x-values based on a linear
+// regression model y = slope*x + intercept.
+func fnTREND(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- arrayDims returns (rows, cols) for an array, or (1,1) for scalar. ----
+	arrayDims := func(v Value) (int, int) {
+		if v.Type == ValueArray {
+			rows := len(v.Array)
+			if rows == 0 {
+				return 0, 0
+			}
+			return rows, len(v.Array[0])
+		}
+		return 1, 1
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// Unlike GROWTH, y-values can be negative or zero.
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. new_x's ----
+	var newX []float64
+	newXRows, newXCols := 1, 1
+	isNewXScalar := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		newX, ev = flattenNums(args[2])
+		if ev != nil {
+			return *ev, nil
+		}
+		newXRows, newXCols = arrayDims(args[2])
+		isNewXScalar = args[2].Type != ValueArray
+	} else {
+		newX = make([]float64, len(knownX))
+		copy(newX, knownX)
+		// Shape matches known_x's shape.
+		if len(args) >= 2 && args[1].Type != ValueEmpty {
+			newXRows, newXCols = arrayDims(args[1])
+			isNewXScalar = args[1].Type != ValueArray
+		} else {
+			newXRows, newXCols = arrayDims(args[0])
+			isNewXScalar = args[0].Type != ValueArray
+		}
+	}
+
+	// ---- 4. const ----
+	useConst := true
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		cv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 5. Linear regression of knownY on knownX ----
+	var slope, intercept float64
+	if useConst {
+		// Compute means.
+		sumX, sumY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumY += knownY[i]
+		}
+		meanX := sumX / float64(n)
+		meanY := sumY / float64(n)
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX := 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (knownY[i] - meanY)
+			ssqX += dx * dx
+		}
+
+		if ssqX == 0 {
+			// All x values are the same. slope=0, intercept=meanY.
+			slope = 0
+			intercept = meanY
+		} else {
+			slope = cov / ssqX
+			intercept = meanY - slope*meanX
+		}
+	} else {
+		// const=FALSE: force intercept=0, so y = slope*x.
+		// slope = Σ(x*y) / Σ(x²)
+		sumXY := 0.0
+		sumXX := 0.0
+		for i := 0; i < n; i++ {
+			sumXY += knownX[i] * knownY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXY / sumXX
+		intercept = 0
+	}
+
+	// ---- 6. Predict ----
+	predicted := make([]float64, len(newX))
+	for i, x := range newX {
+		predicted[i] = intercept + slope*x
+	}
+
+	// ---- 7. Return result ----
+	if isNewXScalar && len(predicted) == 1 {
+		return NumberVal(predicted[0]), nil
+	}
+
+	// Build array matching the shape of new_x's.
+	result := make([][]Value, newXRows)
+	idx := 0
+	for r := 0; r < newXRows; r++ {
+		row := make([]Value, newXCols)
+		for c := 0; c < newXCols; c++ {
+			if idx < len(predicted) {
+				row[c] = NumberVal(predicted[idx])
+				idx++
+			}
+		}
+		result[r] = row
+	}
+	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// linestQRResidualSS computes the residual sum of squares using Householder
+// QR decomposition. When the direct computation gives ssResid == 0 for a
+// perfect (or near-perfect) linear fit, the QR approach may still produce a
+// tiny non-zero residual due to intermediate floating-point rounding in the
+// Householder reflections. This matches the behaviour of Excel's LINEST,
+// which uses an analogous QR-based algorithm internally.
+func linestQRResidualSS(knownX, knownY []float64, useConst bool) float64 {
+	n := len(knownY)
+	var p, cols int
+	if useConst {
+		p, cols = 2, 3
+	} else {
+		p, cols = 1, 2
+	}
+
+	// Build augmented matrix [A | y].
+	M := make([][]float64, n)
+	for i := 0; i < n; i++ {
+		M[i] = make([]float64, cols)
+		if useConst {
+			M[i][0] = 1.0       // intercept column
+			M[i][1] = knownX[i] // x column
+			M[i][2] = knownY[i] // response
+		} else {
+			M[i][0] = knownX[i]
+			M[i][1] = knownY[i]
+		}
+	}
+
+	// Householder QR factorisation applied to the augmented matrix.
+	for j := 0; j < p; j++ {
+		sigma := 0.0
+		for i := j; i < n; i++ {
+			sigma += M[i][j] * M[i][j]
+		}
+		sigma = math.Sqrt(sigma)
+		if sigma == 0 {
+			continue
+		}
+		if M[j][j] > 0 {
+			sigma = -sigma
+		}
+		M[j][j] -= sigma
+
+		vtv := 0.0
+		for i := j; i < n; i++ {
+			vtv += M[i][j] * M[i][j]
+		}
+		if vtv == 0 {
+			continue
+		}
+		beta := 2.0 / vtv
+
+		for k := j + 1; k < cols; k++ {
+			dot := 0.0
+			for i := j; i < n; i++ {
+				dot += M[i][j] * M[i][k]
+			}
+			dot *= beta
+			for i := j; i < n; i++ {
+				M[i][k] -= dot * M[i][j]
+			}
+		}
+		M[j][j] = sigma
+	}
+
+	// The residual SS is the sum of squares of the tail of Q^T * y.
+	yCol := cols - 1
+	ss := 0.0
+	for i := p; i < n; i++ {
+		ss += M[i][yCol] * M[i][yCol]
+	}
+	return ss
+}
+
+// fnLINEST implements LINEST(known_y's, [known_x's], [const], [stats]).
+// It calculates statistics for a line using the least squares method and
+// returns an array describing the line.
+func fnLINEST(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. const ----
+	useConst := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		cv, e := CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 4. stats ----
+	wantStats := false
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		sv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		wantStats = sv != 0
+	}
+
+	// ---- 5. Compute regression ----
+	nf := float64(n)
+	var slope, intercept float64
+	var ssResid, ssTotal, ssReg float64
+	var df float64
+	var sumXX float64 // Σ(xi²)   — used for se_intercept
+	var ssqX float64  // Σ(xi-x̄)² — used for se_slope (const=TRUE) or Σ(xi²) (const=FALSE)
+
+	if useConst {
+		// Compute means.
+		sumX, sumY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumY += knownY[i]
+		}
+		meanX := sumX / nf
+		meanY := sumY / nf
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX = 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (knownY[i] - meanY)
+			ssqX += dx * dx
+			sumXX += knownX[i] * knownX[i]
+		}
+
+		if ssqX == 0 {
+			slope = 0
+			intercept = meanY
+		} else {
+			slope = cov / ssqX
+			intercept = meanY - slope*meanX
+		}
+
+		// ss_total = Σ(yi - ȳ)²
+		for i := 0; i < n; i++ {
+			dy := knownY[i] - meanY
+			ssTotal += dy * dy
+		}
+		// ss_resid = Σ(yi - predicted)²
+		for i := 0; i < n; i++ {
+			pred := slope*knownX[i] + intercept
+			r := knownY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 2 // n - k - 1, k=1
+	} else {
+		// const=FALSE: force intercept=0.
+		// slope = Σ(xi*yi) / Σ(xi²)
+		sumXY := 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			sumXY += knownX[i] * knownY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXY / sumXX
+		intercept = 0
+		ssqX = sumXX // For const=FALSE, se_slope uses Σxi² directly.
+
+		// ss_total = Σ(yi²) (not centered)
+		for i := 0; i < n; i++ {
+			ssTotal += knownY[i] * knownY[i]
+		}
+		// ss_resid = Σ(yi - slope*xi)²
+		for i := 0; i < n; i++ {
+			pred := slope * knownX[i]
+			r := knownY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 1 // n - k, k=1
+	}
+
+	// ---- 6. Build result ----
+	if !wantStats {
+		// Return 1×2 array: {slope, intercept}
+		row := []Value{NumberVal(slope), NumberVal(intercept)}
+		return Value{Type: ValueArray, Array: [][]Value{row}}, nil
+	}
+
+	// stats=TRUE: build 5×2 array
+	var r2, seY, seSlope, seIntercept Value
+	var fStat Value
+
+	if df <= 0 {
+		// Not enough degrees of freedom.
+		seY = ErrorVal(ErrValNA)
+		seSlope = ErrorVal(ErrValNA)
+		seIntercept = ErrorVal(ErrValNA)
+		fStat = ErrorVal(ErrValNA)
+		if ssResid == 0 {
+			r2 = NumberVal(1) // perfect fit trivially
+		} else {
+			r2 = ErrorVal(ErrValNA)
+		}
+	} else {
+		// r²
+		if ssTotal == 0 {
+			if ssResid == 0 {
+				r2 = NumberVal(1)
+			} else {
+				r2 = NumberVal(0)
+			}
+		} else {
+			r2 = NumberVal(ssReg / ssTotal)
+		}
+
+		// se_y = sqrt(ss_resid / df)
+		seYVal := math.Sqrt(ssResid / df)
+		seY = NumberVal(seYVal)
+
+		// se_slope
+		if ssqX == 0 {
+			seSlope = ErrorVal(ErrValNA)
+		} else {
+			seSlope = NumberVal(seYVal / math.Sqrt(ssqX))
+		}
+
+		// se_intercept
+		if useConst {
+			if ssqX == 0 {
+				seIntercept = ErrorVal(ErrValNA)
+			} else {
+				seIntercept = NumberVal(seYVal * math.Sqrt(sumXX/(nf*ssqX)))
+			}
+		} else {
+			seIntercept = ErrorVal(ErrValNA)
+		}
+
+		// F-statistic = (ss_reg / k) / (ss_resid / df)
+		if ssResid == 0 && ssReg > 0 {
+			// Direct computation gave exactly zero residual (perfect fit).
+			// Fall back to QR decomposition which may produce a tiny non-zero
+			// residual from floating-point rounding, matching Excel's behaviour.
+			ssResidQR := linestQRResidualSS(knownX, knownY, useConst)
+			if ssResidQR > 0 {
+				fStat = NumberVal((ssReg / 1) / (ssResidQR / df))
+			} else {
+				fStat = ErrorVal(ErrValNUM)
+			}
+		} else if ssResid == 0 {
+			fStat = ErrorVal(ErrValNA)
+		} else {
+			fStat = NumberVal((ssReg / 1) / (ssResid / df))
+		}
+	}
+
+	// Row 1: {slope, intercept}
+	row1 := []Value{NumberVal(slope), NumberVal(intercept)}
+	// Row 2: {se_slope, se_intercept}
+	row2 := []Value{seSlope, seIntercept}
+	// Row 3: {r², se_y}
+	row3 := []Value{r2, seY}
+	// Row 4: {F, df}
+	row4 := []Value{fStat, NumberVal(df)}
+	// Row 5: {ss_reg, ss_resid}
+	row5 := []Value{NumberVal(ssReg), NumberVal(ssResid)}
+
+	return Value{Type: ValueArray, Array: [][]Value{row1, row2, row3, row4, row5}}, nil
+}
+
+// fnLOGEST implements LOGEST(known_y's, [known_x's], [const], [stats]).
+// It fits an exponential curve y = b * m^x to the data by performing
+// linear regression on ln(y) vs x (i.e., it is the exponential counterpart
+// of LINEST).
+func fnLOGEST(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// All known_y must be > 0 (since we take ln).
+	for _, y := range knownY {
+		if y <= 0 {
+			return ErrorVal(ErrValNUM), nil
+		}
+	}
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. const ----
+	useConst := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		cv, e := CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 4. stats ----
+	wantStats := false
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		sv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		wantStats = sv != 0
+	}
+
+	// ---- 5. Compute ln(y) ----
+	lnY := make([]float64, n)
+	for i, y := range knownY {
+		lnY[i] = math.Log(y)
+	}
+
+	// ---- 6. Compute regression on ln(y) vs x (same as LINEST) ----
+	nf := float64(n)
+	var slope, intercept float64
+	var ssResid, ssTotal, ssReg float64
+	var df float64
+	var sumXX float64 // Σ(xi²) — used for se_intercept
+	var ssqX float64  // Σ(xi-x̄)² or Σ(xi²) for const=FALSE
+
+	if useConst {
+		// Compute means.
+		sumX, sumLnY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumLnY += lnY[i]
+		}
+		meanX := sumX / nf
+		meanLnY := sumLnY / nf
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX = 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (lnY[i] - meanLnY)
+			ssqX += dx * dx
+			sumXX += knownX[i] * knownX[i]
+		}
+
+		if ssqX == 0 {
+			slope = 0
+			intercept = meanLnY
+		} else {
+			slope = cov / ssqX
+			intercept = meanLnY - slope*meanX
+		}
+
+		// ss_total = Σ(lnYi - mean(lnY))²
+		for i := 0; i < n; i++ {
+			dy := lnY[i] - meanLnY
+			ssTotal += dy * dy
+		}
+		// ss_resid = Σ(lnYi - predicted)²
+		for i := 0; i < n; i++ {
+			pred := slope*knownX[i] + intercept
+			r := lnY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 2 // n - k - 1, k=1
+	} else {
+		// const=FALSE: force intercept=0, so lnY = slope*x.
+		// slope = Σ(xi*lnYi) / Σ(xi²)
+		sumXLnY := 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			sumXLnY += knownX[i] * lnY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXLnY / sumXX
+		intercept = 0
+		ssqX = sumXX
+
+		// ss_total = Σ(lnYi²) (not centered)
+		for i := 0; i < n; i++ {
+			ssTotal += lnY[i] * lnY[i]
+		}
+		// ss_resid = Σ(lnYi - slope*xi)²
+		for i := 0; i < n; i++ {
+			pred := slope * knownX[i]
+			r := lnY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 1 // n - k, k=1
+	}
+
+	// ---- 7. Build result ----
+	// Row 1: {exp(slope), exp(intercept)} = {m, b} where y = b*m^x
+	m := math.Exp(slope)
+	b := math.Exp(intercept)
+
+	if !wantStats {
+		// Return 1×2 array: {m, b}
+		row := []Value{NumberVal(m), NumberVal(b)}
+		return Value{Type: ValueArray, Array: [][]Value{row}}, nil
+	}
+
+	// stats=TRUE: build 5×2 array
+	var r2, seY, seSlope, seIntercept Value
+	var fStat Value
+
+	if df <= 0 {
+		// Not enough degrees of freedom.
+		seY = ErrorVal(ErrValNA)
+		seSlope = ErrorVal(ErrValNA)
+		seIntercept = ErrorVal(ErrValNA)
+		fStat = ErrorVal(ErrValNA)
+		if ssResid == 0 {
+			r2 = NumberVal(1) // perfect fit trivially
+		} else {
+			r2 = ErrorVal(ErrValNA)
+		}
+	} else {
+		// r²
+		r2Val := 0.0
+		if ssTotal == 0 {
+			if ssResid == 0 {
+				r2Val = 1
+			}
+		} else {
+			r2Val = ssReg / ssTotal
+		}
+		r2 = NumberVal(r2Val)
+
+		// Detect near-perfect exponential fit. The log transformation
+		// introduces floating-point noise that makes ssResid tiny but
+		// nonzero even for mathematically perfect exponential data
+		// (e.g., y = 2^x). When R² rounds to exactly 1.0 in float64,
+		// ssResid is dominated by this noise and must be treated as
+		// zero, matching Excel's behaviour.
+		perfectFit := r2Val == 1.0 && ssReg > 0
+
+		// For a perfect fit, recompute ssResid so that downstream
+		// statistics (se_y, se_slope, se_intercept, F) are consistent.
+		if perfectFit {
+			ssResid = 0
+		}
+
+		// se_y = sqrt(ss_resid / df) — from the ln(y) regression, as-is
+		seYVal := math.Sqrt(ssResid / df)
+		seY = NumberVal(seYVal)
+
+		// se_slope — raw from ln(y) regression (NOT exponentiated)
+		if ssqX == 0 {
+			seSlope = ErrorVal(ErrValNA)
+		} else {
+			seSlope = NumberVal(seYVal / math.Sqrt(ssqX))
+		}
+
+		// se_intercept — raw from ln(y) regression (NOT exponentiated)
+		if useConst {
+			if ssqX == 0 {
+				seIntercept = ErrorVal(ErrValNA)
+			} else {
+				seIntercept = NumberVal(seYVal * math.Sqrt(sumXX/(nf*ssqX)))
+			}
+		} else {
+			seIntercept = ErrorVal(ErrValNA)
+		}
+
+		// F-statistic = (ss_reg / k) / (ss_resid / df).
+		if ssResid == 0 && ssReg > 0 {
+			if useConst {
+				// Perfect fit with intercept: fall back to QR
+				// decomposition to obtain a tiny non-zero residual
+				// from floating-point rounding, matching the
+				// approach LINEST uses for perfect linear fits.
+				ssResidQR := linestQRResidualSS(knownX, lnY, useConst)
+				if ssResidQR > 0 {
+					fStat = NumberVal((ssReg / 1) / (ssResidQR / df))
+				} else {
+					fStat = ErrorVal(ErrValNUM)
+				}
+			} else {
+				// Perfect fit without intercept: infinite F.
+				fStat = ErrorVal(ErrValNUM)
+			}
+		} else if ssResid == 0 {
+			fStat = ErrorVal(ErrValNA)
+		} else {
+			fStat = NumberVal((ssReg / 1) / (ssResid / df))
+		}
+	}
+
+	// Row 1: {m, b} = {exp(slope), exp(intercept)}
+	row1 := []Value{NumberVal(m), NumberVal(b)}
+	// Row 2: {se_slope, se_intercept} — raw standard errors from ln(y) regression
+	row2 := []Value{seSlope, seIntercept}
+	// Row 3: {r², se_y} — from ln(y) regression, as-is
+	row3 := []Value{r2, seY}
+	// Row 4: {F, df} — from ln(y) regression, as-is
+	row4 := []Value{fStat, NumberVal(df)}
+	// Row 5: {ss_reg, ss_resid} — from ln(y) regression, as-is
+	row5 := []Value{NumberVal(ssReg), NumberVal(ssResid)}
+
+	return Value{Type: ValueArray, Array: [][]Value{row1, row2, row3, row4, row5}}, nil
 }

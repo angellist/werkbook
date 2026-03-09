@@ -152,7 +152,7 @@ func TestPOWER(t *testing.T) {
 		{"bool_true_power", "POWER(3,TRUE)", 3, 0},
 		{"bool_false_power", "POWER(3,FALSE)", 1, 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "POWER(5,2)", 25, 0},
 		{"doc_ex2", "POWER(98.6,3.2)", 2401077.2220695773, 1e-3},
 		{"doc_ex3", "POWER(4,5/4)", 5.656854249, 1e-6},
@@ -260,7 +260,7 @@ func TestABS(t *testing.T) {
 		{"expr_neg_result", "ABS(2-5)", 3},
 		{"expr_pos_result", "ABS(5-2)", 3},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ABS(2)", 2},
 		{"doc_ex2", "ABS(-2)", 2},
 	}
@@ -357,7 +357,7 @@ func TestFLOOR(t *testing.T) {
 		{"dec_sig_0.01", "FLOOR(0.234,0.01)", 0.23},
 		{"dec_sig_0.05", "FLOOR(4.42,0.05)", 4.4},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "FLOOR(3.7,2)", 2},
 		{"doc_ex2", "FLOOR(-2.5,-2)", -2},
 		{"doc_ex3", "FLOOR(1.58,0.1)", 1.5},
@@ -484,7 +484,7 @@ func TestCEILING(t *testing.T) {
 		{"dec_sig_0.05", "CEILING(4.42,0.05)", 4.45},
 		{"dec_sig_0.25", "CEILING(1.1,0.25)", 1.25},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "CEILING(2.5,1)", 3},
 		{"doc_ex2", "CEILING(-2.5,-2)", -4},
 		{"doc_ex3", "CEILING(-2.5,2)", -2},
@@ -811,7 +811,7 @@ func TestCEILINGPRECISE(t *testing.T) {
 		// String coercion of numeric strings
 		{"string_num", "CEILING.PRECISE(\"4.3\")", 5},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "CEILING.PRECISE(4.3)", 5},
 		{"doc_example_2", "CEILING.PRECISE(-4.3)", -4},
 		{"doc_example_3", "CEILING.PRECISE(4.3,2)", 6},
@@ -914,7 +914,7 @@ func TestFLOORPRECISE(t *testing.T) {
 		// String coercion of numeric strings
 		{"string_num", "FLOOR.PRECISE(\"3.2\")", 3},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "FLOOR.PRECISE(-3.2,-1)", -4},
 		{"doc_example_2", "FLOOR.PRECISE(3.2,1)", 3},
 		{"doc_example_3", "FLOOR.PRECISE(-3.2,1)", -4},
@@ -1006,7 +1006,7 @@ func TestMOD(t *testing.T) {
 		// Precision overflow: |n/d| >= 1e13 -> #NUM!
 		{"precision_overflow", "MOD(100,-1e-15)", ErrValNUM},
 		{"precision_overflow_large", "MOD(1e18,1)", ErrValNUM},
-		{"precision_overflow_excel", "MOD(10^15,7)", ErrValNUM},
+		{"precision_overflow", "MOD(10^15,7)", ErrValNUM},
 	}
 
 	for _, tt := range errTests {
@@ -1032,7 +1032,7 @@ func TestMROUND(t *testing.T) {
 		wantNum float64
 		tol     float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "MROUND(10,3)", 9, 0},
 		{"doc_ex2", "MROUND(-10,-3)", -9, 0},
 		{"doc_ex3", "MROUND(1.3,0.2)", 1.4, 1e-10},
@@ -1051,18 +1051,18 @@ func TestMROUND(t *testing.T) {
 		{"pos_round_up", "MROUND(8,5)", 10, 0},
 		{"pos_exact", "MROUND(10,5)", 10, 0},
 		{"pos_round_nearest", "MROUND(13,5)", 15, 0},
-		{"pos_round_mid_away", "MROUND(7.5,5)", 10, 0},     // midpoint rounds away from zero
+		{"pos_round_mid_away", "MROUND(7.5,5)", 10, 0}, // midpoint rounds away from zero
 
 		// Negative rounding - both signs negative
 		{"neg_round_down", "MROUND(-7,-5)", -5, 0},
 		{"neg_round_up", "MROUND(-8,-5)", -10, 0},
 		{"neg_exact", "MROUND(-10,-5)", -10, 0},
 		{"neg_round_nearest", "MROUND(-13,-5)", -15, 0},
-		{"neg_round_mid_away", "MROUND(-7.5,-5)", -10, 0},  // midpoint rounds away from zero
+		{"neg_round_mid_away", "MROUND(-7.5,-5)", -10, 0}, // midpoint rounds away from zero
 
 		// Decimal multiples
-		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per Excel docs
-		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per Excel docs
+		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10}, // midpoint with decimal multiple: direction undefined per docs
+		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10}, // midpoint with decimal multiple: direction undefined per docs
 		{"decimal_mult_3", "MROUND(0.5,0.25)", 0.5, 1e-10},
 		{"decimal_mult_4", "MROUND(0.6,0.25)", 0.5, 1e-10},
 		{"decimal_mult_5", "MROUND(0.63,0.25)", 0.75, 1e-10},
@@ -1170,7 +1170,7 @@ func TestROUND(t *testing.T) {
 		{"neg_digits_hundreds", "ROUND(149,-2)", 100, 0},
 		{"neg_digits_hundreds_up", "ROUND(150,-2)", 200, 0},
 
-		// Rounding 0.5 (away from zero in Excel)
+		// Rounding 0.5 (away from zero)
 		{"half_up", "ROUND(2.5,0)", 3, 0},
 		{"half_up_neg", "ROUND(-2.5,0)", -3, 0},
 		{"half_up_1dp", "ROUND(0.15,1)", 0.2, 1e-10},
@@ -1298,7 +1298,7 @@ func TestROUNDDOWN(t *testing.T) {
 		{"string_number", `ROUNDDOWN("3.7",0)`, 3, 0},
 		{"string_digits", `ROUNDDOWN(3.14159,"2")`, 3.14, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ROUNDDOWN(3.2,0)", 3, 0},
 		{"doc_ex2", "ROUNDDOWN(76.9,0)", 76, 0},
 		{"doc_ex3", "ROUNDDOWN(3.14159,3)", 3.141, 1e-10},
@@ -1406,7 +1406,7 @@ func TestROUNDUP(t *testing.T) {
 		{"string_number", `ROUNDUP("3.2",0)`, 4, 0},
 		{"string_digits", `ROUNDUP(3.14159,"2")`, 3.15, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ROUNDUP(3.2,0)", 4, 0},
 		{"doc_ex2", "ROUNDUP(76.9,0)", 77, 0},
 		{"doc_ex3", "ROUNDUP(3.14159,3)", 3.142, 1e-10},
@@ -1481,6 +1481,647 @@ func TestRandFunctions(t *testing.T) {
 	if got.Type != ValueNumber || got.Num < 1 || got.Num > 10 {
 		t.Errorf("RANDBETWEEN(1,10) = %g, want [1,10]", got.Num)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// RAND comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestRAND(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns_number_type", func(t *testing.T) {
+		cf := evalCompile(t, "RAND()")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Errorf("RAND() type = %v, want ValueNumber", got.Type)
+		}
+	})
+
+	t.Run("no_args_works", func(t *testing.T) {
+		cf := evalCompile(t, "RAND()")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Errorf("RAND() should succeed with no args, got type %v", got.Type)
+		}
+	})
+
+	t.Run("wrong_arg_count_one_number", func(t *testing.T) {
+		cf := evalCompile(t, "RAND(1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RAND(1) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("wrong_arg_count_string", func(t *testing.T) {
+		cf := evalCompile(t, `RAND("x")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`RAND("x") = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("wrong_arg_count_two_args", func(t *testing.T) {
+		cf := evalCompile(t, "RAND(1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RAND(1,2) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("lower_bound_inclusive", func(t *testing.T) {
+		// RAND() >= 0 must always be true
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RAND()>=0")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RAND()>=0 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("upper_bound_exclusive", func(t *testing.T) {
+		// RAND() < 1 must always be true
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RAND()<1")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RAND()<1 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("not_negative", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RAND()")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Num < 0 {
+				t.Fatalf("RAND() = %g, want non-negative (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("TYPE_equals_1", func(t *testing.T) {
+		cf := evalCompile(t, "TYPE(RAND())")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(RAND()) = %v, want 1 (number)", got)
+		}
+	})
+
+	t.Run("ISNUMBER_true", func(t *testing.T) {
+		cf := evalCompile(t, "ISNUMBER(RAND())")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNUMBER(RAND()) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("ISTEXT_false", func(t *testing.T) {
+		cf := evalCompile(t, "ISTEXT(RAND())")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISTEXT(RAND()) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("arithmetic_plus_one", func(t *testing.T) {
+		// RAND()+1 should be between 1 (inclusive) and 2 (exclusive)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RAND()+1")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num >= 2 {
+				t.Fatalf("RAND()+1 = %g, want [1,2) (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("scaling_times_10", func(t *testing.T) {
+		// RAND()*10 should be in [0, 10)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RAND()*10")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num >= 10 {
+				t.Fatalf("RAND()*10 = %g, want [0,10) (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("INT_of_RAND_is_zero", func(t *testing.T) {
+		// Since 0 <= RAND() < 1, INT(RAND()) = 0 always
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "INT(RAND())")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != 0 {
+				t.Fatalf("INT(RAND()) = %g, want 0 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("in_IF_condition", func(t *testing.T) {
+		// RAND()+1 > 0 is always true, so IF should return "yes"
+		cf := evalCompile(t, `IF(RAND()+1>0,"yes","no")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf(`IF(RAND()+1>0,"yes","no") = %v, want "yes"`, got)
+		}
+	})
+
+	t.Run("comparison_chain_AND", func(t *testing.T) {
+		// AND(RAND()>=0, RAND()<1) should always be TRUE
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "AND(RAND()>=0, RAND()<1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("AND(RAND()>=0, RAND()<1) = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("dice_roll_simulation", func(t *testing.T) {
+		// INT(RAND()*6)+1 should be in [1, 6]
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "INT(RAND()*6)+1")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 6 {
+				t.Fatalf("INT(RAND()*6)+1 = %g, want [1,6] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("ROUND_to_zero_decimals", func(t *testing.T) {
+		// ROUND(RAND(),0) should be either 0 or 1
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "ROUND(RAND(),0)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || (got.Num != 0 && got.Num != 1) {
+				t.Fatalf("ROUND(RAND(),0) = %g, want 0 or 1 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("two_calls_independent", func(t *testing.T) {
+		// Two separate RAND() evaluations should both be valid numbers in [0,1)
+		cf1 := evalCompile(t, "RAND()")
+		got1, err := Eval(cf1, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval RAND() #1: %v", err)
+		}
+		cf2 := evalCompile(t, "RAND()")
+		got2, err := Eval(cf2, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval RAND() #2: %v", err)
+		}
+		if got1.Type != ValueNumber || got1.Num < 0 || got1.Num >= 1 {
+			t.Errorf("RAND() #1 = %g, want [0,1)", got1.Num)
+		}
+		if got2.Type != ValueNumber || got2.Num < 0 || got2.Num >= 1 {
+			t.Errorf("RAND() #2 = %g, want [0,1)", got2.Num)
+		}
+	})
+
+	t.Run("SUM_of_two_RANDs", func(t *testing.T) {
+		// SUM(RAND(), RAND()) should be in [0, 2)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "SUM(RAND(), RAND())")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num >= 2 {
+				t.Fatalf("SUM(RAND(), RAND()) = %g, want [0,2) (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("AVERAGE_of_RAND", func(t *testing.T) {
+		// AVERAGE(RAND()) should be in [0, 1)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "AVERAGE(RAND())")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num >= 1 {
+				t.Fatalf("AVERAGE(RAND()) = %g, want [0,1) (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("RAND_times_100_int", func(t *testing.T) {
+		// INT(RAND()*100) should be in [0, 99] (Excel doc example)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "INT(RAND()*100)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num > 99 {
+				t.Fatalf("INT(RAND()*100) = %g, want [0,99] (iteration %d)", got.Num, i)
+			}
+			// Should be an integer
+			if got.Num != math.Floor(got.Num) {
+				t.Fatalf("INT(RAND()*100) = %g, want integer (iteration %d)", got.Num, i)
+			}
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// RANDBETWEEN comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestRANDBETWEEN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("basic_returns_number", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Errorf("RANDBETWEEN(1,10) type = %v, want ValueNumber", got.Type)
+		}
+	})
+
+	t.Run("lower_bound_inclusive", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,10)>=1")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RANDBETWEEN(1,10)>=1 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("upper_bound_inclusive", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,10)<=10")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RANDBETWEEN(1,10)<=10 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("same_bounds_returns_that_value", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != 1 {
+				t.Fatalf("RANDBETWEEN(1,1) = %g, want 1 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("same_bounds_zero", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(0,0)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != 0 {
+				t.Fatalf("RANDBETWEEN(0,0) = %g, want 0 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_range", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-10,-1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -10 || got.Num > -1 {
+				t.Fatalf("RANDBETWEEN(-10,-1) = %g, want [-10,-1] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_to_positive_range", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-5,5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -5 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(-5,5) = %g, want [-5,5] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("binary_range_0_or_1", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(0,1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || (got.Num != 0 && got.Num != 1) {
+				t.Fatalf("RANDBETWEEN(0,1) = %g, want 0 or 1 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("returns_integer_no_fractional_part", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,100)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != math.Floor(got.Num) {
+				t.Fatalf("RANDBETWEEN(1,100) = %g, want integer (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("TYPE_equals_1", func(t *testing.T) {
+		cf := evalCompile(t, "TYPE(RANDBETWEEN(1,10))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(RANDBETWEEN(1,10)) = %v, want 1 (number)", got)
+		}
+	})
+
+	t.Run("ISNUMBER_true", func(t *testing.T) {
+		cf := evalCompile(t, "ISNUMBER(RANDBETWEEN(1,10))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNUMBER(RANDBETWEEN(1,10)) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("error_bottom_greater_than_top", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(10,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("RANDBETWEEN(10,1) = %v, want #NUM! error", got)
+		}
+	})
+
+	t.Run("error_zero_args", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN()")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("RANDBETWEEN() = %v, want error", got)
+		}
+	})
+
+	t.Run("error_one_arg", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RANDBETWEEN(1) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("error_three_args", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,5,10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RANDBETWEEN(1,5,10) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("error_propagation_first_arg_VALUE", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN(VALUE("x"),10)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf(`RANDBETWEEN(VALUE("x"),10) = %v, want error`, got)
+		}
+	})
+
+	t.Run("error_propagation_second_arg_NA", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,NA())")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("RANDBETWEEN(1,NA()) = %v, want #N/A error", got)
+		}
+	})
+
+	t.Run("decimal_bounds_ceil_floor", func(t *testing.T) {
+		// RANDBETWEEN(1.5, 5.5) → Ceil(1.5)=2, Floor(5.5)=5 → result in [2,5]
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1.5,5.5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 2 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(1.5,5.5) = %g, want [2,5] (iteration %d)", got.Num, i)
+			}
+			if got.Num != math.Floor(got.Num) {
+				t.Fatalf("RANDBETWEEN(1.5,5.5) = %g, want integer (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("large_range", func(t *testing.T) {
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,1000000)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 1000000 {
+				t.Fatalf("RANDBETWEEN(1,1000000) = %g, want [1,1000000] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_to_zero", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-100,0)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -100 || got.Num > 0 {
+				t.Fatalf("RANDBETWEEN(-100,0) = %g, want [-100,0] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("boolean_coercion_TRUE_as_1", func(t *testing.T) {
+		// TRUE coerces to 1, so RANDBETWEEN(TRUE,5) → RANDBETWEEN(1,5)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(TRUE,5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(TRUE,5) = %g, want [1,5] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("string_coercion_numeric_strings", func(t *testing.T) {
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, `RANDBETWEEN("1","10")`)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 10 {
+				t.Fatalf(`RANDBETWEEN("1","10") = %g, want [1,10] (iteration %d)`, got.Num, i)
+			}
+		}
+	})
+
+	t.Run("error_non_numeric_string", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN("abc",10)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`RANDBETWEEN("abc",10) = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("error_non_numeric_string_second_arg", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN(1,"xyz")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`RANDBETWEEN(1,"xyz") = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("decimal_bounds_that_cross_after_ceil_floor", func(t *testing.T) {
+		// RANDBETWEEN(1.9, 1.1) → Ceil(1.9)=2, Floor(1.1)=1 → lo>hi → #NUM!
+		cf := evalCompile(t, "RANDBETWEEN(1.9,1.1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("RANDBETWEEN(1.9,1.1) = %v, want #NUM! error", got)
+		}
+	})
+
+	t.Run("boolean_FALSE_as_0", func(t *testing.T) {
+		// FALSE coerces to 0, so RANDBETWEEN(FALSE,3) → RANDBETWEEN(0,3)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(FALSE,3)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num > 3 {
+				t.Fatalf("RANDBETWEEN(FALSE,3) = %g, want [0,3] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_same_bounds", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-7,-7)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != -7 {
+				t.Fatalf("RANDBETWEEN(-7,-7) = %g, want -7 (iteration %d)", got.Num, i)
+			}
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -2257,15 +2898,15 @@ func TestSERIESSUM(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel documentation example: cos(PI/4) via Taylor series
-		{"excel_example", "SERIESSUM(PI()/4,0,2,{1,-0.5,0.041666667,-0.001388889})", 0.707103, 1e-4},
+		// Documentation example: cos(PI/4) via Taylor series
+		{"doc_example", "SERIESSUM(PI()/4,0,2,{1,-0.5,0.041666667,-0.001388889})", 0.707103, 1e-4},
 		// Single coefficient
 		{"single_coeff", "SERIESSUM(2,3,1,{5})", 40, 0},
 		// Single coefficient as scalar
 		{"scalar_coeff", "SERIESSUM(2,3,1,5)", 40, 0},
 		// x=0, n>0: 0^positive = 0, so result = 0
 		{"x_zero_n_pos", "SERIESSUM(0,1,1,{3,4,5})", 0, 0},
-		// x=0, n=0: Excel returns #NUM! (0^0 indeterminate) — tested in error cases below
+		// x=0, n=0: returns #NUM! (0^0 indeterminate) — tested in error cases below
 		// x=1: all powers are 1, so result = sum of coefficients
 		{"x_one", "SERIESSUM(1,2,3,{2,3,4})", 9, 0},
 		// Negative x
@@ -2294,7 +2935,7 @@ func TestSERIESSUM(t *testing.T) {
 		{"power_step_2", "SERIESSUM(2,0,2,{1,2,3})", 57, 0},
 		// Very small x: 0.001^0=1 => 1*1 + 1000*0.001 = 2
 		{"small_x", "SERIESSUM(0.001,0,1,{1,1000})", 2, 1e-10},
-		// x=0, n=0, m=0: Excel returns #NUM! (0^0 indeterminate) — tested in error cases below
+		// x=0, n=0, m=0: returns #NUM! (0^0 indeterminate) — tested in error cases below
 	}
 
 	for _, tt := range numTests {
@@ -2866,17 +3507,17 @@ func TestMDETERM(t *testing.T) {
 
 		// 2x2 matrices
 		{"MDETERM({3,6;1,1})", -3, 0},
-		{"MDETERM({1,0;0,1})", 1, 0},    // identity
-		{"MDETERM({0,0;0,0})", 0, 0},    // zero matrix
-		{"MDETERM({2,0;0,3})", 6, 0},    // diagonal
-		{"MDETERM({1,2;2,4})", 0, 0},    // singular
-		{"MDETERM({-1,-2;3,4})", 2, 0},  // negative numbers
+		{"MDETERM({1,0;0,1})", 1, 0},   // identity
+		{"MDETERM({0,0;0,0})", 0, 0},   // zero matrix
+		{"MDETERM({2,0;0,3})", 6, 0},   // diagonal
+		{"MDETERM({1,2;2,4})", 0, 0},   // singular
+		{"MDETERM({-1,-2;3,4})", 2, 0}, // negative numbers
 
 		// 3x3 matrices
 		{"MDETERM({3,6,1;1,1,0;3,10,2})", 1, 1e-10},
-		{"MDETERM({1,0,0;0,1,0;0,0,1})", 1, 0},        // 3x3 identity
-		{"MDETERM({2,0,0;0,3,0;0,0,4})", 24, 1e-10},    // diagonal
-		{"MDETERM({1,2,3;4,5,6;7,8,9})", 0, 1e-10},     // singular
+		{"MDETERM({1,0,0;0,1,0;0,0,1})", 1, 0},      // 3x3 identity
+		{"MDETERM({2,0,0;0,3,0;0,0,4})", 24, 1e-10}, // diagonal
+		{"MDETERM({1,2,3;4,5,6;7,8,9})", 0, 1e-10},  // singular
 
 		// 4x4 matrix
 		{"MDETERM({1,3,8,5;1,3,6,1;1,1,1,0;7,3,10,2})", 88, 1e-10},
@@ -5046,10 +5687,10 @@ func TestINT(t *testing.T) {
 		{"already_int_pos", "INT(10)", 10},
 		// Already integer negative
 		{"already_int_neg", "INT(-10)", -10},
-		// Excel doc example: INT(8.9) = 8
-		{"excel_doc_pos", "INT(8.9)", 8},
-		// Excel doc example: INT(-8.9) = -9
-		{"excel_doc_neg", "INT(-8.9)", -9},
+		// Doc example: INT(8.9) = 8
+		{"doc_pos", "INT(8.9)", 8},
+		// Doc example: INT(-8.9) = -9
+		{"doc_neg", "INT(-8.9)", -9},
 		// Positive number just below next integer
 		{"just_below", "INT(2.999999)", 2},
 		// Negative number just above integer
@@ -5134,8 +5775,8 @@ func TestSQRT(t *testing.T) {
 		// Boolean coercion
 		{"bool_true", "SQRT(TRUE)", 1},
 		{"bool_false", "SQRT(FALSE)", 0},
-		// Excel doc example: SQRT(ABS(-16)) = 4
-		{"excel_doc_abs_neg16", "SQRT(ABS(-16))", 4},
+		// Doc example: SQRT(ABS(-16)) = 4
+		{"doc_abs_neg16", "SQRT(ABS(-16))", 4},
 	}
 
 	for _, tt := range numTests {
@@ -5189,7 +5830,7 @@ func TestSQRTPI(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"sqrtpi_1", "SQRTPI(1)", math.Sqrt(math.Pi)},
 		{"sqrtpi_2", "SQRTPI(2)", math.Sqrt(2 * math.Pi)},
 		// Zero
@@ -5303,10 +5944,10 @@ func TestLOG(t *testing.T) {
 		{"log_large", "LOG(1000000)", 6, 1e-10},
 		{"log_large_base2", "LOG(1048576,2)", 20, 1e-10},
 
-		// Excel doc examples
-		{"excel_example_1", "LOG(10)", 1, 0},
-		{"excel_example_2", "LOG(8,2)", 3, 0},
-		{"excel_example_3", "LOG(86,2.7182818)", 4.4543473, 1e-4},
+		// Doc examples
+		{"doc_example_1", "LOG(10)", 1, 0},
+		{"doc_example_2", "LOG(8,2)", 3, 0},
+		{"doc_example_3", "LOG(86,2.7182818)", 4.4543473, 1e-4},
 
 		// Boolean coercion: TRUE=1
 		{"log_true", "LOG(TRUE)", 0, 0},
@@ -5420,10 +6061,10 @@ func TestLOG10(t *testing.T) {
 		{"log10_1e-5", "LOG10(0.00001)", -5, 1e-10},
 		{"log10_1e-10", "LOG10(1E-10)", -10, 1e-6},
 
-		// Excel documentation example
-		{"excel_example_86", "LOG10(86)", 1.93449845124357, 1e-10},
-		{"excel_example_10", "LOG10(10)", 1, 0},
-		{"excel_example_1e5", "LOG10(1E5)", 5, 1e-10},
+		// Documentation example
+		{"doc_example_86", "LOG10(86)", 1.93449845124357, 1e-10},
+		{"doc_example_10", "LOG10(10)", 1, 0},
+		{"doc_example_1e5", "LOG10(1E5)", 5, 1e-10},
 
 		// Boolean coercion: TRUE=1 -> LOG10(1)=0
 		{"log10_true", "LOG10(TRUE)", 0, 0},
@@ -5642,7 +6283,7 @@ func TestACOS(t *testing.T) {
 		{"acos_string_zero", `ACOS("0")`, math.Pi / 2, 1e-10},
 		{"acos_string_one", `ACOS("1")`, 0, 0},
 
-		// Excel doc example: ACOS(-0.5) = 2.094395102
+		// Doc example: ACOS(-0.5) = 2.094395102
 		{"doc_example_neg0.5", "ACOS(-0.5)", 2.094395102, 1e-6},
 	}
 
@@ -5715,7 +6356,7 @@ func TestACOSH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_1", "ACOSH(1)", 0, 0},
 		{"doc_example_10", "ACOSH(10)", 2.9932228461263808, 1e-10},
 
@@ -6015,7 +6656,7 @@ func TestASINH(t *testing.T) {
 		{"asinh_1", "ASINH(1)", math.Asinh(1), 1e-10},
 		{"asinh_neg1", "ASINH(-1)", math.Asinh(-1), 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_neg2.5", "ASINH(-2.5)", -1.6472311463710958, 1e-10},
 		{"doc_10", "ASINH(10)", 2.99822295029797, 1e-10},
 
@@ -6115,7 +6756,7 @@ func TestATAN(t *testing.T) {
 		{"atan_1", "ATAN(1)", math.Pi / 4, 1e-10},
 		{"atan_neg1", "ATAN(-1)", -math.Pi / 4, 1e-10},
 
-		// Excel doc example: ATAN(1) = 0.785398163...
+		// Doc example: ATAN(1) = 0.785398163...
 		{"doc_ex1", "ATAN(1)", 0.785398163, 1e-9},
 
 		// Fractional inputs
@@ -6302,7 +6943,7 @@ func TestATANH(t *testing.T) {
 		{"atanh_0.5", "ATANH(0.5)", 0.5493061443340549, 1e-10},
 		{"atanh_neg0.5", "ATANH(-0.5)", -0.5493061443340549, 1e-10},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ATANH(0.76159416)", 1.00000001, 1e-8},
 		{"doc_ex2", "ATANH(-0.1)", -0.100335348, 1e-9},
 
@@ -6414,7 +7055,7 @@ func TestFACT(t *testing.T) {
 		{"seven", "FACT(7)", 5040},
 		{"ten", "FACT(10)", 3628800},
 		{"twelve", "FACT(12)", 479001600},
-		// Decimal inputs — truncated to integer (Excel doc: FACT(1.9) = 1)
+		// Decimal inputs — truncated to integer (doc: FACT(1.9) = 1)
 		{"decimal_1.9", "FACT(1.9)", 1},
 		{"decimal_5.9", "FACT(5.9)", 120},
 		{"decimal_0.5", "FACT(0.5)", 1},
@@ -6454,7 +7095,7 @@ func TestFACT(t *testing.T) {
 		formula string
 		errVal  ErrorValue
 	}{
-		// Negative numbers → #NUM! (Excel doc: FACT(-1) = #NUM!)
+		// Negative numbers → #NUM! (doc: FACT(-1) = #NUM!)
 		{"negative_one", "FACT(-1)", ErrValNUM},
 		{"negative_five", "FACT(-5)", ErrValNUM},
 		// FACT(-0.1): math.Trunc(-0.1) = -0, which is not < 0, so returns FACT(0) = 1
@@ -6496,21 +7137,21 @@ func TestFACTDOUBLE(t *testing.T) {
 		{"one", "FACTDOUBLE(1)", 1},
 		// Even numbers: n!! = n*(n-2)*(n-4)...(4)(2)
 		{"two", "FACTDOUBLE(2)", 2},
-		{"four", "FACTDOUBLE(4)", 8},        // 4*2
-		{"six", "FACTDOUBLE(6)", 48},        // 6*4*2
-		{"eight", "FACTDOUBLE(8)", 384},     // 8*6*4*2
-		{"ten", "FACTDOUBLE(10)", 3840},     // 10*8*6*4*2
+		{"four", "FACTDOUBLE(4)", 8},    // 4*2
+		{"six", "FACTDOUBLE(6)", 48},    // 6*4*2
+		{"eight", "FACTDOUBLE(8)", 384}, // 8*6*4*2
+		{"ten", "FACTDOUBLE(10)", 3840}, // 10*8*6*4*2
 		// Odd numbers: n!! = n*(n-2)*(n-4)...(3)(1)
-		{"three", "FACTDOUBLE(3)", 3},       // 3*1
-		{"five", "FACTDOUBLE(5)", 15},       // 5*3*1
-		{"seven", "FACTDOUBLE(7)", 105},     // 7*5*3*1
-		{"nine", "FACTDOUBLE(9)", 945},      // 9*7*5*3*1
+		{"three", "FACTDOUBLE(3)", 3},   // 3*1
+		{"five", "FACTDOUBLE(5)", 15},   // 5*3*1
+		{"seven", "FACTDOUBLE(7)", 105}, // 7*5*3*1
+		{"nine", "FACTDOUBLE(9)", 945},  // 9*7*5*3*1
 		// Larger values
-		{"fifteen", "FACTDOUBLE(15)", 2027025},     // 15*13*11*9*7*5*3*1
-		{"twenty", "FACTDOUBLE(20)", 3715891200},   // 20*18*16*14*12*10*8*6*4*2
+		{"fifteen", "FACTDOUBLE(15)", 2027025},   // 15*13*11*9*7*5*3*1
+		{"twenty", "FACTDOUBLE(20)", 3715891200}, // 20*18*16*14*12*10*8*6*4*2
 		// FACTDOUBLE(-1) = 1 by convention
 		{"negative_one", "FACTDOUBLE(-1)", 1},
-		// Decimal inputs — truncated to integer (Excel doc: non-integer is truncated)
+		// Decimal inputs — truncated to integer (doc: non-integer is truncated)
 		{"decimal_5.9", "FACTDOUBLE(5.9)", 15},
 		{"decimal_6.1", "FACTDOUBLE(6.1)", 48},
 		{"decimal_0.7", "FACTDOUBLE(0.7)", 1},
@@ -6629,7 +7270,7 @@ func TestEVEN(t *testing.T) {
 		{"bool_true", "EVEN(TRUE)", 2},
 		{"bool_false", "EVEN(FALSE)", 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "EVEN(1.5)", 2},
 		{"doc_ex2", "EVEN(3)", 4},
 		{"doc_ex3", "EVEN(2)", 2},
@@ -6702,7 +7343,7 @@ func TestODD(t *testing.T) {
 		{"already_odd_9", "ODD(9)", 9},
 		{"already_odd_11", "ODD(11)", 11},
 
-		// Zero (Excel returns 1)
+		// Zero (returns 1)
 		{"zero", "ODD(0)", 1},
 
 		// Negative numbers (rounds away from zero)
@@ -6740,7 +7381,7 @@ func TestODD(t *testing.T) {
 		{"bool_true", "ODD(TRUE)", 1},
 		{"bool_false", "ODD(FALSE)", 1},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "ODD(1.5)", 3},
 		{"doc_ex2", "ODD(3)", 3},
 		{"doc_ex3", "ODD(2)", 3},
@@ -6938,7 +7579,7 @@ func TestSIGN(t *testing.T) {
 		{"expr_neg_result", "SIGN(2-5)", -1},
 		{"expr_zero_result", "SIGN(4-4)", 0},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "SIGN(10)", 1},
 		{"doc_ex2", "SIGN(4-4)", 0},
 		{"doc_ex3", "SIGN(-0.00001)", -1},
@@ -7027,7 +7668,7 @@ func TestSIN(t *testing.T) {
 		// Small angle
 		{"sin_small", "SIN(0.001)", math.Sin(0.001), 1e-10},
 
-		// Degrees via conversion (Excel doc examples)
+		// Degrees via conversion (doc examples)
 		{"doc_ex1_pi", "SIN(PI())", 0, 1e-10},
 		{"doc_ex2_pi_2", "SIN(PI()/2)", 1, 1e-10},
 		{"doc_ex3_30deg", "SIN(30*PI()/180)", 0.5, 1e-10},
@@ -7099,7 +7740,7 @@ func TestCOMBINA(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "COMBINA(4,3)", 20},
 		{"doc_ex2", "COMBINA(10,3)", 220},
 
@@ -7200,7 +7841,7 @@ func TestCOMBIN(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example", "COMBIN(8,2)", 28},
 		// Basic combinations
 		{"5_choose_2", "COMBIN(5,2)", 10},
@@ -7304,7 +7945,7 @@ func TestCOS(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example", "COS(1.047)", 0.5001710745970701, 1e-10},
 
 		// Key angles
@@ -7397,7 +8038,7 @@ func TestCOSH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_4", "COSH(4)", 27.308232836016487, 1e-10},
 		{"doc_example_e", "COSH(EXP(1))", 7.6101251386622884, 1e-10},
 
@@ -7675,7 +8316,7 @@ func TestTANH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Basic values (from Excel docs)
+		// Basic values (from docs)
 		{"tanh_0", "TANH(0)", 0, 0},
 		{"tanh_0.5", "TANH(0.5)", 0.462117157, 1e-8},
 		{"tanh_1", "TANH(1)", 0.761594156, 1e-8},
@@ -7768,8 +8409,8 @@ func TestSINH(t *testing.T) {
 
 		// Standard values
 		{"sinh_1", "SINH(1)", math.Sinh(1), 1e-10},       // ~1.1752
-		{"sinh_neg1", "SINH(-1)", math.Sinh(-1), 1e-10},   // ~-1.1752
-		{"sinh_0_5", "SINH(0.5)", math.Sinh(0.5), 1e-10},  // ~0.5211
+		{"sinh_neg1", "SINH(-1)", math.Sinh(-1), 1e-10},  // ~-1.1752
+		{"sinh_0_5", "SINH(0.5)", math.Sinh(0.5), 1e-10}, // ~0.5211
 		{"sinh_neg0_5", "SINH(-0.5)", math.Sinh(-0.5), 1e-10},
 
 		// Odd function: SINH(-x) = -SINH(x)
@@ -7777,14 +8418,14 @@ func TestSINH(t *testing.T) {
 		{"odd_3", "SINH(-3)", -math.Sinh(3), 1e-10},
 
 		// Larger values
-		{"sinh_5", "SINH(5)", math.Sinh(5), 1e-10},    // ~74.2032
-		{"sinh_10", "SINH(10)", math.Sinh(10), 1e-4},   // ~11013.2329
+		{"sinh_5", "SINH(5)", math.Sinh(5), 1e-10},   // ~74.2032
+		{"sinh_10", "SINH(10)", math.Sinh(10), 1e-4}, // ~11013.2329
 
 		// Small values (near-linear region: SINH(x) ~ x for small x)
 		{"sinh_small", "SINH(0.001)", math.Sinh(0.001), 1e-14},
 		{"sinh_tiny", "SINH(0.0001)", math.Sinh(0.0001), 1e-15},
 
-		// Excel doc example: 2.868*SINH(0.0342*1.03)
+		// Doc example: 2.868*SINH(0.0342*1.03)
 		{"doc_example", "2.868*SINH(0.0342*1.03)", 2.868 * math.Sinh(0.0342*1.03), 1e-7},
 
 		// Boolean coercion
@@ -7967,10 +8608,10 @@ func TestLN(t *testing.T) {
 		{"ln_exp_5", "LN(EXP(5))", 5, 1e-10},
 		{"ln_exp_0_5", "LN(EXP(0.5))", 0.5, 1e-10},
 
-		// Excel documentation examples
-		{"excel_example_86", "LN(86)", 4.4543473, 1e-4},
-		{"excel_example_e", "LN(2.7182818)", 1, 1e-4},
-		{"excel_example_exp3", "LN(EXP(3))", 3, 0},
+		// Documentation examples
+		{"doc_example_86", "LN(86)", 4.4543473, 1e-4},
+		{"doc_example_e", "LN(2.7182818)", 1, 1e-4},
+		{"doc_example_exp3", "LN(EXP(3))", 3, 0},
 
 		// Common values
 		{"ln_2", "LN(2)", 0.69314718055994530, 1e-10},
@@ -8103,8 +8744,8 @@ func TestCSC(t *testing.T) {
 		// Degree conversion via expression (30 degrees = PI/6)
 		{"degrees_30", "CSC(30*PI()/180)", 2, 1e-10},
 
-		// Excel example: CSC(15) ≈ 1.5377...
-		{"excel_example", "CSC(15)", 1 / math.Sin(15), 1e-10},
+		// Example: CSC(15) ≈ 1.5377...
+		{"doc_example", "CSC(15)", 1 / math.Sin(15), 1e-10},
 	}
 
 	for _, tt := range numTests {
@@ -8168,7 +8809,7 @@ func TestSEC(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples (angles in radians)
+		// Doc examples (angles in radians)
 		{"doc_sec_45", "SEC(45)", 1.0 / math.Cos(45), 1e-5},
 		{"doc_sec_30", "SEC(30)", 1.0 / math.Cos(30), 1e-5},
 
@@ -8261,7 +8902,7 @@ func TestSECH(t *testing.T) {
 		want    float64
 		tol     float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_45", "SECH(45)", 5.725037161098787e-20, 1e-30},
 		{"doc_example_30", "SECH(30)", 1.871524593768035e-13, 1e-23},
 
@@ -8583,7 +9224,7 @@ func TestRADIANS(t *testing.T) {
 		{"expr_mul", "RADIANS(2*90)", math.Pi, 1e-10},
 		{"expr_add", "RADIANS(45+45)", math.Pi / 2, 1e-10},
 
-		// Excel doc example
+		// Doc example
 		{"doc_ex1", "RADIANS(270)", 3 * math.Pi / 2, 1e-10},
 	}
 
@@ -8676,7 +9317,7 @@ func TestDEGREES(t *testing.T) {
 		{"string_zero", `DEGREES("0")`, 0, 0},
 		{"string_neg", `DEGREES("-1")`, -180 / math.Pi, 1e-10},
 
-		// Excel doc example
+		// Doc example
 		{"doc_example", "DEGREES(PI())", 180, 0},
 	}
 
@@ -8740,7 +9381,7 @@ func TestQUOTIENT(t *testing.T) {
 		formula string
 		wantNum float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "QUOTIENT(5,2)", 2},
 		{"doc_ex2", "QUOTIENT(4.5,3.1)", 1},
 		{"doc_ex3", "QUOTIENT(-10,3)", -3},
@@ -8858,7 +9499,7 @@ func TestDECIMAL(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"hex_FF", `DECIMAL("FF",16)`, 255},
 		{"binary_111", `DECIMAL("111",2)`, 7},
 		{"base36_zap", `DECIMAL("zap",36)`, 45745},
@@ -9073,7 +9714,7 @@ func TestLCM(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_ex1", "LCM(5,2)", 10},
 		{"doc_ex2", "LCM(24,36)", 72},
 		// Basic two-argument cases
@@ -9174,7 +9815,7 @@ func TestGCD(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Basic two-argument cases (from Excel docs)
+		// Basic two-argument cases (from docs)
 		{"basic_12_8", "GCD(12,8)", 4},
 		{"basic_24_36", "GCD(24,36)", 12},
 		{"basic_5_2", "GCD(5,2)", 1},
@@ -9278,7 +9919,7 @@ func TestPRODUCT(t *testing.T) {
 		{"two_args", "PRODUCT(2,3)", 6},
 		{"five_args", "PRODUCT(1,2,3,4,5)", 120},
 
-		// Excel doc examples
+		// Doc examples
 		{"doc_ex1", "PRODUCT(5,15,30)", 2250},
 		{"doc_ex1_with_multiplier", "PRODUCT(5,15,30,2)", 4500},
 
@@ -9463,7 +10104,7 @@ func TestPERMUT(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc examples
+		// Doc examples
 		{"doc_example_100_3", "PERMUT(100,3)", 970200},
 		{"doc_example_3_2", "PERMUT(3,2)", 6},
 		// Basic permutations
@@ -9566,7 +10207,7 @@ func TestBASE(t *testing.T) {
 		formula string
 		want    string
 	}{
-		// Excel documentation examples
+		// Documentation examples
 		{"doc_binary_7", "BASE(7,2)", "111"},
 		{"doc_hex_100", "BASE(100,16)", "64"},
 		{"doc_binary_15_padded", "BASE(15,2,10)", "0000001111"},
@@ -9660,7 +10301,6 @@ func TestBASE(t *testing.T) {
 	}
 }
 
-
 func TestMULTINOMIAL(t *testing.T) {
 	resolver := &mockResolver{}
 
@@ -9669,7 +10309,7 @@ func TestMULTINOMIAL(t *testing.T) {
 		formula string
 		want    float64
 	}{
-		// Excel doc example
+		// Doc example
 		{"doc_example_2_3_4", "MULTINOMIAL(2,3,4)", 1260},
 		// Basic multinomial identities
 		{"two_ones", "MULTINOMIAL(1,1)", 2},
@@ -9867,5 +10507,578 @@ func TestSUBTOTAL(t *testing.T) {
 				t.Errorf("Eval(%q) = type=%v err=%v, want %v", tt.formula, got.Type, got.Err, tt.errVal)
 			}
 		})
+	}
+}
+
+func TestISOCEILING(t *testing.T) {
+	resolver := &mockResolver{}
+
+	numTests := []struct {
+		name    string
+		formula string
+		wantNum float64
+	}{
+		// documented examples
+		{"doc_iso_1", "ISO.CEILING(4.3)", 5},
+		{"doc_iso_2", "ISO.CEILING(-4.3)", -4},
+		{"doc_iso_3", "ISO.CEILING(4.3,2)", 6},
+		{"doc_iso_4", "ISO.CEILING(4.3,-2)", 6},
+		{"doc_iso_5", "ISO.CEILING(-4.3,2)", -4},
+		{"doc_iso_6", "ISO.CEILING(-4.3,-2)", -4},
+
+		// Default significance (omitted = 1)
+		{"pos_default", "ISO.CEILING(4.3)", 5},
+		{"neg_default", "ISO.CEILING(-4.3)", -4},
+		{"pos_exact_default", "ISO.CEILING(7)", 7},
+
+		// Zero number returns 0
+		{"zero_number", "ISO.CEILING(0)", 0},
+		{"zero_with_sig", "ISO.CEILING(0,5)", 0},
+		{"zero_with_neg_sig", "ISO.CEILING(0,-3)", 0},
+
+		// Zero significance returns 0
+		{"sig_zero_pos", "ISO.CEILING(6.3,0)", 0},
+		{"sig_zero_neg", "ISO.CEILING(-6.3,0)", 0},
+
+		// Positive number, positive significance
+		{"pos_sig_2", "ISO.CEILING(4.3,2)", 6},
+		{"pos_sig_5", "ISO.CEILING(24.3,5)", 25},
+		{"pos_sig_3", "ISO.CEILING(7,3)", 9},
+		{"pos_sig_exact", "ISO.CEILING(6,3)", 6},
+
+		// Negative number, positive significance (rounds toward +inf)
+		{"neg_sig_pos_2", "ISO.CEILING(-4.3,2)", -4},
+		{"neg_sig_pos_1", "ISO.CEILING(-4.1,1)", -4},
+		{"neg_sig_pos_5", "ISO.CEILING(-8.1,5)", -5},
+
+		// Positive number, negative significance (uses abs, same as positive sig)
+		{"pos_neg_sig_2", "ISO.CEILING(4.3,-2)", 6},
+		{"pos_neg_sig_5", "ISO.CEILING(24.3,-5)", 25},
+
+		// Negative number, negative significance (uses abs)
+		{"neg_neg_sig_2", "ISO.CEILING(-4.3,-2)", -4},
+		{"neg_neg_sig_5", "ISO.CEILING(-8.1,-5)", -5},
+
+		// Fractional significance
+		{"frac_sig_0.1", "ISO.CEILING(6.31,0.1)", 6.4},
+		{"frac_sig_0.5", "ISO.CEILING(6.3,0.5)", 6.5},
+		{"frac_sig_0.1_neg", "ISO.CEILING(-6.31,0.1)", -6.3},
+		{"frac_sig_0.5_neg", "ISO.CEILING(-6.3,0.5)", -6},
+
+		// Large numbers
+		{"large_pos", "ISO.CEILING(1234567,1000)", 1235000},
+		{"large_neg", "ISO.CEILING(-1234567,1000)", -1234000},
+
+		// Very small numbers
+		{"small_pos", "ISO.CEILING(0.001,0.01)", 0.01},
+		{"small_neg", "ISO.CEILING(-0.001,0.01)", 0},
+		{"small_frac", "ISO.CEILING(0.1)", 1},
+		{"neg_small_frac", "ISO.CEILING(-0.1)", 0},
+
+		// Already-rounded numbers (exact multiples)
+		{"exact_multiple_pos", "ISO.CEILING(6,3)", 6},
+		{"exact_multiple_neg", "ISO.CEILING(-6,3)", -6},
+		{"exact_multiple_neg_sig", "ISO.CEILING(6,-3)", 6},
+
+		// String coercion of numeric strings
+		{"string_num", "ISO.CEILING(\"4.3\")", 5},
+		{"string_num_neg", "ISO.CEILING(\"-4.3\")", -4},
+		{"string_sig", "ISO.CEILING(4.3,\"2\")", 6},
+
+		// Boolean coercion (TRUE = 1, FALSE = 0)
+		{"bool_true", "ISO.CEILING(TRUE)", 1},
+		{"bool_false", "ISO.CEILING(FALSE)", 0},
+		{"bool_true_sig", "ISO.CEILING(2.3,TRUE)", 3},
+	}
+
+	for _, tt := range numTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("Eval(%q) = type %v, want ValueNumber", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.wantNum) > 1e-10 {
+				t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		{"no_args", "ISO.CEILING()", ErrValVALUE},
+		{"too_many_args", "ISO.CEILING(1,2,3)", ErrValVALUE},
+		{"non_numeric", "ISO.CEILING(\"abc\")", ErrValVALUE},
+		{"non_numeric_sig", "ISO.CEILING(1,\"abc\")", ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = type=%v err=%v, want error %v", tt.formula, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RANDARRAY tests
+// ---------------------------------------------------------------------------
+
+func TestRANDARRAY_NoArgs(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY()")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("RANDARRAY() type = %v, want number", got.Type)
+	}
+	if got.Num < 0 || got.Num >= 1 {
+		t.Errorf("RANDARRAY() = %g, want [0,1)", got.Num)
+	}
+}
+
+func TestRANDARRAY_3x2(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(3,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("RANDARRAY(3,2) type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 3 {
+		t.Fatalf("RANDARRAY(3,2) rows = %d, want 3", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 2 {
+			t.Fatalf("RANDARRAY(3,2) row %d cols = %d, want 2", r, len(row))
+		}
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < 0 || v.Num >= 1 {
+				t.Errorf("RANDARRAY(3,2)[%d][%d] = %g, want [0,1)", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_1x1Scalar(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("RANDARRAY(1,1) type = %v, want number (scalar)", got.Type)
+	}
+	if got.Num < 0 || got.Num >= 1 {
+		t.Errorf("RANDARRAY(1,1) = %g, want [0,1)", got.Num)
+	}
+}
+
+func TestRANDARRAY_CustomMinMax(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,3,10,20)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 2 {
+		t.Fatalf("rows = %d, want 2", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 3 {
+			t.Fatalf("row %d cols = %d, want 3", r, len(row))
+		}
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < 10 || v.Num > 20 {
+				t.Errorf("[%d][%d] = %g, want [10,20]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_WholeNumberTrue(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(3,3,1,10,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	for r, row := range got.Array {
+		for c, v := range row {
+			if v.Type != ValueNumber {
+				t.Errorf("[%d][%d] type = %v, want number", r, c, v.Type)
+				continue
+			}
+			if v.Num != math.Floor(v.Num) {
+				t.Errorf("[%d][%d] = %g, want integer", r, c, v.Num)
+			}
+			if v.Num < 1 || v.Num > 10 {
+				t.Errorf("[%d][%d] = %g, want [1,10]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_WholeNumberFalse(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,2,0,100,FALSE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	for r, row := range got.Array {
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < 0 || v.Num > 100 {
+				t.Errorf("[%d][%d] = %g, want [0,100]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_MinGreaterThanMax(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,1,10,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("RANDARRAY(1,1,10,5) = type=%v err=%v, want #VALUE!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_ZeroRows(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(0,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("RANDARRAY(0,1) = type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_ZeroCols(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("RANDARRAY(1,0) = type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_NegativeRows(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(-3,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("RANDARRAY(-3,2) = type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_NegativeCols(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,-1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("RANDARRAY(2,-1) = type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_WholeNoValidIntegers(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,1,1.5,1.7,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("RANDARRAY(1,1,1.5,1.7,TRUE) = type=%v err=%v, want #VALUE!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_DefaultMinMaxIntegerMode(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,2,,,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	for r, row := range got.Array {
+		for c, v := range row {
+			if v.Type != ValueNumber {
+				t.Errorf("[%d][%d] type = %v, want number", r, c, v.Type)
+				continue
+			}
+			// With default min=0, max=1 and whole=TRUE, valid integers are 0 and 1
+			if v.Num != 0 && v.Num != 1 {
+				t.Errorf("[%d][%d] = %g, want 0 or 1", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_LargeArray10x10(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(10,10,0,100)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 10 {
+		t.Fatalf("rows = %d, want 10", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 10 {
+			t.Fatalf("row %d cols = %d, want 10", r, len(row))
+		}
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < 0 || v.Num > 100 {
+				t.Errorf("[%d][%d] = %g, want [0,100]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_SingleRowMultipleCols(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 1 {
+		t.Fatalf("rows = %d, want 1", len(got.Array))
+	}
+	if len(got.Array[0]) != 5 {
+		t.Fatalf("cols = %d, want 5", len(got.Array[0]))
+	}
+}
+
+func TestRANDARRAY_MultipleRowsSingleCol(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(4,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 4 {
+		t.Fatalf("rows = %d, want 4", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 1 {
+			t.Fatalf("row %d cols = %d, want 1", r, len(row))
+		}
+	}
+}
+
+func TestRANDARRAY_StringCoercion(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, `RANDARRAY("2","3","5","15")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 2 {
+		t.Fatalf("rows = %d, want 2", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 3 {
+			t.Fatalf("row %d cols = %d, want 3", r, len(row))
+		}
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < 5 || v.Num > 15 {
+				t.Errorf("[%d][%d] = %g, want [5,15]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_BooleanCoercion(t *testing.T) {
+	// TRUE coerces to 1, so RANDARRAY(TRUE,TRUE) = RANDARRAY(1,1) = scalar
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(TRUE,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("type = %v, want number (scalar)", got.Type)
+	}
+	if got.Num < 0 || got.Num >= 1 {
+		t.Errorf("RANDARRAY(TRUE,TRUE) = %g, want [0,1)", got.Num)
+	}
+}
+
+func TestRANDARRAY_ErrorTooManyArgs(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,1,0,1,FALSE,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("RANDARRAY(6 args) = type=%v err=%v, want #VALUE!", got.Type, got.Err)
+	}
+}
+
+func TestRANDARRAY_ErrorNonNumericRows(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, `RANDARRAY("abc")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("RANDARRAY(\"abc\") type = %v, want error", got.Type)
+	}
+}
+
+func TestRANDARRAY_WholeScalar(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(1,1,5,10,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("type = %v, want number (scalar)", got.Type)
+	}
+	if got.Num != math.Floor(got.Num) {
+		t.Errorf("got %g, want integer", got.Num)
+	}
+	if got.Num < 5 || got.Num > 10 {
+		t.Errorf("got %g, want [5,10]", got.Num)
+	}
+}
+
+func TestRANDARRAY_RowsTruncated(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2.9,1.8)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	// 2.9 truncated to 2 rows, 1.8 truncated to 1 col
+	if len(got.Array) != 2 {
+		t.Fatalf("rows = %d, want 2", len(got.Array))
+	}
+	if len(got.Array[0]) != 1 {
+		t.Fatalf("cols = %d, want 1", len(got.Array[0]))
+	}
+}
+
+func TestRANDARRAY_MinEqualsMax(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,2,7,7)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	for r, row := range got.Array {
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num != 7 {
+				t.Errorf("[%d][%d] = %g, want 7", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_NegativeRange(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(2,2,-10,-5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	for r, row := range got.Array {
+		for c, v := range row {
+			if v.Type != ValueNumber || v.Num < -10 || v.Num > -5 {
+				t.Errorf("[%d][%d] = %g, want [-10,-5]", r, c, v.Num)
+			}
+		}
+	}
+}
+
+func TestRANDARRAY_OnlyRowsArg(t *testing.T) {
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "RANDARRAY(3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("type = %v, want array", got.Type)
+	}
+	if len(got.Array) != 3 {
+		t.Fatalf("rows = %d, want 3", len(got.Array))
+	}
+	for r, row := range got.Array {
+		if len(row) != 1 {
+			t.Fatalf("row %d cols = %d, want 1 (default)", r, len(row))
+		}
+		if row[0].Type != ValueNumber || row[0].Num < 0 || row[0].Num >= 1 {
+			t.Errorf("[%d][0] = %g, want [0,1)", r, row[0].Num)
+		}
 	}
 }

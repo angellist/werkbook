@@ -8,6 +8,10 @@ import (
 )
 
 func init() {
+	Register("BESSELI", NoCtx(fnBesselI))
+	Register("BESSELJ", NoCtx(fnBesselJ))
+	Register("BESSELK", NoCtx(fnBesselK))
+	Register("BESSELY", NoCtx(fnBesselY))
 	Register("BIN2DEC", NoCtx(fnBin2Dec))
 	Register("BIN2HEX", NoCtx(fnBin2Hex))
 	Register("BIN2OCT", NoCtx(fnBin2Oct))
@@ -38,6 +42,7 @@ func init() {
 	Register("IMCOT", NoCtx(fnImcot))
 	Register("IMCSC", NoCtx(fnImcsc))
 	Register("IMCSCH", NoCtx(fnImcsch))
+	Register("IMSEC", NoCtx(fnImsec))
 	Register("IMSECH", NoCtx(fnImsech))
 	Register("IMSIN", NoCtx(fnImsin))
 	Register("IMSINH", NoCtx(fnImsinh))
@@ -50,7 +55,361 @@ func init() {
 	Register("OCT2HEX", NoCtx(fnOct2Hex))
 }
 
-// fnBin2Dec implements the Excel BIN2DEC function.
+// fnBesselI implements the BESSELI function.
+// BESSELI(X, N) — returns the modified Bessel function of the first kind, I_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!.
+func fnBesselI(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Handle x = 0 specially.
+	if x == 0 {
+		if n == 0 {
+			return NumberVal(1), nil
+		}
+		return NumberVal(0), nil
+	}
+
+	// Handle negative x: I_n(-x) = (-1)^n * I_n(x) for integer n.
+	sign := 1.0
+	if x < 0 {
+		if n%2 != 0 {
+			sign = -1
+		}
+		x = -x
+	}
+
+	result := besselI(n, x)
+	return NumberVal(sign * result), nil
+}
+
+// besselI0 computes I_0(x) for x >= 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.1 and 9.8.2).
+func besselI0(x float64) float64 {
+	if x <= 3.75 {
+		t := x / 3.75
+		t2 := t * t
+		return 1.0 +
+			t2*(3.5156229+
+				t2*(3.0899424+
+					t2*(1.2067492+
+						t2*(0.2659732+
+							t2*(0.0360768+
+								t2*0.0045813)))))
+	}
+	t := 3.75 / x
+	return (math.Exp(x) / math.Sqrt(x)) *
+		(0.39894228 +
+			t*(0.01328592+
+				t*(0.00225319+
+					t*(-0.00157565+
+						t*(0.00916281+
+							t*(-0.02057706+
+								t*(0.02635537+
+									t*(-0.01647633+
+										t*0.00392377))))))))
+}
+
+// besselI1 computes I_1(x) for x >= 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.3 and 9.8.4).
+func besselI1(x float64) float64 {
+	if x <= 3.75 {
+		t := x / 3.75
+		t2 := t * t
+		return x * (0.5 +
+			t2*(0.87890594+
+				t2*(0.51498869+
+					t2*(0.15084934+
+						t2*(0.02658733+
+							t2*(0.00301532+
+								t2*0.00032411))))))
+	}
+	t := 3.75 / x
+	return (math.Exp(x) / math.Sqrt(x)) *
+		(0.39894228 +
+			t*(-0.03988024+
+				t*(-0.00362018+
+					t*(0.00163801+
+						t*(-0.01031555+
+							t*(0.02282967+
+								t*(-0.02895312+
+									t*(0.01787654+
+										t*(-0.00420059)))))))))
+}
+
+// besselI computes I_n(x) for integer n >= 0 and x > 0.
+// For n=0 and n=1 it uses direct polynomial approximations (A&S).
+// For n >= 2 it uses forward recurrence from I_0 and I_1 when stable,
+// or Miller's backward recurrence otherwise.
+func besselI(n int, x float64) float64 {
+	if n == 0 {
+		return besselI0(x)
+	}
+	if n == 1 {
+		return besselI1(x)
+	}
+
+	if x == 0 {
+		return 0
+	}
+
+	// For I_n(x), forward recurrence from I_0,I_1 is stable when x > n
+	// because the ratio I_{n+1}/I_n < 1. For x <= n it is unstable
+	// and we must use backward recurrence.
+	//
+	// Forward recurrence: I_{k+1}(x) = I_{k-1}(x) - (2k/x)*I_k(x)
+	// Note: this is actually I_{k+1} = -(2k/x)*I_k + I_{k-1}
+	// The standard recurrence is: I_{n-1}(x) - (2n/x)*I_n(x) = I_{n+1}(x)
+	// Rearranged for forward: I_{n+1}(x) = I_{n-1}(x) - (2n/x)*I_n(x)
+	// But actually for modified Bessel: I_{n+1}(x) = -(2n/x)*I_n(x) + I_{n-1}(x)
+	// is UNSTABLE in the forward direction for I.
+	//
+	// The correct recurrence for modified Bessel of 1st kind is:
+	//   I_{n-1}(x) - I_{n+1}(x) = (2n/x)*I_n(x)
+	// or equivalently:
+	//   I_{n+1}(x) = I_{n-1}(x) - (2n/x)*I_n(x)
+	//
+	// For modified Bessel I, forward recurrence is UNSTABLE for all x
+	// (I_n grows, not decreases). Use Miller's backward recurrence.
+
+	bi0 := besselI0(x)
+
+	// Miller's backward recurrence with higher accuracy.
+	// Start from a sufficiently high order where I_m ~ 0.
+	const iacc = 40
+	bigno := 1e10
+	bigni := 1e-10
+
+	// Starting index: must be well above n and large enough for convergence.
+	m := 2 * ((n + int(math.Sqrt(float64(iacc*n)))) / 2)
+	if m < 40 {
+		m = 40
+	}
+	// For large x, we need even more terms.
+	if extra := int(x) + 10; m < n+extra {
+		m = n + extra
+		// Round up to even.
+		if m%2 != 0 {
+			m++
+		}
+	}
+
+	var bip, bi, bim float64
+	var result float64
+	tox := 2.0 / x
+
+	bip = 0
+	bi = 1.0
+	for j := m; j >= 1; j-- {
+		bim = bip + float64(j)*tox*bi
+		bip = bi
+		bi = bim
+		// Renormalize to prevent overflow.
+		if math.Abs(bi) > bigno {
+			result *= bigni
+			bi *= bigni
+			bip *= bigni
+		}
+		if j == n {
+			result = bip
+		}
+	}
+	// Normalize: at j=0 we have bi ≈ I_0(x) * scale, so result/bi * I_0(x) gives I_n(x).
+	result *= bi0 / bi
+	return result
+}
+
+// fnBesselJ implements the BESSELJ function.
+// BESSELJ(X, N) — returns the Bessel function of the first kind, J_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!.
+func fnBesselJ(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(math.Jn(n, x)), nil
+}
+
+// fnBesselK implements the BESSELK function.
+// BESSELK(X, N) — returns the modified Bessel function of the second kind, K_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!. If X <= 0, returns #NUM!.
+func fnBesselK(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// K_n(x) is undefined for x <= 0.
+	if x <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	result := besselK(n, x)
+	return NumberVal(result), nil
+}
+
+// besselK0 computes K_0(x) for x > 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.5 and 9.8.6).
+func besselK0(x float64) float64 {
+	if x <= 2 {
+		t := x / 2
+		t2 := t * t
+		return -math.Log(t)*besselI0(x) +
+			(-0.57721566 +
+				t2*(0.42278420+
+					t2*(0.23069756+
+						t2*(0.03488590+
+							t2*(0.00262698+
+								t2*(0.00010750+
+									t2*0.00000740))))))
+	}
+	t := 2.0 / x
+	return (math.Exp(-x) / math.Sqrt(x)) *
+		(1.25331414 +
+			t*(-0.07832358+
+				t*(0.02189568+
+					t*(-0.01062446+
+						t*(0.00587872+
+							t*(-0.00251540+
+								t*0.00053208))))))
+}
+
+// besselK1 computes K_1(x) for x > 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.7 and 9.8.8).
+func besselK1(x float64) float64 {
+	if x <= 2 {
+		t := x / 2
+		t2 := t * t
+		return math.Log(t)*besselI1(x) +
+			(1.0/x)*
+				(1.0+
+					t2*(0.15443144+
+						t2*(-0.67278579+
+							t2*(-0.18156897+
+								t2*(-0.01919402+
+									t2*(-0.00110404+
+										t2*(-0.00004686)))))))
+	}
+	t := 2.0 / x
+	return (math.Exp(-x) / math.Sqrt(x)) *
+		(1.25331414 +
+			t*(0.23498619+
+				t*(-0.03655620+
+					t*(0.01504268+
+						t*(-0.00780353+
+							t*(0.00325614+
+								t*(-0.00068245)))))))
+}
+
+// besselK computes K_n(x) for integer n >= 0 and x > 0.
+// For n=0 and n=1 it uses direct polynomial approximations (A&S).
+// For n >= 2 it uses forward recurrence: K_{n+1}(x) = K_{n-1}(x) + (2n/x)*K_n(x).
+func besselK(n int, x float64) float64 {
+	if n == 0 {
+		return besselK0(x)
+	}
+	if n == 1 {
+		return besselK1(x)
+	}
+
+	// Forward recurrence is stable for K_n (K_n grows with n).
+	k0 := besselK0(x)
+	k1 := besselK1(x)
+	tox := 2.0 / x
+	for i := 1; i < n; i++ {
+		k2 := k0 + float64(i)*tox*k1
+		k0 = k1
+		k1 = k2
+	}
+	return k1
+}
+
+// fnBesselY implements the BESSELY function.
+// BESSELY(X, N) — returns the Bessel function of the second kind, Y_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!. If X <= 0, returns #NUM!.
+func fnBesselY(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Y_n(x) is undefined for x <= 0.
+	if x <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	result := math.Yn(n, x)
+	if math.IsInf(result, 0) || math.IsNaN(result) {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(result), nil
+}
+
+// fnBin2Dec implements the BIN2DEC function.
 // BIN2DEC(number) — converts a binary number string to decimal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -165,7 +524,7 @@ func parseBinToInt64(args []Value) (int64, *Value) {
 	return int64(u), nil
 }
 
-// fnBin2Hex implements the Excel BIN2HEX function.
+// fnBin2Hex implements the BIN2HEX function.
 // BIN2HEX(number, [places]) — converts a binary number string to hexadecimal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -209,7 +568,7 @@ func fnBin2Hex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnBin2Oct implements the Excel BIN2OCT function.
+// fnBin2Oct implements the BIN2OCT function.
 // BIN2OCT(number, [places]) — converts a binary number string to octal.
 // Input must contain only 0s and 1s, max 10 digits.
 // 10-digit numbers starting with 1 are negative (two's complement).
@@ -262,7 +621,7 @@ func formatComplexNum(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-// fnComplex implements the Excel COMPLEX function.
+// fnComplex implements the COMPLEX function.
 // COMPLEX(real_num, i_num, [suffix]) — converts real and imaginary
 // coefficients into a complex number string of the form x+yi or x+yj.
 func fnComplex(args []Value) (Value, error) {
@@ -334,7 +693,7 @@ func fnComplex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDELTA implements the Excel DELTA function.
+// fnDELTA implements the DELTA function.
 // DELTA(number1, [number2]) — returns 1 if number1 == number2, else 0.
 // number2 defaults to 0. Non-numeric arguments produce #VALUE!.
 func fnDELTA(args []Value) (Value, error) {
@@ -361,7 +720,7 @@ func fnDELTA(args []Value) (Value, error) {
 	return NumberVal(0), nil
 }
 
-// fnDec2Bin implements the Excel DEC2BIN function.
+// fnDec2Bin implements the DEC2BIN function.
 // DEC2BIN(number, [places]) — converts a decimal number to binary.
 // number must be between -512 and 511 (inclusive). Non-integer values are truncated.
 // Negative numbers use two's complement (10-bit). places specifies minimum digits (1–10).
@@ -370,7 +729,7 @@ func fnDec2Bin(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -419,7 +778,7 @@ func fnDec2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDec2Hex implements the Excel DEC2HEX function.
+// fnDec2Hex implements the DEC2HEX function.
 // DEC2HEX(number, [places]) — converts a decimal number to hexadecimal.
 // number must be between -549755813888 and 549755813887 (inclusive, -2^39 to 2^39-1).
 // Non-integer values are truncated. Negative numbers use two's complement (10 hex digits = 40 bits).
@@ -429,7 +788,7 @@ func fnDec2Hex(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -478,7 +837,7 @@ func fnDec2Hex(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnDec2Oct implements the Excel DEC2OCT function.
+// fnDec2Oct implements the DEC2OCT function.
 // DEC2OCT(number, [places]) — converts a decimal number to octal.
 // number must be between -536870912 and 536870911 (inclusive, -2^29 to 2^29-1).
 // Non-integer values are truncated. Negative numbers use two's complement (10 octal digits = 30 bits).
@@ -488,7 +847,7 @@ func fnDec2Oct(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Excel engineering functions reject bare booleans with #VALUE!.
+	// Engineering functions reject bare booleans with #VALUE!.
 	if args[0].Type == ValueBool {
 		return ErrorVal(ErrValVALUE), nil
 	}
@@ -537,7 +896,7 @@ func fnDec2Oct(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnHex2Dec implements the Excel HEX2DEC function.
+// fnHex2Dec implements the HEX2DEC function.
 // HEX2DEC(number) — converts a hexadecimal number string to decimal.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // 10-digit numbers starting with 8-F are negative (two's complement).
@@ -597,7 +956,7 @@ func fnHex2Dec(args []Value) (Value, error) {
 	return NumberVal(result), nil
 }
 
-// fnOct2Dec implements the Excel OCT2DEC function.
+// fnOct2Dec implements the OCT2DEC function.
 // OCT2DEC(number) — converts an octal number string to decimal.
 // Input must contain only octal chars (0-7), max 10 digits.
 // 10-digit numbers starting with 4-7 are negative (two's complement, 30-bit).
@@ -767,7 +1126,7 @@ func parseOctToInt64(args []Value) (int64, *Value) {
 	return int64(u), nil
 }
 
-// fnHex2Bin implements the Excel HEX2BIN function.
+// fnHex2Bin implements the HEX2BIN function.
 // HEX2BIN(number, [places]) — converts a hexadecimal number string to binary.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // Output must be in range -512 to 511 (10-bit binary).
@@ -815,7 +1174,7 @@ func fnHex2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnHex2Oct implements the Excel HEX2OCT function.
+// fnHex2Oct implements the HEX2OCT function.
 // HEX2OCT(number, [places]) — converts a hexadecimal number string to octal.
 // Input must contain only hex chars (0-9, A-F, a-f), max 10 digits.
 // Output must be in range -536870912 to 536870911 (30-bit octal).
@@ -863,7 +1222,7 @@ func fnHex2Oct(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnOct2Bin implements the Excel OCT2BIN function.
+// fnOct2Bin implements the OCT2BIN function.
 // OCT2BIN(number, [places]) — converts an octal number string to binary.
 // Input must contain only octal chars (0-7), max 10 digits.
 // Output must be in range -512 to 511 (10-bit binary).
@@ -911,7 +1270,7 @@ func fnOct2Bin(args []Value) (Value, error) {
 	return StringVal(result), nil
 }
 
-// fnOct2Hex implements the Excel OCT2HEX function.
+// fnOct2Hex implements the OCT2HEX function.
 // OCT2HEX(number, [places]) — converts an octal number string to hexadecimal.
 // Input must contain only octal chars (0-7), max 10 digits.
 // Output is uppercase hex. Negative numbers use 40-bit two's complement.
@@ -1022,17 +1381,17 @@ var convertMass = convertCategory{
 var convertDistance = convertCategory{
 	name: "distance",
 	units: map[string]float64{
-		"m":    1,
-		"km":   1e3,
-		"mi":   1609.344,
-		"yd":   0.9144,
-		"ft":   0.3048,
-		"in":   0.0254,
-		"Nmi":  1852,
-		"ang":  1e-10,
-		"Pica": 0.0254 / 72 * 6, // 1 Pica = 1/6 inch (PostScript pica)
-		"ell":  1.143,
-		"ly":   9.46073047258e15,
+		"m":         1,
+		"km":        1e3,
+		"mi":        1609.344,
+		"yd":        0.9144,
+		"ft":        0.3048,
+		"in":        0.0254,
+		"Nmi":       1852,
+		"ang":       1e-10,
+		"Pica":      0.0254 / 72 * 6, // 1 Pica = 1/6 inch (PostScript pica)
+		"ell":       1.143,
+		"ly":        9.46073047258e15,
 		"survey_mi": 1609.3472186944373,
 	},
 }
@@ -1260,7 +1619,7 @@ func convertTemperature(val float64, from, to string) (float64, bool) {
 	return result, true
 }
 
-// fnConvert implements the Excel CONVERT function.
+// fnConvert implements the CONVERT function.
 // CONVERT(number, from_unit, to_unit) — converts a number from one measurement
 // unit to another.
 func fnConvert(args []Value) (Value, error) {
@@ -1332,7 +1691,7 @@ func fnConvert(args []Value) (Value, error) {
 	return NumberVal(result), nil
 }
 
-// parseComplex parses an Excel-style complex number string (e.g. "3+4i",
+// parseComplex parses a complex number string (e.g. "3+4i",
 // "-3-4j", "i", "3", "-i") and returns the real and imaginary coefficients.
 // The third return value is true if the string is not a valid complex number.
 func parseComplex(s string) (real, imag float64, fail bool) {
@@ -1416,7 +1775,7 @@ func parseComplex(s string) (real, imag float64, fail bool) {
 	return r, im, false
 }
 
-// fnImabs implements the Excel IMABS function.
+// fnImabs implements the IMABS function.
 // IMABS(inumber) — returns the absolute value (modulus) of a complex number.
 // The modulus is sqrt(real² + imag²).
 func fnImabs(args []Value) (Value, error) {
@@ -1462,7 +1821,7 @@ func fnImabs(args []Value) (Value, error) {
 	return NumberVal(math.Sqrt(real*real + imag*imag)), nil
 }
 
-// fnImaginary implements the Excel IMAGINARY function.
+// fnImaginary implements the IMAGINARY function.
 // IMAGINARY(inumber) — returns the imaginary coefficient of a complex number.
 func fnImaginary(args []Value) (Value, error) {
 	if len(args) != 1 {
@@ -1504,7 +1863,7 @@ func fnImaginary(args []Value) (Value, error) {
 	return NumberVal(imag), nil
 }
 
-// fnImreal implements the Excel IMREAL function.
+// fnImreal implements the IMREAL function.
 // IMREAL(inumber) — returns the real coefficient of a complex number.
 func fnImreal(args []Value) (Value, error) {
 	if len(args) != 1 {
@@ -1549,7 +1908,7 @@ func fnImreal(args []Value) (Value, error) {
 	return NumberVal(real), nil
 }
 
-// fnImargument implements the Excel IMARGUMENT function.
+// fnImargument implements the IMARGUMENT function.
 // IMARGUMENT(inumber) — returns the argument (theta/angle in radians) of a complex number.
 // The argument of zero is undefined and returns #DIV/0!.
 func fnImargument(args []Value) (Value, error) {
@@ -1602,7 +1961,7 @@ func fnImargument(args []Value) (Value, error) {
 	return NumberVal(math.Atan2(imag, real)), nil
 }
 
-// fnImconjugate implements the Excel IMCONJUGATE function.
+// fnImconjugate implements the IMCONJUGATE function.
 // IMCONJUGATE(inumber) — returns the complex conjugate of a complex number.
 // The conjugate of a+bi is a-bi (the imaginary part is negated).
 func fnImconjugate(args []Value) (Value, error) {
@@ -1674,7 +2033,7 @@ func parseComplexWithSuffix(s string) (real, imag float64, suffix string, fail b
 	return r, im, suffix, false
 }
 
-// formatComplex formats a complex number as an Excel-style string
+// formatComplex formats a complex number as a formatted string
 // using the same formatting rules as the COMPLEX function.
 func formatComplex(real, imag float64, suffix string) string {
 	// Both zero: just "0".
@@ -1709,7 +2068,7 @@ func formatComplex(real, imag float64, suffix string) string {
 	return result
 }
 
-// fnImdiv implements the Excel IMDIV function.
+// fnImdiv implements the IMDIV function.
 // IMDIV(inumber1, inumber2) — returns the quotient of two complex numbers.
 // Both arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 // Division by zero (both real and imag of divisor are 0) returns #NUM!.
@@ -1782,7 +2141,7 @@ func fnImdiv(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImproduct implements the Excel IMPRODUCT function.
+// fnImproduct implements the IMPRODUCT function.
 // IMPRODUCT(inumber1, [inumber2], ...) — returns the product of 1 to 255 complex numbers.
 // All arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImproduct(args []Value) (Value, error) {
@@ -1847,7 +2206,7 @@ func fnImproduct(args []Value) (Value, error) {
 	return StringVal(formatComplex(totalReal, totalImag, suffix)), nil
 }
 
-// fnImsum implements the Excel IMSUM function.
+// fnImsum implements the IMSUM function.
 // IMSUM(inumber1, [inumber2], ...) — returns the sum of two or more complex numbers.
 // All arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImsum(args []Value) (Value, error) {
@@ -1907,7 +2266,7 @@ func fnImsum(args []Value) (Value, error) {
 	return StringVal(formatComplex(totalReal, totalImag, suffix)), nil
 }
 
-// fnImsub implements the Excel IMSUB function.
+// fnImsub implements the IMSUB function.
 // IMSUB(inumber1, inumber2) — returns the difference of two complex numbers.
 // Both arguments must use the same suffix (i or j). Returns #NUM! for invalid inputs.
 func fnImsub(args []Value) (Value, error) {
@@ -1981,7 +2340,7 @@ func cleanFloat(v float64) float64 {
 	return v
 }
 
-// fnImsqrt implements the Excel IMSQRT function.
+// fnImsqrt implements the IMSQRT function.
 // IMSQRT(inumber) — returns the square root of a complex number.
 // Uses polar form: r=sqrt(x²+y²), θ=atan2(y,x), result=sqrt(r)*(cos(θ/2)+sin(θ/2)*i).
 func fnImsqrt(args []Value) (Value, error) {
@@ -2044,7 +2403,7 @@ func fnImsqrt(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImpower implements the Excel IMPOWER function.
+// fnImpower implements the IMPOWER function.
 // IMPOWER(inumber, number) — returns a complex number raised to a power.
 // Uses polar form: r^n * (cos(nθ) + sin(nθ)*i).
 func fnImpower(args []Value) (Value, error) {
@@ -2122,7 +2481,7 @@ func fnImpower(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImexp implements the Excel IMEXP function.
+// fnImexp implements the IMEXP function.
 // IMEXP(inumber) — returns the exponential of a complex number.
 // e^(x+yi) = e^x * (cos(y) + sin(y)*i).
 func fnImexp(args []Value) (Value, error) {
@@ -2176,7 +2535,7 @@ func fnImexp(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImln implements the Excel IMLN function.
+// fnImln implements the IMLN function.
 // IMLN(inumber) — returns the natural logarithm of a complex number.
 // ln(x+yi) = ln(|z|) + atan2(y,x)*i.
 func fnImln(args []Value) (Value, error) {
@@ -2235,7 +2594,7 @@ func fnImln(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImlog2 implements the Excel IMLOG2 function.
+// fnImlog2 implements the IMLOG2 function.
 // IMLOG2(inumber) — returns the base-2 logarithm of a complex number.
 // log2(z) = ln(z) / ln(2).
 func fnImlog2(args []Value) (Value, error) {
@@ -2295,7 +2654,7 @@ func fnImlog2(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImlog10 implements the Excel IMLOG10 function.
+// fnImlog10 implements the IMLOG10 function.
 // IMLOG10(inumber) — returns the base-10 logarithm of a complex number.
 // log10(z) = ln(z) / ln(10).
 func fnImlog10(args []Value) (Value, error) {
@@ -2355,7 +2714,7 @@ func fnImlog10(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsin implements the Excel IMSIN function.
+// fnImsin implements the IMSIN function.
 // IMSIN(inumber) — returns the sine of a complex number.
 // sin(x+yi) = sin(x)*cosh(y) + cos(x)*sinh(y)*i.
 func fnImsin(args []Value) (Value, error) {
@@ -2407,7 +2766,7 @@ func fnImsin(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcos implements the Excel IMCOS function.
+// fnImcos implements the IMCOS function.
 // IMCOS(inumber) — returns the cosine of a complex number.
 // cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i.
 func fnImcos(args []Value) (Value, error) {
@@ -2459,7 +2818,7 @@ func fnImcos(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImtan implements the Excel IMTAN function.
+// fnImtan implements the IMTAN function.
 // IMTAN(inumber) — returns the tangent of a complex number.
 // tan(z) = sin(z)/cos(z).
 // real part = sin(2x)/(cos(2x)+cosh(2y))
@@ -2521,7 +2880,7 @@ func fnImtan(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsinh implements the Excel IMSINH function.
+// fnImsinh implements the IMSINH function.
 // IMSINH(inumber) — returns the hyperbolic sine of a complex number.
 // sinh(x+yi) = sinh(x)*cos(y) + cosh(x)*sin(y)*i.
 func fnImsinh(args []Value) (Value, error) {
@@ -2573,7 +2932,7 @@ func fnImsinh(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcosh implements the Excel IMCOSH function.
+// fnImcosh implements the IMCOSH function.
 // IMCOSH(inumber) — returns the hyperbolic cosine of a complex number.
 // cosh(x+yi) = cosh(x)*cos(y) + sinh(x)*sin(y)*i.
 func fnImcosh(args []Value) (Value, error) {
@@ -2625,9 +2984,68 @@ func fnImcosh(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImsech implements the Excel IMSECH function.
+// fnImsech implements the IMSECH function.
 // IMSECH(inumber) — returns the hyperbolic secant of a complex number.
 // sech(z) = 1/cosh(z).
+func fnImsec(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Propagate errors.
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+
+	// Handle arrays.
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnImsec([]Value{v})
+			return r
+		}), nil
+	}
+
+	var x, y float64
+	var suffix string
+
+	switch args[0].Type {
+	case ValueNumber:
+		x = args[0].Num
+		y = 0
+		suffix = ""
+	case ValueString:
+		var fail bool
+		x, y, suffix, fail = parseComplexWithSuffix(args[0].Str)
+		if fail {
+			return ErrorVal(ErrValNUM), nil
+		}
+	case ValueBool:
+		return ErrorVal(ErrValVALUE), nil
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Default suffix if none was set.
+	if suffix == "" {
+		suffix = "i"
+	}
+
+	// cos(x+yi) = cos(x)*cosh(y) - sin(x)*sinh(y)*i
+	cr := math.Cos(x) * math.Cosh(y)
+	ci := -math.Sin(x) * math.Sinh(y)
+
+	// 1/(cr+ci*i): multiply by conjugate → (cr-ci*i)/(cr²+ci²)
+	denom := cr*cr + ci*ci
+	if denom < 1e-24 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	realResult := cleanFloat(cr / denom)
+	imagResult := cleanFloat(-ci / denom)
+
+	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
+}
+
 func fnImsech(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
@@ -2687,7 +3105,7 @@ func fnImsech(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcsc implements the Excel IMCSC function.
+// fnImcsc implements the IMCSC function.
 // IMCSC(inumber) — returns the cosecant of a complex number.
 // csc(z) = 1/sin(z).
 func fnImcsc(args []Value) (Value, error) {
@@ -2749,7 +3167,7 @@ func fnImcsc(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcot implements the Excel IMCOT function.
+// fnImcot implements the IMCOT function.
 // IMCOT(inumber) — returns the cotangent of a complex number.
 // cot(z) = cos(z)/sin(z).
 func fnImcot(args []Value) (Value, error) {
@@ -2816,7 +3234,7 @@ func fnImcot(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnImcsch implements the Excel IMCSCH function.
+// fnImcsch implements the IMCSCH function.
 // IMCSCH(inumber) — returns the hyperbolic cosecant of a complex number.
 // csch(z) = 1/sinh(z).
 func fnImcsch(args []Value) (Value, error) {
@@ -2878,7 +3296,7 @@ func fnImcsch(args []Value) (Value, error) {
 	return StringVal(formatComplex(realResult, imagResult, suffix)), nil
 }
 
-// fnGESTEP implements the Excel GESTEP function.
+// fnGESTEP implements the GESTEP function.
 // GESTEP(number, [step]) — returns 1 if number >= step, else 0.
 // step defaults to 0. Non-numeric arguments produce #VALUE!.
 func fnGESTEP(args []Value) (Value, error) {

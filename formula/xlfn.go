@@ -3,8 +3,8 @@ package formula
 import "strings"
 
 // xlfnPrefix maps function names to their required OOXML prefix.
-// These are Excel functions added after the original OOXML specification
-// that require a special prefix in the XML to be recognized by Excel.
+// These are functions added after the original OOXML specification
+// that require a special prefix in the XML to be recognized.
 var xlfnPrefix = map[string]string{
 	"ACOT":            "_xlfn.",
 	"ACOTH":           "_xlfn.",
@@ -26,6 +26,7 @@ var xlfnPrefix = map[string]string{
 	"CHISQ.DIST.RT":   "_xlfn.",
 	"CHISQ.INV":       "_xlfn.",
 	"CHISQ.INV.RT":    "_xlfn.",
+	"CHISQ.TEST":      "_xlfn.",
 	"CEILING.MATH":    "_xlfn.",
 	"CEILING.PRECISE": "_xlfn.",
 	"CONFIDENCE.NORM": "_xlfn.",
@@ -72,6 +73,7 @@ var xlfnPrefix = map[string]string{
 	"IMSINH":          "_xlfn.",
 	"ISOWEEKNUM":      "_xlfn.",
 	"LAMBDA":          "_xlfn.",
+	"LET":             "_xlfn.",
 	"MAKEARRAY":       "_xlfn.",
 	"MAP":             "_xlfn.",
 	"MAXIFS":          "_xlfn.",
@@ -114,6 +116,7 @@ var xlfnPrefix = map[string]string{
 	"T.DIST.RT":       "_xlfn.",
 	"T.INV":           "_xlfn.",
 	"T.INV.2T":        "_xlfn.",
+	"T.TEST":          "_xlfn.",
 	"SWITCH":          "_xlfn.",
 	"TAKE":            "_xlfn.",
 	"TEXTJOIN":        "_xlfn.",
@@ -132,6 +135,7 @@ var xlfnPrefix = map[string]string{
 	"XLOOKUP":         "_xlfn.",
 	"XMATCH":          "_xlfn.",
 	"XOR":             "_xlfn.",
+	"Z.TEST":          "_xlfn.",
 }
 
 var dynamicArrayFunctions = map[string]struct{}{
@@ -218,7 +222,7 @@ func AddXlfnPrefixes(f string) string {
 	return string(buf)
 }
 
-// IsDynamicArrayFormula reports whether the formula uses Excel dynamic-array
+// IsDynamicArrayFormula reports whether the formula uses dynamic-array
 // semantics and must be serialized with dynamic-array OOXML metadata.
 func IsDynamicArrayFormula(f string) bool {
 	if f == "" {
