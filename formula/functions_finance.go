@@ -220,10 +220,19 @@ func fnPV(args []Value) (Value, error) {
 		return NumberVal(-fv - pmt*nper), nil
 	}
 	term := math.Pow(1+rate, nper)
-	if payType == 1 {
-		return NumberVal((-fv - pmt*(1+rate)*(term-1)/rate) / term), nil
+	if term == 0 {
+		return ErrorVal(ErrValNUM), nil
 	}
-	return NumberVal((-fv - pmt*(term-1)/rate) / term), nil
+	result := 0.0
+	if payType == 1 {
+		result = (-fv - pmt*(1+rate)*(term-1)/rate) / term
+	} else {
+		result = (-fv - pmt*(term-1)/rate) / term
+	}
+	if math.IsInf(result, 0) || math.IsNaN(result) {
+		return ErrorVal(ErrValNUM), nil
+	}
+	return NumberVal(result), nil
 }
 
 // fnNPER implements NPER(rate, pmt, pv, [fv], [type]).
