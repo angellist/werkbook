@@ -16,6 +16,7 @@ func init() {
 	Register("ISNONTEXT", NoCtx(fnISNONTEXT))
 	Register("ISNUMBER", NoCtx(fnISNUMBER))
 	Register("ISODD", NoCtx(fnISODD))
+	Register("ISREF", NoCtx(fnISREF))
 	Register("ISTEXT", NoCtx(fnISTEXT))
 	Register("N", NoCtx(fnN))
 	Register("NA", NoCtx(fnNA))
@@ -83,6 +84,16 @@ func fnISODD(args []Value) (Value, error) {
 		return *e, nil
 	}
 	return BoolVal(int(math.Trunc(n))%2 != 0), nil
+}
+
+// fnISREF implements ISREF(value). It returns TRUE if the argument is a cell
+// or range reference, FALSE otherwise. Errors are not propagated — ISREF(1/0)
+// returns FALSE, not #DIV/0!.
+func fnISREF(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	return BoolVal(args[0].Type == ValueRef), nil
 }
 
 func fnISNA(args []Value) (Value, error) {

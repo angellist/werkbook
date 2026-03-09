@@ -2563,3 +2563,458 @@ func TestTYPE(t *testing.T) {
 		}
 	})
 }
+
+func TestISREF(t *testing.T) {
+	t.Run("cell_reference_A1", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("cell_reference_empty_cell", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1) empty cell = %v, want TRUE (still a reference)", got)
+		}
+	})
+
+	t.Run("range_reference", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1:B5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1:B5) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("range_reference_single_column", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1:A5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1:A5) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("number_literal", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(1) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("string_literal", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF("text")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf(`ISREF("text") = %v, want FALSE`, got)
+		}
+	})
+
+	t.Run("boolean_true", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(TRUE)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(TRUE) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("boolean_false", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(FALSE)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(FALSE) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("error_div_by_zero", func(t *testing.T) {
+		// ISREF does NOT propagate errors — ISREF(1/0) returns FALSE
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(1/0)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(1/0) = %v, want FALSE (not error propagation)", got)
+		}
+	})
+
+	t.Run("function_result", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(SUM(1,2))`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(SUM(1,2)) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("no_args_error", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF()`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("ISREF() = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("too_many_args_error", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(1,2)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("ISREF(1,2) = %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("cross_sheet_reference", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Sheet: "Sheet1", Col: 1, Row: 1}: NumberVal(99),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(Sheet1!A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(Sheet1!A1) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("number_zero", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(0)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(0) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("negative_number", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(-5)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(-5) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("empty_string", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF("")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf(`ISREF("") = %v, want FALSE`, got)
+		}
+	})
+
+	t.Run("expression_result", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(2+3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(2+3) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("na_error", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(#N/A)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(#N/A) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("value_error", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(#VALUE!)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(#VALUE!) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("cell_ref_with_number_value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 2, Row: 3}: NumberVal(100),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(B3)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(B3) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("cell_ref_with_string_value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello"),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1) with string cell = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("cell_ref_with_bool_value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+			},
+		}
+		ctx := &EvalContext{
+			CurrentCol:   2,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(A1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISREF(A1) with bool cell = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("concatenation_result", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF("a"&"b")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf(`ISREF("a"&"b") = %v, want FALSE`, got)
+		}
+	})
+
+	t.Run("pi_function_result", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{
+			CurrentCol:   1,
+			CurrentRow:   1,
+			CurrentSheet: "",
+			Resolver:     resolver,
+		}
+		cf := evalCompile(t, `ISREF(PI())`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISREF(PI()) = %v, want FALSE", got)
+		}
+	})
+}
