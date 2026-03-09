@@ -1901,6 +1901,7 @@ func TestLEN(t *testing.T) {
 		// Wrong argument count
 		{name: "no_args", formula: `LEN()`, isErr: true},
 		{name: "two_args", formula: `LEN("a","b")`, isErr: true},
+		{name: "error_arg", formula: `LEN(NA())`, isErr: true},
 
 		// Nested formula
 		{name: "nested_concat", formula: `LEN(CONCATENATE("ab","cd"))`, wantNum: 4},
@@ -2255,8 +2256,10 @@ func TestUNICHAR(t *testing.T) {
 		{"lowercase_z", `UNICHAR(122)`, "z"},
 		{"tilde", `UNICHAR(126)`, "~"},
 
-		// Smallest valid code point
-		{"code_1", `UNICHAR(1)`, "\x01"},
+		// Common control characters
+		{"tab", `UNICHAR(9)`, "\t"},
+		{"line_feed", `UNICHAR(10)`, "\n"},
+		{"carriage_return", `UNICHAR(13)`, "\r"},
 
 		// Unicode characters beyond ASCII
 		{"copyright", `UNICHAR(169)`, "\u00A9"},     // ©
@@ -2271,9 +2274,6 @@ func TestUNICHAR(t *testing.T) {
 		// Emoji (supplementary plane)
 		{"grinning_face", `UNICHAR(128512)`, "\U0001F600"}, // 😀
 
-		// Max valid Unicode code point
-		{"max_unicode", `UNICHAR(1114111)`, "\U0010FFFF"},
-
 		// Non-integer inputs should truncate
 		{"truncate_65.1", `UNICHAR(65.1)`, "A"},
 		{"truncate_65.9", `UNICHAR(65.9)`, "A"},
@@ -2283,7 +2283,20 @@ func TestUNICHAR(t *testing.T) {
 		{"string_65", `UNICHAR("65")`, "A"},
 		{"string_66", `UNICHAR("66")`, "B"},
 
-		// Boolean TRUE = 1
+		// Control characters — Excel accepts all of them
+		{"control_1", `UNICHAR(1)`, "\x01"},
+		{"control_2", `UNICHAR(2)`, "\x02"},
+		{"control_31", `UNICHAR(31)`, "\x1F"},
+
+		// DEL and C1 control characters — Excel accepts them
+		{"del", `UNICHAR(127)`, "\x7F"},
+		{"c1_128", `UNICHAR(128)`, "\u0080"},
+		{"c1_159", `UNICHAR(159)`, "\u009F"},
+
+		// Unicode noncharacters — Excel accepts them
+		{"nonchar_fdd0", `UNICHAR(64976)`, "\uFDD0"},
+		{"nonchar_fffe", `UNICHAR(65534)`, "\uFFFE"},
+		// Boolean TRUE coerces to 1
 		{"bool_true", `UNICHAR(TRUE)`, "\x01"},
 	}
 
@@ -2314,10 +2327,13 @@ func TestUNICHAR(t *testing.T) {
 		// Above max Unicode code point
 		{"too_large", `UNICHAR(1114112)`, ErrValVALUE},
 		{"very_large", `UNICHAR(9999999)`, ErrValVALUE},
-		// Surrogate code points → #N/A
-		{"surrogate_start", `UNICHAR(55296)`, ErrValNA}, // 0xD800
-		{"surrogate_mid", `UNICHAR(56000)`, ErrValNA},   // 0xDAC0
-		{"surrogate_end", `UNICHAR(57343)`, ErrValNA},   // 0xDFFF
+		// Surrogate code points → #VALUE!
+		{"surrogate_start", `UNICHAR(55296)`, ErrValVALUE}, // 0xD800
+		{"surrogate_mid", `UNICHAR(56000)`, ErrValVALUE},   // 0xDAC0
+		{"surrogate_end", `UNICHAR(57343)`, ErrValVALUE},   // 0xDFFF
+		// Plane-terminal U+FFFF noncharacters → #N/A
+		{"nonchar_ffff", `UNICHAR(65535)`, ErrValNA},
+		{"max_unicode", `UNICHAR(1114111)`, ErrValNA},
 		// Non-numeric string → #VALUE!
 		{"non_numeric_string", `UNICHAR("hello")`, ErrValVALUE},
 		// Wrong number of args

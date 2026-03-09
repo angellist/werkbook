@@ -1132,6 +1132,14 @@ func fnSUMPRODUCT(args []Value) (Value, error) {
 				if cell.Type == ValueError {
 					return cell, nil
 				}
+				// Excel treats text and boolean cell values as 0 in
+				// SUMPRODUCT.  Computed booleans (e.g. from A1:A5>3)
+				// will already have been coerced to numbers by the
+				// arithmetic operators before reaching this function.
+				if cell.Type == ValueString || cell.Type == ValueBool {
+					product = 0
+					continue
+				}
 				n, e := CoerceNum(cell)
 				if e != nil {
 					n = 0
@@ -2843,19 +2851,15 @@ func fnNormInv(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 	x := mean + stdev*normSInv(p)
-	// When mean=0 and stdev=1 the result must equal NORM.S.INV exactly
-	// (NORM.INV(p,0,1) is treated identically to NORM.S.INV(p)).
-	// For all other parameters, refine with Newton-Raphson on the full
-	// normal distribution. The Acklam approximation gives ~8 digits;
-	// two iterations bring us to ~16 digits of precision.
-	if mean != 0 || stdev != 1 {
-		for range 2 {
-			z := (x - mean) / stdev
-			cdf := normSDistCDF(z)
-			pdf := normSDistPDF(z)
-			if pdf > 0 {
-				x -= (cdf - p) / (pdf / stdev)
-			}
+	// Refine with Newton-Raphson on the full normal distribution.
+	// normSInv already provides high precision, but this ensures
+	// consistency across all parameter combinations.
+	for range 2 {
+		z := (x - mean) / stdev
+		cdf := normSDistCDF(z)
+		pdf := normSDistPDF(z)
+		if pdf > 0 {
+			x -= (cdf - p) / (pdf / stdev)
 		}
 	}
 	return NumberVal(x), nil
@@ -2991,10 +2995,20 @@ func normSInv(p float64) float64 {
 			((((d[0]*q+d[1])*q+d[2])*q+d[3])*q + 1)
 	}
 
-	// One Halley step closes the remaining gap to the expected float64 results.
+	// One Halley step closes most of the gap to full float64 precision.
 	e := 0.5*math.Erfc(-x/math.Sqrt2) - p
 	u := e * math.Sqrt(2*math.Pi) * math.Exp(x*x/2)
 	x = x - u/(1+x*u/2)
+
+	// Two Newton-Raphson iterations bring us to ~15+ digits of precision,
+	// matching Excel's output for NORM.S.INV.
+	for range 2 {
+		cdf := normSDistCDF(x)
+		pdf := normSDistPDF(x)
+		if pdf > 0 {
+			x -= (cdf - p) / pdf
+		}
+	}
 
 	return x
 }
@@ -5479,7 +5493,8 @@ func fnZTEST(args []Value) (Value, error) {
 		return ErrorVal(ErrValDIV0), nil
 	}
 	z := (mean - x) / (sigma / math.Sqrt(float64(n)))
-	return NumberVal(1 - normSDistCDF(z)), nil
+	// Use Erfc directly to avoid precision loss from 1 - CDF when CDF ≈ 1.
+	return NumberVal(0.5 * math.Erfc(z/math.Sqrt(2))), nil
 }
 
 // ---------------------------------------------------------------------------

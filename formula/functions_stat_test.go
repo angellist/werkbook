@@ -862,7 +862,7 @@ func TestSUMPRODUCT_Comprehensive(t *testing.T) {
 		}
 	})
 
-	t.Run("boolean TRUE treated as 1 in array", func(t *testing.T) {
+	t.Run("boolean in cell range treated as 0", func(t *testing.T) {
 		resolver := &mockResolver{
 			cells: map[CellAddr]Value{
 				{Col: 1, Row: 1}: BoolVal(true),
@@ -871,14 +871,15 @@ func TestSUMPRODUCT_Comprehensive(t *testing.T) {
 				{Col: 2, Row: 2}: NumberVal(20),
 			},
 		}
-		// 1*10 + 0*20 = 10
+		// Excel treats boolean cell values as 0 in SUMPRODUCT:
+		// 0*10 + 0*20 = 0
 		cf := evalCompile(t, "SUMPRODUCT(A1:A2,B1:B2)")
 		got, err := Eval(cf, resolver, nil)
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
-		if got.Type != ValueNumber || got.Num != 10 {
-			t.Errorf("got %v, want 10", got)
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
 		}
 	})
 
@@ -1025,6 +1026,351 @@ func TestSUMPRODUCT_Comprehensive(t *testing.T) {
 		}
 		if got.Type != ValueNumber || got.Num != 6.5 {
 			t.Errorf("got %v, want 6.5", got)
+		}
+	})
+}
+
+func TestSUMPRODUCT_Extended(t *testing.T) {
+	t.Run("conditional boolean multiplication", func(t *testing.T) {
+		// SUMPRODUCT((C1:C4="A")*B1:B4) — sum prices where category is "A"
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				// B = prices
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 4}: NumberVal(40),
+				// C = categories
+				{Col: 3, Row: 1}: StringVal("A"),
+				{Col: 3, Row: 2}: StringVal("B"),
+				{Col: 3, Row: 3}: StringVal("A"),
+				{Col: 3, Row: 4}: StringVal("B"),
+			},
+		}
+		ctx := &EvalContext{CurrentCol: 5, CurrentRow: 1, CurrentSheet: "Sheet1"}
+		cf := evalCompile(t, `SUMPRODUCT((C1:C4="A")*B1:B4)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// (1*10 + 0*20 + 1*30 + 0*40) = 40
+		if got.Type != ValueNumber || got.Num != 40 {
+			t.Errorf("got %v, want 40", got)
+		}
+	})
+
+	t.Run("double negation count", func(t *testing.T) {
+		// SUMPRODUCT(--(A1:A6>5)) — count values > 5
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(3),
+				{Col: 1, Row: 2}: NumberVal(7),
+				{Col: 1, Row: 3}: NumberVal(1),
+				{Col: 1, Row: 4}: NumberVal(9),
+				{Col: 1, Row: 5}: NumberVal(5),
+				{Col: 1, Row: 6}: NumberVal(6),
+			},
+		}
+		ctx := &EvalContext{CurrentCol: 3, CurrentRow: 1, CurrentSheet: "Sheet1"}
+		cf := evalCompile(t, "SUMPRODUCT(--(A1:A6>5))")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// values >5: 7, 9, 6 => count = 3
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3", got)
+		}
+	})
+
+	t.Run("three-way condition", func(t *testing.T) {
+		// SUMPRODUCT((A1:A4>0)*(B1:B4="yes")*(C1:C4))
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				// A: flag values
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(-1),
+				{Col: 1, Row: 3}: NumberVal(2),
+				{Col: 1, Row: 4}: NumberVal(3),
+				// B: text conditions
+				{Col: 2, Row: 1}: StringVal("yes"),
+				{Col: 2, Row: 2}: StringVal("yes"),
+				{Col: 2, Row: 3}: StringVal("no"),
+				{Col: 2, Row: 4}: StringVal("yes"),
+				// C: values to sum
+				{Col: 3, Row: 1}: NumberVal(100),
+				{Col: 3, Row: 2}: NumberVal(200),
+				{Col: 3, Row: 3}: NumberVal(300),
+				{Col: 3, Row: 4}: NumberVal(400),
+			},
+		}
+		ctx := &EvalContext{CurrentCol: 5, CurrentRow: 1, CurrentSheet: "Sheet1"}
+		cf := evalCompile(t, `SUMPRODUCT((A1:A4>0)*(B1:B4="yes")*(C1:C4))`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Row1: (1>0=T=1)*(yes=1)*100 = 100
+		// Row2: (-1>0=F=0)*(yes=1)*200 = 0
+		// Row3: (2>0=T=1)*(no=0)*300 = 0
+		// Row4: (3>0=T=1)*(yes=1)*400 = 400
+		// Total: 500
+		if got.Type != ValueNumber || got.Num != 500 {
+			t.Errorf("got %v, want 500", got)
+		}
+	})
+
+	t.Run("single row horizontal arrays", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2),
+				{Col: 2, Row: 1}: NumberVal(3),
+				{Col: 3, Row: 1}: NumberVal(4),
+				{Col: 4, Row: 1}: NumberVal(5),
+				{Col: 1, Row: 2}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 3, Row: 2}: NumberVal(30),
+				{Col: 4, Row: 2}: NumberVal(40),
+			},
+		}
+		// A1:D1 = {2,3,4,5}, A2:D2 = {10,20,30,40}
+		// 2*10 + 3*20 + 4*30 + 5*40 = 20+60+120+200 = 400
+		cf := evalCompile(t, "SUMPRODUCT(A1:D1,A2:D2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 400 {
+			t.Errorf("got %v, want 400", got)
+		}
+	})
+
+	t.Run("large array 20 elements", func(t *testing.T) {
+		cells := map[CellAddr]Value{}
+		wantSum := 0.0
+		for i := 1; i <= 20; i++ {
+			cells[CellAddr{Col: 1, Row: i}] = NumberVal(float64(i))
+			cells[CellAddr{Col: 2, Row: i}] = NumberVal(float64(i * 2))
+			wantSum += float64(i) * float64(i*2) // i * 2i = 2i^2
+		}
+		resolver := &mockResolver{cells: cells}
+		cf := evalCompile(t, "SUMPRODUCT(A1:A20,B1:B20)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != wantSum {
+			t.Errorf("got %v, want %g", got, wantSum)
+		}
+	})
+
+	t.Run("decimal fractional values", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(0.1),
+				{Col: 1, Row: 2}: NumberVal(0.2),
+				{Col: 1, Row: 3}: NumberVal(0.3),
+				{Col: 2, Row: 1}: NumberVal(0.4),
+				{Col: 2, Row: 2}: NumberVal(0.5),
+				{Col: 2, Row: 3}: NumberVal(0.6),
+			},
+		}
+		// 0.1*0.4 + 0.2*0.5 + 0.3*0.6 = 0.04 + 0.10 + 0.18 = 0.32
+		cf := evalCompile(t, "SUMPRODUCT(A1:A3,B1:B3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || math.Abs(got.Num-0.32) > 1e-10 {
+			t.Errorf("got %v, want 0.32", got)
+		}
+	})
+
+	t.Run("all text array returns zero", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello"),
+				{Col: 1, Row: 2}: StringVal("world"),
+				{Col: 1, Row: 3}: StringVal("foo"),
+			},
+		}
+		cf := evalCompile(t, "SUMPRODUCT(A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("all boolean array treated as zero", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: BoolVal(false),
+				{Col: 1, Row: 3}: BoolVal(true),
+				{Col: 1, Row: 4}: BoolVal(true),
+			},
+		}
+		// Excel treats boolean cell values as 0 in SUMPRODUCT
+		cf := evalCompile(t, "SUMPRODUCT(A1:A4)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("mixed boolean and number arrays", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: BoolVal(false),
+				{Col: 1, Row: 3}: BoolVal(true),
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 3}: NumberVal(30),
+			},
+		}
+		// Excel treats boolean cell values as 0:
+		// 0*10 + 0*20 + 0*30 = 0
+		cf := evalCompile(t, "SUMPRODUCT(A1:A3,B1:B3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("numeric string in array treated as zero", func(t *testing.T) {
+		// Excel treats all text (including numeric strings like "5") as 0
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("5"),
+				{Col: 1, Row: 2}: StringVal("10"),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 2, Row: 2}: NumberVal(3),
+			},
+		}
+		// "5"→0, "10"→0 => 0*2 + 0*3 = 0
+		cf := evalCompile(t, "SUMPRODUCT(A1:A2,B1:B2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	t.Run("negative numbers in all positions", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(-5),
+				{Col: 1, Row: 2}: NumberVal(-3),
+				{Col: 1, Row: 3}: NumberVal(-1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 2, Row: 2}: NumberVal(-4),
+				{Col: 2, Row: 3}: NumberVal(6),
+			},
+		}
+		// (-5)*2 + (-3)*(-4) + (-1)*6 = -10 + 12 + -6 = -4
+		cf := evalCompile(t, "SUMPRODUCT(A1:A3,B1:B3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != -4 {
+			t.Errorf("got %v, want -4", got)
+		}
+	})
+
+	t.Run("four arrays", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 1}: NumberVal(3),
+				{Col: 2, Row: 2}: NumberVal(4),
+				{Col: 3, Row: 1}: NumberVal(5),
+				{Col: 3, Row: 2}: NumberVal(6),
+				{Col: 4, Row: 1}: NumberVal(7),
+				{Col: 4, Row: 2}: NumberVal(8),
+			},
+		}
+		// 1*3*5*7 + 2*4*6*8 = 105 + 384 = 489
+		cf := evalCompile(t, "SUMPRODUCT(A1:A2,B1:B2,C1:C2,D1:D2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 489 {
+			t.Errorf("got %v, want 489", got)
+		}
+	})
+
+	t.Run("2D arrays multi-row multi-col", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 3, Row: 1}: NumberVal(3),
+				{Col: 1, Row: 2}: NumberVal(4),
+				{Col: 2, Row: 2}: NumberVal(5),
+				{Col: 3, Row: 2}: NumberVal(6),
+				{Col: 1, Row: 3}: NumberVal(7),
+				{Col: 2, Row: 3}: NumberVal(8),
+				{Col: 3, Row: 3}: NumberVal(9),
+			},
+		}
+		// SUMPRODUCT(A1:C3) with single array = sum of elements
+		// 1+2+3+4+5+6+7+8+9 = 45
+		cf := evalCompile(t, "SUMPRODUCT(A1:C3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 45 {
+			t.Errorf("got %v, want 45", got)
+		}
+	})
+
+	t.Run("2D arrays sum of squares", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: NumberVal(3),
+				{Col: 2, Row: 2}: NumberVal(4),
+			},
+		}
+		// SUMPRODUCT(A1:B2, A1:B2) = 1*1 + 2*2 + 3*3 + 4*4 = 1+4+9+16 = 30
+		cf := evalCompile(t, "SUMPRODUCT(A1:B2,A1:B2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 30 {
+			t.Errorf("got %v, want 30", got)
+		}
+	})
+
+	t.Run("inline arrays", func(t *testing.T) {
+		resolver := &mockResolver{}
+		ctx := &EvalContext{CurrentCol: 1, CurrentRow: 1, CurrentSheet: "Sheet1"}
+		// {1,2,3} * {4,5,6} = 1*4 + 2*5 + 3*6 = 4+10+18 = 32
+		cf := evalCompile(t, "SUMPRODUCT({1,2,3},{4,5,6})")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 32 {
+			t.Errorf("got %v, want 32", got)
 		}
 	})
 }
@@ -14606,7 +14952,7 @@ func TestNORMSDIST_argcount(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNORMSINV(t *testing.T) {
-	const tol = 1e-5
+	const tol = 1e-12
 	resolver := &mockResolver{}
 
 	tests := []struct {
@@ -14617,25 +14963,25 @@ func TestNORMSINV(t *testing.T) {
 		wantErr   ErrorValue
 	}{
 		{"p_0.5", "NORM.S.INV(0.5)", 0, false, 0},
-		{"p_0.841344746", "NORM.S.INV(0.841344746)", 1.0, false, 0},
-		{"p_0.158655254", "NORM.S.INV(0.158655254)", -1.0, false, 0},
-		{"p_0.977249868", "NORM.S.INV(0.977249868)", 2.0, false, 0},
-		{"p_0.022750132", "NORM.S.INV(0.022750132)", -2.0, false, 0},
-		{"p_0.998650102", "NORM.S.INV(0.998650102)", 3.0, false, 0},
-		{"p_0.001349898", "NORM.S.INV(0.001349898)", -3.0, false, 0},
-		{"p_0.975", "NORM.S.INV(0.975)", 1.959964, false, 0},
-		{"p_0.025", "NORM.S.INV(0.025)", -1.959964, false, 0},
-		{"p_0.9", "NORM.S.INV(0.9)", 1.281552, false, 0},
-		{"p_0.1", "NORM.S.INV(0.1)", -1.281552, false, 0},
-		{"p_0.95", "NORM.S.INV(0.95)", 1.644854, false, 0},
-		{"p_0.05", "NORM.S.INV(0.05)", -1.644854, false, 0},
-		{"p_0.99", "NORM.S.INV(0.99)", 2.326348, false, 0},
-		{"p_0.01", "NORM.S.INV(0.01)", -2.326348, false, 0},
-		{"p_0.001", "NORM.S.INV(0.001)", -3.090232, false, 0},
-		{"p_0.999", "NORM.S.INV(0.999)", 3.090232, false, 0},
-		{"p_0.908789", "NORM.S.INV(0.908789)", 1.333335, false, 0},
-		{"p_0.75", "NORM.S.INV(0.75)", 0.674490, false, 0},
-		{"p_0.25", "NORM.S.INV(0.25)", -0.674490, false, 0},
+		{"p_0.841344746", "NORM.S.INV(0.841344746)", 0.9999999997167303, false, 0},
+		{"p_0.158655254", "NORM.S.INV(0.158655254)", -0.9999999997167306, false, 0},
+		{"p_0.977249868", "NORM.S.INV(0.977249868)", 1.999999999040196, false, 0},
+		{"p_0.022750132", "NORM.S.INV(0.022750132)", -1.999999999040195, false, 0},
+		{"p_0.998650102", "NORM.S.INV(0.998650102)", 3.000000007137002, false, 0},
+		{"p_0.001349898", "NORM.S.INV(0.001349898)", -3.000000007136999, false, 0},
+		{"p_0.975", "NORM.S.INV(0.975)", 1.959963984540054, false, 0},
+		{"p_0.025", "NORM.S.INV(0.025)", -1.959963984540054, false, 0},
+		{"p_0.9", "NORM.S.INV(0.9)", 1.281551565544601, false, 0},
+		{"p_0.1", "NORM.S.INV(0.1)", -1.281551565544601, false, 0},
+		{"p_0.95", "NORM.S.INV(0.95)", 1.644853626951472, false, 0},
+		{"p_0.05", "NORM.S.INV(0.05)", -1.644853626951473, false, 0},
+		{"p_0.99", "NORM.S.INV(0.99)", 2.326347874040841, false, 0},
+		{"p_0.01", "NORM.S.INV(0.01)", -2.326347874040841, false, 0},
+		{"p_0.001", "NORM.S.INV(0.001)", -3.090232306167814, false, 0},
+		{"p_0.999", "NORM.S.INV(0.999)", 3.090232306167823, false, 0},
+		{"p_0.908789", "NORM.S.INV(0.908789)", 1.333334673044107, false, 0},
+		{"p_0.75", "NORM.S.INV(0.75)", 0.674489750196082, false, 0},
+		{"p_0.25", "NORM.S.INV(0.25)", -0.6744897501960818, false, 0},
 
 		// Error: boundary values
 		{"err_p_zero", "NORM.S.INV(0)", 0, true, ErrValNUM},
@@ -14691,9 +15037,9 @@ func TestNORMSINV_argcount(t *testing.T) {
 }
 
 func TestNORMSINV_NORMSDIST_roundtrip(t *testing.T) {
-	// NORM.S.INV uses Acklam's approximation without refinement,
-	// so the roundtrip through NORM.S.DIST is only accurate to ~8 digits.
-	const tol = 1e-8
+	// With Newton-Raphson refinement, NORM.S.INV achieves ~15+ digits
+	// of precision, so the roundtrip through NORM.S.DIST is very tight.
+	const tol = 1e-14
 	resolver := &mockResolver{}
 
 	probs := []float64{0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.001, 0.999}
@@ -30324,6 +30670,727 @@ func TestLINEST(t *testing.T) {
 	})
 }
 
+func TestLINEST_Comprehensive(t *testing.T) {
+	const tol = 1e-6
+
+	// Helper to build a 1-row array value from floats.
+	rowArray := func(vals ...float64) Value {
+		row := make([]Value, len(vals))
+		for i, v := range vals {
+			row[i] = NumberVal(v)
+		}
+		return Value{Type: ValueArray, Array: [][]Value{row}}
+	}
+
+	// Helper to build a column (Nx1) array from floats.
+	colArray := func(vals ...float64) Value {
+		rows := make([][]Value, len(vals))
+		for i, v := range vals {
+			rows[i] = []Value{NumberVal(v)}
+		}
+		return Value{Type: ValueArray, Array: rows}
+	}
+
+	t.Run("simple_2_point_line", func(t *testing.T) {
+		// y={2,4}, x={1,2} => slope=2, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4),
+			rowArray(1, 2),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("identity_line", func(t *testing.T) {
+		// y={1,2,3,4,5}, x={1,2,3,4,5} => slope=1, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(1, 2, 3, 4, 5),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-1) > tol {
+			t.Errorf("slope: got %f, want 1", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("slope_2_intercept_0", func(t *testing.T) {
+		// y={2,4,6,8}, x={1,2,3,4} => slope=2, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 6, 8),
+			rowArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("slope_2_intercept_1", func(t *testing.T) {
+		// y={3,5,7,9}, x={1,2,3,4} => slope=2, intercept=1
+		v, err := fnLINEST([]Value{
+			rowArray(3, 5, 7, 9),
+			rowArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("noisy_data_approx_slope", func(t *testing.T) {
+		// y with noise: y={1.1, 1.9, 3.2, 3.8, 5.1}, x={1,2,3,4,5}
+		// meanX=3, meanY=3.02
+		// cov = (1-3)(1.1-3.02)+(2-3)(1.9-3.02)+(3-3)(3.2-3.02)+(4-3)(3.8-3.02)+(5-3)(5.1-3.02)
+		//     = (-2)(-1.92)+(-1)(-1.12)+(0)(0.18)+(1)(0.78)+(2)(2.08)
+		//     = 3.84+1.12+0+0.78+4.16 = 9.9
+		// ssqX = 4+1+0+1+4 = 10
+		// slope = 9.9/10 = 0.99
+		// intercept = 3.02 - 0.99*3 = 0.05
+		v, err := fnLINEST([]Value{
+			rowArray(1.1, 1.9, 3.2, 3.8, 5.1),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-0.99) > tol {
+			t.Errorf("slope: got %f, want 0.99", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-0.05) > tol {
+			t.Errorf("intercept: got %f, want 0.05", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("default_x_three_points", func(t *testing.T) {
+		// y={10,20,30} with x omitted => uses {1,2,3}
+		// slope=10, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(10, 20, 30),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-10) > tol {
+			t.Errorf("slope: got %f, want 10", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("negative_slope_5_4_3_2_1", func(t *testing.T) {
+		// y={5,4,3,2,1}, x={1,2,3,4,5} => slope=-1, intercept=6
+		v, err := fnLINEST([]Value{
+			rowArray(5, 4, 3, 2, 1),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-(-1)) > tol {
+			t.Errorf("slope: got %f, want -1", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-6) > tol {
+			t.Errorf("intercept: got %f, want 6", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("horizontal_line_slope_zero", func(t *testing.T) {
+		// y={3,3,3,3}, x={1,2,3,4} => slope=0, intercept=3
+		v, err := fnLINEST([]Value{
+			rowArray(3, 3, 3, 3),
+			rowArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-3) > tol {
+			t.Errorf("intercept: got %f, want 3", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("large_values_slope_intercept", func(t *testing.T) {
+		// y={1000,2000,3000}, x={100,200,300} => slope=10, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(1000, 2000, 3000),
+			rowArray(100, 200, 300),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-10) > tol {
+			t.Errorf("slope: got %f, want 10", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("decimal_slope_and_intercept", func(t *testing.T) {
+		// y={0.5,1.0,1.5}, x={0.1,0.2,0.3} => slope=5, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(0.5, 1.0, 1.5),
+			rowArray(0.1, 0.2, 0.3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-5) > tol {
+			t.Errorf("slope: got %f, want 5", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("identity_stats_true_r_squared_1", func(t *testing.T) {
+		// y={1,2,3,4,5}, x={1,2,3,4,5}, stats=TRUE => R²=1
+		v, err := fnLINEST([]Value{
+			rowArray(1, 2, 3, 4, 5),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		// slope=1, intercept=0
+		if math.Abs(v.Array[0][0].Num-1) > tol {
+			t.Errorf("slope: got %f, want 1", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+		// R²=1
+		if v.Array[2][0].Type != ValueNumber || math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %v, want 1", v.Array[2][0])
+		}
+		// df=3
+		if math.Abs(v.Array[3][1].Num-3) > tol {
+			t.Errorf("df: got %f, want 3", v.Array[3][1].Num)
+		}
+		// ss_resid=0
+		if math.Abs(v.Array[4][1].Num) > tol {
+			t.Errorf("ss_resid: got %f, want 0", v.Array[4][1].Num)
+		}
+	})
+
+	t.Run("noisy_stats_r_squared_less_than_1", func(t *testing.T) {
+		// y={1.1, 1.9, 3.2, 3.8, 5.1}, x={1,2,3,4,5}, stats=TRUE
+		// R² < 1, F > 0, df = 3
+		v, err := fnLINEST([]Value{
+			rowArray(1.1, 1.9, 3.2, 3.8, 5.1),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		r2 := v.Array[2][0].Num
+		if r2 >= 1.0 || r2 <= 0 {
+			t.Errorf("r²: got %f, want 0 < r² < 1", r2)
+		}
+		// Should be close to 1 for nearly linear data
+		if r2 < 0.98 {
+			t.Errorf("r²: got %f, expected > 0.98 for nearly linear data", r2)
+		}
+		// F > 0
+		if v.Array[3][0].Type != ValueNumber || v.Array[3][0].Num <= 0 {
+			t.Errorf("F: got %v, want positive number", v.Array[3][0])
+		}
+		// df = 3
+		if math.Abs(v.Array[3][1].Num-3) > tol {
+			t.Errorf("df: got %f, want 3", v.Array[3][1].Num)
+		}
+		// ss_reg + ss_resid should equal ss_total
+		ssReg := v.Array[4][0].Num
+		ssResid := v.Array[4][1].Num
+		if ssReg < 0 || ssResid < 0 {
+			t.Errorf("ss_reg=%f, ss_resid=%f: both should be non-negative", ssReg, ssResid)
+		}
+	})
+
+	t.Run("const_false_perfect_through_origin", func(t *testing.T) {
+		// y={2,4,6}, x={1,2,3}, const=FALSE => slope=2, b=0
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 6),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("single_point_basic", func(t *testing.T) {
+		// y={5}, x={3} => slope=0, intercept=5 (single point, no variance in x)
+		v, err := fnLINEST([]Value{
+			rowArray(5),
+			rowArray(3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-5) > tol {
+			t.Errorf("intercept: got %f, want 5", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("non_uniform_x_spacing", func(t *testing.T) {
+		// y=2x+1: x={1,3,7,10}, y={3,7,15,21}
+		v, err := fnLINEST([]Value{
+			rowArray(3, 7, 15, 21),
+			rowArray(1, 3, 7, 10),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("x_starting_at_zero", func(t *testing.T) {
+		// y=3x+5: x={0,1,2,3,4}, y={5,8,11,14,17}
+		v, err := fnLINEST([]Value{
+			rowArray(5, 8, 11, 14, 17),
+			rowArray(0, 1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-3) > tol {
+			t.Errorf("slope: got %f, want 3", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-5) > tol {
+			t.Errorf("intercept: got %f, want 5", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("steep_slope", func(t *testing.T) {
+		// y=100x+50: x={1,2,3}, y={150,250,350}
+		v, err := fnLINEST([]Value{
+			rowArray(150, 250, 350),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-100) > tol {
+			t.Errorf("slope: got %f, want 100", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-50) > tol {
+			t.Errorf("intercept: got %f, want 50", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("very_gentle_slope", func(t *testing.T) {
+		// y=0.001x+10: x={1,2,3,4,5}, y={10.001,10.002,10.003,10.004,10.005}
+		v, err := fnLINEST([]Value{
+			rowArray(10.001, 10.002, 10.003, 10.004, 10.005),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-0.001) > tol {
+			t.Errorf("slope: got %g, want 0.001", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-10) > tol {
+			t.Errorf("intercept: got %g, want 10", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("reversed_x_order", func(t *testing.T) {
+		// Data given in reverse x order: y=2x+1
+		// x={5,4,3,2,1}, y={11,9,7,5,3}
+		v, err := fnLINEST([]Value{
+			rowArray(11, 9, 7, 5, 3),
+			rowArray(5, 4, 3, 2, 1),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("column_array_input", func(t *testing.T) {
+		// Test using Nx1 column arrays instead of 1xN row arrays
+		// y={3,5,7,9}, x={1,2,3,4}: slope=2, intercept=1
+		v, err := fnLINEST([]Value{
+			colArray(3, 5, 7, 9),
+			colArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("very_small_values", func(t *testing.T) {
+		// y=0.001x: x={0.001,0.002,0.003}, y={0.000001,0.000002,0.000003}
+		v, err := fnLINEST([]Value{
+			rowArray(0.000001, 0.000002, 0.000003),
+			rowArray(0.001, 0.002, 0.003),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-0.001) > tol {
+			t.Errorf("slope: got %g, want 0.001", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %g, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("negative_x_positive_y", func(t *testing.T) {
+		// y=-2x+10: x={-3,-2,-1,0,1}, y={16,14,12,10,8}
+		v, err := fnLINEST([]Value{
+			rowArray(16, 14, 12, 10, 8),
+			rowArray(-3, -2, -1, 0, 1),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-(-2)) > tol {
+			t.Errorf("slope: got %f, want -2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-10) > tol {
+			t.Errorf("intercept: got %f, want 10", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("const_false_with_noise_stats", func(t *testing.T) {
+		// const=FALSE with noisy data that doesn't pass through origin
+		// y={3,5,8}, x={1,2,3}, const=FALSE
+		// slope = Σxy/Σx² = (3+10+24)/(1+4+9) = 37/14
+		v, err := fnLINEST([]Value{
+			rowArray(3, 5, 8),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		wantSlope := 37.0 / 14.0
+		if math.Abs(v.Array[0][0].Num-wantSlope) > tol {
+			t.Errorf("slope: got %f, want %f", v.Array[0][0].Num, wantSlope)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+		// df = n-1 = 2
+		if math.Abs(v.Array[3][1].Num-2) > tol {
+			t.Errorf("df: got %f, want 2", v.Array[3][1].Num)
+		}
+		// se_intercept should be #N/A
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+		// r² should be between 0 and 1
+		r2 := v.Array[2][0].Num
+		if r2 < 0 || r2 > 1 {
+			t.Errorf("r²: got %f, want between 0 and 1", r2)
+		}
+	})
+
+	t.Run("ss_reg_plus_ss_resid_equals_ss_total", func(t *testing.T) {
+		// For const=TRUE: ss_total = ss_reg + ss_resid
+		// y={1,3,4,6,7}, x={2,4,5,7,8}
+		v, err := fnLINEST([]Value{
+			rowArray(1, 3, 4, 6, 7),
+			rowArray(2, 4, 5, 7, 8),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		ssReg := v.Array[4][0].Num
+		ssResid := v.Array[4][1].Num
+		// Compute ss_total manually: sum of (yi - mean_y)^2
+		// mean_y = (1+3+4+6+7)/5 = 21/5 = 4.2
+		// ss_total = (1-4.2)^2+(3-4.2)^2+(4-4.2)^2+(6-4.2)^2+(7-4.2)^2
+		//          = 10.24+1.44+0.04+3.24+7.84 = 22.8
+		wantSSTotal := 22.8
+		gotSSTotal := ssReg + ssResid
+		if math.Abs(gotSSTotal-wantSSTotal) > tol {
+			t.Errorf("ss_reg(%f)+ss_resid(%f)=%f, want ss_total=%f", ssReg, ssResid, gotSSTotal, wantSSTotal)
+		}
+	})
+
+	t.Run("r_squared_consistency_with_ss", func(t *testing.T) {
+		// r² should equal ss_reg / ss_total = ss_reg / (ss_reg + ss_resid)
+		// y={2,3,5,6,8}, x={1,2,3,4,5}
+		v, err := fnLINEST([]Value{
+			rowArray(2, 3, 5, 6, 8),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		r2 := v.Array[2][0].Num
+		ssReg := v.Array[4][0].Num
+		ssResid := v.Array[4][1].Num
+		ssTotal := ssReg + ssResid
+		if ssTotal > 0 {
+			computedR2 := ssReg / ssTotal
+			if math.Abs(r2-computedR2) > tol {
+				t.Errorf("r² inconsistency: reported=%f, ss_reg/ss_total=%f", r2, computedR2)
+			}
+		}
+	})
+
+	t.Run("se_slope_from_stats", func(t *testing.T) {
+		// Verify se_slope = se_y / sqrt(ssqX)
+		// y={1,3,2,5,4}, x={1,2,3,4,5}
+		v, err := fnLINEST([]Value{
+			rowArray(1, 3, 2, 5, 4),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		seSlope := v.Array[1][0].Num
+		seY := v.Array[2][1].Num
+		// ssqX = Σ(xi - meanX)² = 4+1+0+1+4 = 10
+		expectedSeSlope := seY / math.Sqrt(10)
+		if math.Abs(seSlope-expectedSeSlope) > tol {
+			t.Errorf("se_slope: got %f, want %f (se_y/sqrt(ssqX))", seSlope, expectedSeSlope)
+		}
+	})
+
+	t.Run("f_statistic_consistency", func(t *testing.T) {
+		// F = (ss_reg/k) / (ss_resid/df) where k=1
+		// y={1,3,2,5,4}, x={1,2,3,4,5}
+		v, err := fnLINEST([]Value{
+			rowArray(1, 3, 2, 5, 4),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		fStat := v.Array[3][0].Num
+		df := v.Array[3][1].Num
+		ssReg := v.Array[4][0].Num
+		ssResid := v.Array[4][1].Num
+		if ssResid > 0 && df > 0 {
+			expectedF := (ssReg / 1) / (ssResid / df)
+			if math.Abs(fStat-expectedF) > tol {
+				t.Errorf("F: got %f, want %f", fStat, expectedF)
+			}
+		}
+	})
+
+	t.Run("eval_linest_four_args", func(t *testing.T) {
+		// Test through formula evaluator with all 4 arguments
+		cf := evalCompile(t, "INDEX(LINEST({3,5,7,9},{1,2,3,4},TRUE,TRUE),3,1)")
+		got, err := Eval(cf, &mockResolver{cells: map[CellAddr]Value{}}, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", got.Type)
+		}
+		// Perfect fit: r²=1
+		if math.Abs(got.Num-1) > tol {
+			t.Errorf("r²: got %f, want 1", got.Num)
+		}
+	})
+
+	t.Run("eval_linest_const_false", func(t *testing.T) {
+		// Test through formula evaluator: LINEST with const=FALSE
+		cf := evalCompile(t, "INDEX(LINEST({2,4,6},{1,2,3},FALSE),1,1)")
+		got, err := Eval(cf, &mockResolver{cells: map[CellAddr]Value{}}, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", got.Type)
+		}
+		// slope=2
+		if math.Abs(got.Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", got.Num)
+		}
+	})
+
+	t.Run("repeated_identical_points", func(t *testing.T) {
+		// All identical points: y={7,7,7,7,7}, x={3,3,3,3,3}
+		// ssqX=0, slope=0, intercept=mean(y)=7
+		v, err := fnLINEST([]Value{
+			rowArray(7, 7, 7, 7, 7),
+			rowArray(3, 3, 3, 3, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-7) > tol {
+			t.Errorf("intercept: got %f, want 7", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("empty_y_array_returns_na", func(t *testing.T) {
+		// Empty array should return #N/A
+		emptyArr := Value{Type: ValueArray, Array: [][]Value{{}}}
+		v, err := fnLINEST([]Value{emptyArr})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValNA {
+			t.Errorf("expected #N/A, got %v", v)
+		}
+	})
+
+	t.Run("const_false_se_slope_for_noisy", func(t *testing.T) {
+		// const=FALSE with stats: verify se_slope is computed
+		// y={1,3,5}, x={1,2,3}, const=FALSE
+		// slope = (1+6+15)/(1+4+9) = 22/14 ≈ 1.571429
+		v, err := fnLINEST([]Value{
+			rowArray(1, 3, 5),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		wantSlope := 22.0 / 14.0
+		if math.Abs(v.Array[0][0].Num-wantSlope) > tol {
+			t.Errorf("slope: got %f, want %f", v.Array[0][0].Num, wantSlope)
+		}
+		// se_slope should be a number
+		if v.Array[1][0].Type != ValueNumber {
+			t.Errorf("se_slope: expected number, got %v", v.Array[1][0])
+		}
+		// se_slope should be non-negative
+		if v.Array[1][0].Num < 0 {
+			t.Errorf("se_slope: got negative %f", v.Array[1][0].Num)
+		}
+	})
+
+	t.Run("negative_intercept", func(t *testing.T) {
+		// y=3x-10: x={1,2,3,4,5}, y={-7,-4,-1,2,5}
+		v, err := fnLINEST([]Value{
+			rowArray(-7, -4, -1, 2, 5),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-3) > tol {
+			t.Errorf("slope: got %f, want 3", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-(-10)) > tol {
+			t.Errorf("intercept: got %f, want -10", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("wide_range_x", func(t *testing.T) {
+		// y=0.5x+100: x={-100,0,100,200}, y={50,100,150,200}
+		v, err := fnLINEST([]Value{
+			rowArray(50, 100, 150, 200),
+			rowArray(-100, 0, 100, 200),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-0.5) > tol {
+			t.Errorf("slope: got %f, want 0.5", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-100) > tol {
+			t.Errorf("intercept: got %f, want 100", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("fractional_slope", func(t *testing.T) {
+		// y = (1/3)x + 2: x={3,6,9}, y={3,4,5}
+		v, err := fnLINEST([]Value{
+			rowArray(3, 4, 5),
+			rowArray(3, 6, 9),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-1.0/3.0) > tol {
+			t.Errorf("slope: got %f, want %f", v.Array[0][0].Num, 1.0/3.0)
+		}
+		if math.Abs(v.Array[0][1].Num-2) > tol {
+			t.Errorf("intercept: got %f, want 2", v.Array[0][1].Num)
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // LOGEST
 // ---------------------------------------------------------------------------
@@ -31608,6 +32675,503 @@ func TestLOGEST(t *testing.T) {
 		}
 		if math.Abs(b-8) > tol {
 			t.Errorf("b: got %f, want 8", b)
+		}
+	})
+
+	t.Run("all_x_same_const_true", func(t *testing.T) {
+		// When all x values are identical, ssqX = 0, slope = 0.
+		// m = exp(0) = 1, b = exp(mean(ln(y)))
+		// y = {4, 4, 4}, x = {5, 5, 5}
+		v, err := fnLOGEST([]Value{
+			rowArray(4, 4, 4),
+			rowArray(5, 5, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-4) > tol {
+			t.Errorf("b: got %f, want 4", b)
+		}
+	})
+
+	t.Run("all_x_same_different_y", func(t *testing.T) {
+		// All x same but different y: slope=0, b = geometric mean of y
+		// y = {2, 8}, x = {3, 3}: mean(ln(y)) = (ln2+ln8)/2 = (ln2+3ln2)/2 = 2ln2
+		// b = exp(2ln2) = 4
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 8),
+			rowArray(3, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-4) > tol {
+			t.Errorf("b: got %f, want 4", b)
+		}
+	})
+
+	t.Run("const_number_zero_means_false", func(t *testing.T) {
+		// const=0 should be treated as FALSE (b forced to 1)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		b := v.Array[0][1].Num
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1 (const=0 should force b=1)", b)
+		}
+	})
+
+	t.Run("const_number_nonzero_means_true", func(t *testing.T) {
+		// const=2 (nonzero) should be treated as TRUE
+		v, err := fnLOGEST([]Value{
+			rowArray(15, 75, 375),
+			rowArray(1, 2, 3),
+			NumberVal(2),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-5) > tol {
+			t.Errorf("m: got %f, want 5", m)
+		}
+		if math.Abs(b-3) > tol {
+			t.Errorf("b: got %f, want 3", b)
+		}
+	})
+
+	t.Run("stats_number_zero_means_false", func(t *testing.T) {
+		// stats=0 should return 1x2 (same as stats=FALSE)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+	})
+
+	t.Run("stats_number_nonzero_means_true", func(t *testing.T) {
+		// stats=5 (nonzero) should return 5x2 (same as stats=TRUE)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			NumberVal(5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+	})
+
+	t.Run("y_only_const_false", func(t *testing.T) {
+		// y only, const=FALSE: x defaults to {1,2,3,...}, b forced to 1
+		// y = {2, 4, 8}: ln(y) = {ln2, 2ln2, 3ln2}
+		// slope = Σ(xi*lnYi)/Σ(xi²) = (1*ln2+2*2ln2+3*3ln2)/(1+4+9) = (ln2+4ln2+9ln2)/14 = 14ln2/14 = ln2
+		// m = exp(ln2) = 2, b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			{Type: ValueEmpty},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("very_small_y_values", func(t *testing.T) {
+		// Very small positive y values: y = 1e-10 * 2^x for x=1,2,3
+		// y = {2e-10, 4e-10, 8e-10}
+		v, err := fnLOGEST([]Value{
+			rowArray(2e-10, 4e-10, 8e-10),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1e-10) > 1e-19 {
+			t.Errorf("b: got %e, want 1e-10", b)
+		}
+	})
+
+	t.Run("very_large_y_values", func(t *testing.T) {
+		// Very large y values: y = 1e100 * 10^x for x=1,2,3
+		// y = {1e101, 1e102, 1e103}
+		v, err := fnLOGEST([]Value{
+			rowArray(1e101, 1e102, 1e103),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-10) > tol {
+			t.Errorf("m: got %f, want 10", m)
+		}
+		if math.Abs(b-1e100)/1e100 > tol {
+			t.Errorf("b: got %e, want 1e100", b)
+		}
+	})
+
+	t.Run("const_false_stats_true_noisy", func(t *testing.T) {
+		// const=FALSE with stats=TRUE on noisy data
+		v, err := fnLOGEST([]Value{
+			rowArray(2.1, 4.3, 7.8, 17, 31),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		// b must be 1 (forced)
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("b: got %f, want 1", v.Array[0][1].Num)
+		}
+		// se_intercept must be #N/A
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+		// df = n-1 = 4 (const=FALSE uses n-k degrees of freedom)
+		if math.Abs(v.Array[3][1].Num-4) > tol {
+			t.Errorf("df: got %f, want 4", v.Array[3][1].Num)
+		}
+		// se_slope should be > 0 for noisy data
+		if v.Array[1][0].Type != ValueNumber || v.Array[1][0].Num <= 0 {
+			t.Errorf("se_slope: expected > 0, got %v", v.Array[1][0])
+		}
+	})
+
+	t.Run("index_stats_se_slope", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,1) => se_slope > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,1)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_slope: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("index_stats_se_intercept", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,2) => se_intercept > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,2)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_intercept: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("index_stats_se_y", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),3,2) => se_y > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),3,2)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_y: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("const_empty_treated_as_true", func(t *testing.T) {
+		// Empty const arg should be treated as TRUE (default)
+		v, err := fnLOGEST([]Value{
+			rowArray(15, 75, 375),
+			rowArray(1, 2, 3),
+			{Type: ValueEmpty},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-5) > tol {
+			t.Errorf("m: got %f, want 5", m)
+		}
+		if math.Abs(b-3) > tol {
+			t.Errorf("b: got %f, want 3", b)
+		}
+	})
+
+	t.Run("stats_empty_treated_as_false", func(t *testing.T) {
+		// Empty stats arg should be treated as FALSE
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			{Type: ValueEmpty},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+	})
+
+	t.Run("x_values_starting_at_zero", func(t *testing.T) {
+		// x starting at 0: y = 5 * 2^x for x={0,1,2,3} => y={5,10,20,40}
+		v, err := fnLOGEST([]Value{
+			rowArray(5, 10, 20, 40),
+			rowArray(0, 1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-5) > tol {
+			t.Errorf("b: got %f, want 5", b)
+		}
+	})
+
+	t.Run("non_sequential_x_values", func(t *testing.T) {
+		// Non-sequential x values: x={10,20,30}, y = 3^x scaled
+		// y = 3^(x/10) => y = {3, 9, 27} for x={10,20,30}
+		// In ln space: lnY = (x/10)*ln3, slope = ln3/10
+		// m = exp(ln3/10) = 3^0.1, b = exp(intercept)
+		// Actually: slope = ln3/10, intercept = 0 from regression
+		v, err := fnLOGEST([]Value{
+			rowArray(3, 9, 27),
+			rowArray(10, 20, 30),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		expectedM := math.Pow(3, 0.1) // 3^(1/10)
+		if math.Abs(m-expectedM) > tol {
+			t.Errorf("m: got %f, want %f", m, expectedM)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("single_y_only", func(t *testing.T) {
+		// Single y value with no x: x defaults to {1}
+		// n=1, slope=0, b=y
+		v, err := fnLOGEST([]Value{
+			rowArray(7),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-7) > tol {
+			t.Errorf("b: got %f, want 7", b)
+		}
+	})
+
+	t.Run("all_y_same_const_false", func(t *testing.T) {
+		// const=FALSE with all y same: y={5,5,5}, x={1,2,3}
+		// slope = Σ(xi*lnYi)/Σ(xi²) = ln5*(1+2+3)/(1+4+9) = 6*ln5/14
+		// m = exp(6*ln5/14), b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(5, 5, 5),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		expectedSlope := 6 * math.Log(5) / 14
+		expectedM := math.Exp(expectedSlope)
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-expectedM) > tol {
+			t.Errorf("m: got %f, want %f", m, expectedM)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("six_data_points_stats", func(t *testing.T) {
+		// y = 2 * 1.5^x for x=0..5 => y={2, 3, 4.5, 6.75, 10.125, 15.1875}
+		ys := make([]float64, 6)
+		for i := 0; i < 6; i++ {
+			ys[i] = 2 * math.Pow(1.5, float64(i))
+		}
+		v, err := fnLOGEST([]Value{
+			rowArray(ys...),
+			rowArray(0, 1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1.5) > tol {
+			t.Errorf("m: got %f, want 1.5", m)
+		}
+		if math.Abs(b-2) > tol {
+			t.Errorf("b: got %f, want 2", b)
+		}
+		// df = 6-2 = 4
+		if math.Abs(v.Array[3][1].Num-4) > tol {
+			t.Errorf("df: got %f, want 4", v.Array[3][1].Num)
+		}
+		// r² = 1
+		if math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %f, want 1", v.Array[2][0].Num)
+		}
+	})
+
+	t.Run("const_false_stats_perfect_fit", func(t *testing.T) {
+		// const=FALSE, stats=TRUE, perfect fit: y = 2^x with x={1,2,3,4}
+		// b forced to 1, and actual data passes through origin in log space
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8, 16),
+			rowArray(1, 2, 3, 4),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		// b must be 1
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("b: got %f, want 1", v.Array[0][1].Num)
+		}
+		// df = n-1 = 3
+		if math.Abs(v.Array[3][1].Num-3) > tol {
+			t.Errorf("df: got %f, want 3", v.Array[3][1].Num)
+		}
+		// se_intercept = #N/A
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+	})
+
+	t.Run("all_args_explicit", func(t *testing.T) {
+		// All four arguments provided explicitly
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("fractional_y_only", func(t *testing.T) {
+		// y values less than 1 with default x
+		// y = {0.1, 0.01, 0.001}: y = 0.1^x => m = 0.1, b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(0.1, 0.01, 0.001),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-0.1) > tol {
+			t.Errorf("m: got %f, want 0.1", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("prediction_matches_manual_calc", func(t *testing.T) {
+		// Verify predicted values from LOGEST match manual calculation
+		// y = {3, 12, 48} for x = {1, 2, 3}: y = 0.75*4^x
+		v, err := fnLOGEST([]Value{
+			rowArray(3, 12, 48),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		// Verify predictions at each data point
+		for i, x := range []float64{1, 2, 3} {
+			predicted := b * math.Pow(m, x)
+			actual := []float64{3, 12, 48}[i]
+			if math.Abs(predicted-actual) > 1e-6 {
+				t.Errorf("prediction at x=%g: got %f, want %f", x, predicted, actual)
+			}
 		}
 	})
 }

@@ -2805,26 +2805,36 @@ func TestSWITCH(t *testing.T) {
 		}
 	})
 
-	t.Run("error expression no match returns NA", func(t *testing.T) {
-		// 1/0 evaluates to #DIV/0! which doesn't match 1 or 2, so returns #N/A
+	t.Run("error expression propagates without default", func(t *testing.T) {
 		cf := evalCompile(t, `SWITCH(1/0, 1, "one", 2, "two")`)
 		got, err := Eval(cf, resolver, nil)
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
-		if got.Type != ValueError || got.Err != ErrValNA {
-			t.Errorf(`SWITCH(1/0, 1,"one", 2,"two") = %v, want #N/A`, got)
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf(`SWITCH(1/0, 1,"one", 2,"two") = %v, want #DIV/0!`, got)
 		}
 	})
 
-	t.Run("error expression with default returns default", func(t *testing.T) {
+	t.Run("error expression propagates with default", func(t *testing.T) {
 		cf := evalCompile(t, `SWITCH(1/0, 1, "one", 2, "two", "fallback")`)
 		got, err := Eval(cf, resolver, nil)
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
-		if got.Type != ValueString || got.Str != "fallback" {
-			t.Errorf(`SWITCH(1/0, ..., "fallback") = %v, want "fallback"`, got)
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf(`SWITCH(1/0, ..., "fallback") = %v, want #DIV/0!`, got)
+		}
+	})
+
+	t.Run("udf error expression stays catchable", func(t *testing.T) {
+		cf := evalCompile(t, `IFERROR(SWITCH(_xludf.IFNA(1,"x"), "x", "ok", "fallback"), "caught")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "caught" {
+			t.Errorf(`IFERROR(SWITCH(_xludf.IFNA(...)), "caught") = %v, want "caught"`, got)
 		}
 	})
 

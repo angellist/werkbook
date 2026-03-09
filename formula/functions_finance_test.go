@@ -452,6 +452,63 @@ func TestPMT_Comprehensive(t *testing.T) {
 			args:    numArgs(0.05),
 			wantErr: true,
 		},
+
+		// --- Additional parity cases ---
+		{
+			name: "30-year mortgage at 6%",
+			args: numArgs(0.06/12, 360, 200000),
+			want: -1199.10,
+		},
+		{
+			name: "5-year car loan at 5%",
+			args: numArgs(0.05/12, 60, 25000),
+			want: -471.78,
+		},
+		{
+			name: "zero rate 12 periods $12000",
+			args: numArgs(0, 12, 12000),
+			want: -1000,
+		},
+		{
+			name: "rate=0 with fv only",
+			args: numArgs(0, 10, 0, 10000),
+			want: -1000,
+		},
+		{
+			name: "negative pv with positive fv",
+			args: numArgs(0.1/12, 60, -5000, 20000),
+			want: -152.04,
+		},
+		{
+			name: "type=1 with pv and fv (8%/12, 24 periods)",
+			args: numArgs(0.08/12, 24, 10000, 5000, 1),
+			want: -640.80,
+		},
+		{
+			name: "very small rate 0.0001 over 360 periods",
+			args: numArgs(0.0001, 360, 100000),
+			want: -282.82,
+		},
+		{
+			name: "50-year loan at 5%",
+			args: numArgs(0.05/12, 600, 100000),
+			want: -454.14,
+		},
+		{
+			name: "negative pv 8%/12 over 120 periods",
+			args: numArgs(0.08/12, 120, -50000),
+			want: 606.64,
+		},
+		{
+			name: "pv=20000 fv=-5000 at 5%/12 over 60 months",
+			args: numArgs(0.05/12, 60, 20000, -5000),
+			want: -303.90,
+		},
+		{
+			name: "string coercion: all three args as strings",
+			args: []Value{StringVal("0.05"), StringVal("12"), StringVal("1000")},
+			want: -112.83,
+		},
 	}
 
 	for _, tt := range tests {
@@ -781,6 +838,82 @@ func TestFV_Comprehensive(t *testing.T) {
 			name: "empty type treated as 0",
 			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), EmptyVal()},
 			want: 1233.56,
+		},
+		// --- Additional scenario coverage ---
+		{
+			name: "retirement savings 30 years monthly",
+			args: numArgs(0.07/12, 360, -500),
+			want: 609985.50,
+		},
+		{
+			name: "lump sum annual compound no pmt",
+			args: numArgs(0.05, 10, 0, -10000),
+			want: 16288.95,
+		},
+		{
+			name: "very small rate 360 periods",
+			args: numArgs(0.0001, 360, -100),
+			want: 36653.98,
+		},
+		{
+			name: "large payment 360 months",
+			args: numArgs(0.05/12, 360, -5000),
+			want: 4161293.18,
+		},
+		{
+			name: "very long term 50 years monthly",
+			args: numArgs(0.05/12, 600, -100),
+			want: 266865.20,
+		},
+		{
+			name: "mixed signs negative pmt positive pv loan paydown",
+			args: numArgs(0.06/12, 24, -100, 5000),
+			want: -3092.60,
+		},
+		{
+			name: "high rate 24 pct annual monthly",
+			args: numArgs(0.24/12, 36, -200),
+			want: 10398.87,
+		},
+		{
+			name: "beginning of period no pv",
+			args: numArgs(0.08/12, 60, -200, 0, 1),
+			want: 14793.34,
+		},
+		{
+			name: "beginning of period with pv",
+			args: numArgs(0.06/12, 120, -500, -10000, 1),
+			want: 100543.34,
+		},
+		{
+			name: "all string coercion",
+			args: []Value{StringVal("0.06"), StringVal("12"), StringVal("-1000")},
+			want: 16869.94,
+		},
+		{
+			name: "zero rate 12 periods pmt only",
+			args: numArgs(0, 12, -100),
+			want: 1200.00,
+		},
+		{
+			name: "zero rate 10 periods pmt and pv",
+			args: numArgs(0, 10, -100, -500),
+			want: 1500.00,
+		},
+		{
+			name: "annual compound 8 pct no pmt",
+			args: numArgs(0.08, 5, 0, -1000),
+			want: 1469.33,
+		},
+		{
+			name: "positive pmt receiving money",
+			args: numArgs(0.05/12, 60, 1000),
+			want: -68006.08,
+		},
+		{
+			name: "pv zero pmt zero rate nonzero",
+			args: numArgs(0.05, 10, 0, 0),
+			want: 0,
 		},
 	}
 
@@ -1151,6 +1284,85 @@ func TestPV_Comprehensive(t *testing.T) {
 			args: numArgs(0.05, 10, 0, -1000, 1),
 			want: 613.91,
 		},
+		// --- Additional scenarios from requirements ---
+		// Car loan: how much can you borrow at 10%/12 for 48 months paying $263.33/mo
+		{
+			name: "car loan PV",
+			args: numArgs(0.10/12, 48, -263.33),
+			want: 10382.62,
+		},
+		// Mortgage: 30yr at 6% paying $1199.10/mo
+		{
+			name: "mortgage 30yr 6%",
+			args: numArgs(0.06/12, 360, -1199.10),
+			want: 199999.82,
+		},
+		// pmt + fv combined: 5yr monthly at 5%
+		{
+			name: "pmt and fv 5yr monthly 5%",
+			args: numArgs(0.05/12, 60, -200, -5000),
+			want: 14494.17,
+		},
+		// No pmt, just fv: 10yr annual at 8%
+		{
+			name: "no pmt just fv 10yr 8%",
+			args: numArgs(0.08, 10, 0, -50000),
+			want: 23159.67,
+		},
+		// Savings target: 10yr monthly at 6%
+		{
+			name: "savings target 10yr 6%",
+			args: numArgs(0.06/12, 120, 0, -100000),
+			want: 54963.27,
+		},
+		// Beginning of period: 20yr monthly 8%
+		{
+			name: "annuity begin of period 20yr 8%",
+			args: numArgs(0.08/12, 240, 500, 0, 1),
+			want: -60175.66,
+		},
+		// Beginning of period: pmt + fv 5yr monthly 6%
+		{
+			name: "pmt and fv begin of period 5yr 6%",
+			args: numArgs(0.06/12, 60, -500, -10000, 1),
+			want: 33405.82,
+		},
+		// Zero rate: PV(0, 10, 0, -10000) = 10000
+		{
+			name: "zero rate fv only no pmt",
+			args: numArgs(0, 10, 0, -10000),
+			want: 10000,
+		},
+		// High rate: 24%/12 for 36 months
+		{
+			name: "high rate 24% monthly 36mo",
+			args: numArgs(0.24/12, 36, -200),
+			want: 5097.77,
+		},
+		// Large nper: 50 years monthly at 5%
+		{
+			name: "large nper 50yr monthly 5%",
+			args: numArgs(0.05/12, 600, -100),
+			want: 22019.70,
+		},
+		// Negative pmt (receiving money): 5yr monthly at 5%
+		{
+			name: "receiving money 5yr monthly 5%",
+			args: numArgs(0.05/12, 60, 1000),
+			want: -52990.71,
+		},
+		// All string coercion: PV("0.05", "12", "-1000")
+		{
+			name: "all string coercion",
+			args: []Value{StringVal("0.05"), StringVal("12"), StringVal("-1000")},
+			want: 8863.25,
+		},
+		// Bool as nper: PV(0.05, TRUE, -1000) — TRUE as nper=1
+		{
+			name: "bool TRUE as nper",
+			args: []Value{NumberVal(0.05), BoolVal(true), NumberVal(-1000)},
+			want: 952.38,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1250,6 +1462,40 @@ func TestPV_Errors(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertError(t, tc.name, v)
+		})
+	}
+}
+
+// TestPV_TVM_Identity verifies that PV(rate, nper, PMT(rate, nper, pv), 0) ≈ -pv.
+// This is the fundamental time value of money identity.
+func TestPV_TVM_Identity(t *testing.T) {
+	cases := []struct {
+		name string
+		rate float64
+		nper float64
+		pv   float64
+	}{
+		{"5% 10yr", 0.05, 10, 10000},
+		{"8% monthly 30yr", 0.08 / 12, 360, 200000},
+		{"3% 5yr", 0.03, 5, 50000},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// First compute PMT(rate, nper, pv)
+			pmtVal, err := fnPMT(numArgs(tc.rate, tc.nper, tc.pv))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pmtVal.Type != ValueNumber {
+				t.Fatalf("PMT returned non-number: %v", pmtVal)
+			}
+			// Then compute PV(rate, nper, pmt, 0) and verify ≈ pv
+			// PMT(rate, nper, pv) gives negative payment, so PV recovers original pv
+			pvVal, err := fnPV(numArgs(tc.rate, tc.nper, pmtVal.Num, 0))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertClose(t, tc.name, pvVal, tc.pv)
 		})
 	}
 }
@@ -1537,6 +1783,87 @@ func TestNPER_Comprehensive(t *testing.T) {
 			name:    "pmt=0 rate=0: div by zero",
 			args:    numArgs(0, 0, 1000, 5000),
 			wantErr: true,
+		},
+
+		// --- Additional requested scenarios ---
+
+		// Pay off $30k at 6% annual with $500/month payments
+		{
+			name: "loan payoff: $30k at 6%, $500/mo",
+			args: numArgs(0.06/12, -500, 30000),
+			want: 71.5132,
+		},
+		// Months to save $50k with $200/month at 5% annual
+		{
+			name: "savings goal: $50k at 5%, $200/mo",
+			args: numArgs(0.05/12, -200, 0, 50000),
+			want: 171.6606,
+		},
+		// Save to $25k with $300/month at 8% annual
+		{
+			name: "savings: $25k target at 8%, $300/mo",
+			args: numArgs(0.08/12, -300, 0, 25000),
+			want: 66.4956,
+		},
+		// Annual payments with both pv and fv
+		{
+			name: "annual: pv=-5000, fv=50000 at 5%, $1000/yr",
+			args: numArgs(0.05, -1000, -5000, 50000),
+			want: 21.1030,
+		},
+		// Beginning of period savings
+		{
+			name: "savings type=1: $25k target at 8%, $300/mo",
+			args: numArgs(0.08/12, -300, 0, 25000, 1),
+			want: 66.1392,
+		},
+		// Beginning of period loan payoff
+		{
+			name: "loan type=1: $30k at 6%, $500/mo",
+			args: numArgs(0.06/12, -500, 30000, 0, 1),
+			want: 71.0861,
+		},
+		// Zero rate with fv only (no pv)
+		{
+			name: "zero rate: fv only, $100/period to $5000",
+			args: numArgs(0, -100, 0, 5000),
+			want: 50,
+		},
+		// Zero rate with both pv and fv
+		{
+			name: "zero rate: pv=1000, fv=3000, $200/period",
+			args: numArgs(0, -200, 1000, 3000),
+			want: 20,
+		},
+		// Single period needed
+		{
+			name: "single period: NPER(0.1, -1100, 1000)",
+			args: numArgs(0.1, -1100, 1000),
+			want: 1.0,
+		},
+		// Large payment relative to pv
+		{
+			name: "large pmt: $10000/mo on $50k at 5%",
+			args: numArgs(0.05/12, -10000, 50000),
+			want: 5.0633,
+		},
+		// Very small rate (0.01%)
+		{
+			name: "very small rate: 0.01% per period",
+			args: numArgs(0.0001, -100, 10000),
+			want: 100.5084,
+		},
+		// High rate (24% annual = 2% monthly)
+		{
+			name: "high rate: 24%/yr, $500/mo, $10k loan",
+			args: numArgs(0.24/12, -500, 10000),
+			want: 25.7959,
+		},
+		// String coercion with 5% rate
+		{
+			name: "string coercion: NPER(\"0.05\", \"-100\", \"1000\")",
+			args: []Value{StringVal("0.05"), StringVal("-100"), StringVal("1000")},
+			want: 14.2067,
 		},
 	}
 
@@ -2632,6 +2959,98 @@ func TestPPMT_Comprehensive(t *testing.T) {
 			// PPMT(0, 1, 10, 10000, 0, 1)
 			args: numArgs(0, 1, 10, 10000, 0, 1),
 			want: -1000.00,
+		},
+
+		// --- 6% mortgage (from task spec) ---
+		{
+			name: "6% mortgage first payment",
+			// PPMT(0.06/12, 1, 360, 200000)
+			args: numArgs(0.06/12, 1, 360, 200000),
+			want: -199.10,
+		},
+		{
+			name: "6% mortgage last payment",
+			// PPMT(0.06/12, 360, 360, 200000)
+			args: numArgs(0.06/12, 360, 360, 200000),
+			want: -1193.14,
+		},
+
+		// --- Period progression: principal grows over time (8%/12, 120 months) ---
+		{
+			name: "period progression first month",
+			// PPMT(0.08/12, 1, 120, 10000)
+			args: numArgs(0.08/12, 1, 120, 10000),
+			want: -54.66,
+		},
+		{
+			name: "period progression midpoint month 60",
+			// PPMT(0.08/12, 60, 120, 10000)
+			args: numArgs(0.08/12, 60, 120, 10000),
+			want: -80.90,
+		},
+		{
+			name: "period progression last month 120",
+			// PPMT(0.08/12, 120, 120, 10000)
+			args: numArgs(0.08/12, 120, 120, 10000),
+			want: -120.52,
+		},
+
+		// --- Future value with pv (task spec) ---
+		{
+			name: "pv=20000 fv=5000 first period",
+			// PPMT(0.05/12, 1, 60, 20000, 5000)
+			args: numArgs(0.05/12, 1, 60, 20000, 5000),
+			want: -367.61,
+		},
+
+		// --- Savings accumulation pv=0, fv=50000 ---
+		{
+			name: "savings accumulation pv=0 fv=50000 mid",
+			// PPMT(0.05/12, 30, 60, 0, 50000)
+			args: numArgs(0.05/12, 30, 60, 0, 50000),
+			want: -829.45,
+		},
+
+		// --- Beginning of period type=1 with 8% rate (task spec) ---
+		{
+			name: "type=1 8% monthly per=1",
+			// PPMT(0.08/12, 1, 24, 10000, 0, 1)
+			args: numArgs(0.08/12, 1, 24, 10000, 0, 1),
+			want: -449.28,
+		},
+		{
+			name: "type=1 8% monthly per=12",
+			// PPMT(0.08/12, 12, 24, 10000, 0, 1)
+			args: numArgs(0.08/12, 12, 24, 10000, 0, 1),
+			want: -412.10,
+		},
+
+		// --- Zero rate: 12000 over 12 periods (task spec) ---
+		{
+			name: "zero rate 12000 over 12 per=1",
+			// PPMT(0, 1, 12, 12000) — should be -1000
+			args: numArgs(0, 1, 12, 12000),
+			want: -1000.00,
+		},
+		{
+			name: "zero rate 12000 over 12 per=6",
+			// PPMT(0, 6, 12, 12000)
+			args: numArgs(0, 6, 12, 12000),
+			want: -1000.00,
+		},
+		{
+			name: "zero rate pv=0 fv=10000",
+			// PPMT(0, 1, 10, 0, 10000) — each period = -1000
+			args: numArgs(0, 1, 10, 0, 10000),
+			want: -1000.00,
+		},
+
+		// --- All-string coercion (task spec) ---
+		{
+			name: "all string coercion",
+			// PPMT("0.05", "1", "12", "1000")
+			args: []Value{StringVal("0.05"), StringVal("1"), StringVal("12"), StringVal("1000")},
+			want: -62.83,
 		},
 	}
 
@@ -11212,6 +11631,93 @@ func TestFVSchedule_Comprehensive(t *testing.T) {
 			args: []Value{NumberVal(100), mkArr(NumberVal(0.01), NumberVal(0.02), NumberVal(0.03), NumberVal(0.04), NumberVal(0.05))},
 			want: 100 * 1.01 * 1.02 * 1.03 * 1.04 * 1.05,
 		},
+		// Investment example: 10k with varying annual rates
+		{
+			name: "investment 10000 with 5%,6%,7%",
+			args: []Value{NumberVal(10000), mkArr(NumberVal(0.05), NumberVal(0.06), NumberVal(0.07))},
+			want: 10000 * 1.05 * 1.06 * 1.07,
+		},
+		// Single rate 8%
+		{
+			name: "single rate 8% on 1000",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.08))},
+			want: 1080.0,
+		},
+		// 5 years with increasing rates
+		{
+			name: "5 years increasing rates 5-9%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0.06), NumberVal(0.07), NumberVal(0.08), NumberVal(0.09))},
+			want: 1000 * 1.05 * 1.06 * 1.07 * 1.08 * 1.09,
+		},
+		// All same rate — equivalent to compound interest
+		{
+			name: "all same rate 5% three periods",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0.05), NumberVal(0.05))},
+			want: 1000 * 1.05 * 1.05 * 1.05,
+		},
+		// Mixed positive and negative with specific values
+		{
+			name: "mixed rates 10%,-5%,8%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.10), NumberVal(-0.05), NumberVal(0.08))},
+			want: 1000 * 1.10 * 0.95 * 1.08,
+		},
+		// Zero rate in middle
+		{
+			name: "zero rate in middle: 5%,0%,10%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0), NumberVal(0.10))},
+			want: 1000 * 1.05 * 1.0 * 1.10,
+		},
+		// All negative rates
+		{
+			name: "all negative rates -10% three periods",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(-0.1), NumberVal(-0.1), NumberVal(-0.1))},
+			want: 1000 * 0.9 * 0.9 * 0.9,
+		},
+		// Rate of -1 on 1000
+		{
+			name: "rate -1 on 1000 gives zero",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(-1.0))},
+			want: 0.0,
+		},
+		// Negative principal with multiple rates
+		{
+			name: "negative principal -1000 with 5%,10%",
+			args: []Value{NumberVal(-1000), mkArr(NumberVal(0.05), NumberVal(0.10))},
+			want: -1000 * 1.05 * 1.10,
+		},
+		// Very small rates
+		{
+			name: "very small rates 0.01%,0.02%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.0001), NumberVal(0.0002))},
+			want: 1000 * 1.0001 * 1.0002,
+		},
+		// Very large rates — doubling and tripling
+		{
+			name: "very large rates: 100%,200%",
+			args: []Value{NumberVal(100), mkArr(NumberVal(1.0), NumberVal(2.0))},
+			want: 100 * 2.0 * 3.0,
+		},
+		// Long schedule: 10 periods of 1%
+		{
+			name: "long schedule 10 periods of 1%",
+			args: []Value{NumberVal(1000), mkArr(
+				NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01),
+				NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01),
+			)},
+			want: 1000 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01,
+		},
+		// String coercion for principal
+		{
+			name: "string principal coerced to number",
+			args: []Value{StringVal("1000"), mkArr(NumberVal(0.05), NumberVal(0.10))},
+			want: 1000 * 1.05 * 1.10,
+		},
+		// Principal = 1 with single high rate
+		{
+			name: "unit principal with 50% rate",
+			args: []Value{NumberVal(1), mkArr(NumberVal(0.5))},
+			want: 1.5,
+		},
 	}
 
 	for _, tt := range tests {
@@ -11297,6 +11803,72 @@ func TestFVSchedule_ErrorCases(t *testing.T) {
 		}
 		assertError(t, "empty string in schedule", v)
 	})
+}
+
+func TestFVSchedule_RangeReference(t *testing.T) {
+	// Test FVSCHEDULE with cell range reference instead of array constant.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0.09),
+			{Col: 1, Row: 2}: NumberVal(0.11),
+			{Col: 1, Row: 3}: NumberVal(0.10),
+		},
+	}
+
+	cf := evalCompile(t, "FVSCHEDULE(1, A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want := 1.0 * 1.09 * 1.11 * 1.10
+	if got.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got.Type)
+	}
+	if math.Abs(got.Num-want) > 1e-6 {
+		t.Errorf("FVSCHEDULE(1,A1:A3) = %f, want %f", got.Num, want)
+	}
+
+	// Range with a blank cell in the middle
+	resolver2 := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 1}: NumberVal(0.05),
+			// B2 is blank (empty)
+			{Col: 2, Row: 3}: NumberVal(0.10),
+		},
+	}
+	cf2 := evalCompile(t, "FVSCHEDULE(1000, B1:B3)")
+	got2, err := Eval(cf2, resolver2, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want2 := 1000.0 * 1.05 * 1.0 * 1.10
+	if got2.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got2.Type)
+	}
+	if math.Abs(got2.Num-want2) > 1e-6 {
+		t.Errorf("FVSCHEDULE(1000,B1:B3) = %f, want %f", got2.Num, want2)
+	}
+
+	// Range with a row vector
+	resolver3 := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 5}: NumberVal(0.03),
+			{Col: 2, Row: 5}: NumberVal(0.04),
+			{Col: 3, Row: 5}: NumberVal(0.05),
+		},
+	}
+	cf3 := evalCompile(t, "FVSCHEDULE(5000, A5:C5)")
+	got3, err := Eval(cf3, resolver3, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want3 := 5000.0 * 1.03 * 1.04 * 1.05
+	if got3.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got3.Type)
+	}
+	if math.Abs(got3.Num-want3) > 1e-6 {
+		t.Errorf("FVSCHEDULE(5000,A5:C5) = %f, want %f", got3.Num, want3)
+	}
 }
 
 // === AMORDEGRC ===

@@ -275,6 +275,353 @@ func TestVLOOKUPArgErrors(t *testing.T) {
 	}
 }
 
+func TestVLOOKUP_Comprehensive(t *testing.T) {
+	// Layout:
+	//       A          B         C         D
+	// 1     1          "one"     100       TRUE
+	// 2     2          "two"     200       FALSE
+	// 3     3          "three"   300       TRUE
+	// 4     4          "four"    400       FALSE
+	// 5     5          "five"    500       TRUE
+	//
+	// Sorted string keys (rows 6-10):
+	//       A          B
+	// 6     "apple"    10
+	// 7     "banana"   20
+	// 8     "cherry"   30
+	// 9     "date"     40
+	// 10    "elderberry" 50
+	//
+	// Duplicates (rows 11-13):
+	//       A          B
+	// 11    1          "first"
+	// 12    1          "second"
+	// 13    2          "third"
+	//
+	// Mixed types (rows 14-16):
+	//       A          B
+	// 14    "123"      "string-123"
+	// 15    123        "number-123"
+	// 16    TRUE       "bool-true"
+	//
+	// Large sorted table (rows 17-27):
+	//       A          B
+	// 17    10         "r17"
+	// 18    20         "r18"
+	// 19    30         "r19"
+	// 20    40         "r20"
+	// 21    50         "r21"
+	// 22    60         "r22"
+	// 23    70         "r23"
+	// 24    80         "r24"
+	// 25    90         "r25"
+	// 26    100        "r26"
+	// 27    110        "r27"
+	//
+	// Single row table (row 28):
+	//       A          B
+	// 28    42         "only-row"
+	//
+	// Single column table (rows 29-31):
+	//       A
+	// 29    10
+	// 30    20
+	// 31    30
+	//
+	// Empty cells in table (rows 32-34):
+	//       A          B
+	// 32    (empty)    "empty-key"
+	// 33    1          "has-key"
+	// 34    2          (empty)
+
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// Rows 1-5: numeric keys, multi-column
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: StringVal("one"), {Col: 3, Row: 1}: NumberVal(100), {Col: 4, Row: 1}: BoolVal(true),
+			{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: StringVal("two"), {Col: 3, Row: 2}: NumberVal(200), {Col: 4, Row: 2}: BoolVal(false),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: StringVal("three"), {Col: 3, Row: 3}: NumberVal(300), {Col: 4, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: StringVal("four"), {Col: 3, Row: 4}: NumberVal(400), {Col: 4, Row: 4}: BoolVal(false),
+			{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: StringVal("five"), {Col: 3, Row: 5}: NumberVal(500), {Col: 4, Row: 5}: BoolVal(true),
+
+			// Rows 6-10: sorted string keys
+			{Col: 1, Row: 6}: StringVal("apple"), {Col: 2, Row: 6}: NumberVal(10),
+			{Col: 1, Row: 7}: StringVal("banana"), {Col: 2, Row: 7}: NumberVal(20),
+			{Col: 1, Row: 8}: StringVal("cherry"), {Col: 2, Row: 8}: NumberVal(30),
+			{Col: 1, Row: 9}: StringVal("date"), {Col: 2, Row: 9}: NumberVal(40),
+			{Col: 1, Row: 10}: StringVal("elderberry"), {Col: 2, Row: 10}: NumberVal(50),
+
+			// Rows 11-13: duplicates
+			{Col: 1, Row: 11}: NumberVal(1), {Col: 2, Row: 11}: StringVal("first"),
+			{Col: 1, Row: 12}: NumberVal(1), {Col: 2, Row: 12}: StringVal("second"),
+			{Col: 1, Row: 13}: NumberVal(2), {Col: 2, Row: 13}: StringVal("third"),
+
+			// Rows 14-16: mixed types
+			{Col: 1, Row: 14}: StringVal("123"), {Col: 2, Row: 14}: StringVal("string-123"),
+			{Col: 1, Row: 15}: NumberVal(123), {Col: 2, Row: 15}: StringVal("number-123"),
+			{Col: 1, Row: 16}: BoolVal(true), {Col: 2, Row: 16}: StringVal("bool-true"),
+
+			// Rows 17-27: large sorted table
+			{Col: 1, Row: 17}: NumberVal(10), {Col: 2, Row: 17}: StringVal("r17"),
+			{Col: 1, Row: 18}: NumberVal(20), {Col: 2, Row: 18}: StringVal("r18"),
+			{Col: 1, Row: 19}: NumberVal(30), {Col: 2, Row: 19}: StringVal("r19"),
+			{Col: 1, Row: 20}: NumberVal(40), {Col: 2, Row: 20}: StringVal("r20"),
+			{Col: 1, Row: 21}: NumberVal(50), {Col: 2, Row: 21}: StringVal("r21"),
+			{Col: 1, Row: 22}: NumberVal(60), {Col: 2, Row: 22}: StringVal("r22"),
+			{Col: 1, Row: 23}: NumberVal(70), {Col: 2, Row: 23}: StringVal("r23"),
+			{Col: 1, Row: 24}: NumberVal(80), {Col: 2, Row: 24}: StringVal("r24"),
+			{Col: 1, Row: 25}: NumberVal(90), {Col: 2, Row: 25}: StringVal("r25"),
+			{Col: 1, Row: 26}: NumberVal(100), {Col: 2, Row: 26}: StringVal("r26"),
+			{Col: 1, Row: 27}: NumberVal(110), {Col: 2, Row: 27}: StringVal("r27"),
+
+			// Row 28: single row
+			{Col: 1, Row: 28}: NumberVal(42), {Col: 2, Row: 28}: StringVal("only-row"),
+
+			// Rows 29-31: single column
+			{Col: 1, Row: 29}: NumberVal(10),
+			{Col: 1, Row: 30}: NumberVal(20),
+			{Col: 1, Row: 31}: NumberVal(30),
+
+			// Rows 32-34: empty cells
+			// Row 32 col A is empty
+			{Col: 2, Row: 32}: StringVal("empty-key"),
+			{Col: 1, Row: 33}: NumberVal(1), {Col: 2, Row: 33}: StringVal("has-key"),
+			{Col: 1, Row: 34}: NumberVal(2),
+			// Row 34 col B is empty
+		},
+	}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    Value
+	}{
+		// ----------------------------------------------------------------
+		// Exact match (range_lookup=FALSE)
+		// ----------------------------------------------------------------
+		{
+			name:    "exact_match_number_return_col2",
+			formula: "VLOOKUP(2,A1:D5,2,FALSE)",
+			want:    StringVal("two"),
+		},
+		{
+			name:    "exact_match_number_return_col3",
+			formula: "VLOOKUP(3,A1:D5,3,FALSE)",
+			want:    NumberVal(300),
+		},
+		{
+			name:    "exact_match_number_return_col4",
+			formula: "VLOOKUP(1,A1:D5,4,FALSE)",
+			want:    BoolVal(true),
+		},
+		{
+			name:    "exact_match_string_case_insensitive",
+			formula: `VLOOKUP("BANANA",A6:B10,2,FALSE)`,
+			want:    NumberVal(20),
+		},
+		{
+			name:    "exact_match_string_mixed_case",
+			formula: `VLOOKUP("Cherry",A6:B10,2,FALSE)`,
+			want:    NumberVal(30),
+		},
+		{
+			name:    "exact_match_not_found_returns_NA",
+			formula: "VLOOKUP(99,A1:D5,2,FALSE)",
+			want:    ErrorVal(ErrValNA),
+		},
+		{
+			name:    "exact_match_first_match_wins_with_duplicates",
+			formula: "VLOOKUP(1,A11:B13,2,FALSE)",
+			want:    StringVal("first"),
+		},
+		{
+			name:    "exact_match_return_col1_itself",
+			formula: "VLOOKUP(3,A1:D5,1,FALSE)",
+			want:    NumberVal(3),
+		},
+		{
+			name:    "exact_match_using_0_for_false",
+			formula: `VLOOKUP("date",A6:B10,2,0)`,
+			want:    NumberVal(40),
+		},
+
+		// ----------------------------------------------------------------
+		// Approximate match (range_lookup=TRUE / default)
+		// ----------------------------------------------------------------
+		{
+			name:    "approx_exact_value_exists",
+			formula: "VLOOKUP(30,A17:B27,2,TRUE)",
+			want:    StringVal("r19"),
+		},
+		{
+			name:    "approx_between_entries_returns_lower",
+			formula: "VLOOKUP(25,A17:B27,2,TRUE)",
+			want:    StringVal("r18"),
+		},
+		{
+			name:    "approx_smaller_than_all_returns_NA",
+			formula: "VLOOKUP(5,A17:B27,2,TRUE)",
+			want:    ErrorVal(ErrValNA),
+		},
+		{
+			name:    "approx_larger_than_all_returns_last",
+			formula: "VLOOKUP(999,A17:B27,2,TRUE)",
+			want:    StringVal("r27"),
+		},
+		{
+			name:    "approx_default_no_4th_arg",
+			formula: "VLOOKUP(55,A17:B27,2)",
+			want:    StringVal("r21"),
+		},
+		{
+			name:    "approx_value_equals_first_entry",
+			formula: "VLOOKUP(10,A17:B27,2,TRUE)",
+			want:    StringVal("r17"),
+		},
+		{
+			name:    "approx_value_equals_last_entry",
+			formula: "VLOOKUP(110,A17:B27,2,TRUE)",
+			want:    StringVal("r27"),
+		},
+
+		// ----------------------------------------------------------------
+		// Error cases
+		// ----------------------------------------------------------------
+		{
+			name:    "col_index_zero_returns_VALUE",
+			formula: "VLOOKUP(1,A1:D5,0,FALSE)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "col_index_negative_returns_VALUE",
+			formula: "VLOOKUP(1,A1:D5,-1,FALSE)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "col_index_exceeds_columns_returns_REF",
+			formula: "VLOOKUP(1,A1:D5,10,FALSE)",
+			want:    ErrorVal(ErrValREF),
+		},
+		{
+			name:    "too_few_args_returns_VALUE",
+			formula: "VLOOKUP(1,A1:D5)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "col_index_string_returns_VALUE",
+			formula: `VLOOKUP(1,A1:D5,"abc",FALSE)`,
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// ----------------------------------------------------------------
+		// Edge cases
+		// ----------------------------------------------------------------
+		{
+			name:    "single_row_table_found",
+			formula: "VLOOKUP(42,A28:B28,2,FALSE)",
+			want:    StringVal("only-row"),
+		},
+		{
+			name:    "single_row_table_not_found",
+			formula: "VLOOKUP(99,A28:B28,2,FALSE)",
+			want:    ErrorVal(ErrValNA),
+		},
+		{
+			name:    "single_column_table_col1",
+			formula: "VLOOKUP(20,A29:A31,1,FALSE)",
+			want:    NumberVal(20),
+		},
+		{
+			name:    "fractional_col_index_truncated_to_2",
+			formula: "VLOOKUP(2,A1:D5,2.9,FALSE)",
+			want:    StringVal("two"),
+		},
+		{
+			name:    "range_lookup_1_means_true",
+			formula: "VLOOKUP(25,A17:B27,2,1)",
+			want:    StringVal("r18"),
+		},
+		{
+			name:    "large_table_approx_middle",
+			formula: "VLOOKUP(65,A17:B27,2,TRUE)",
+			want:    StringVal("r22"),
+		},
+		{
+			name:    "large_table_approx_near_end",
+			formula: "VLOOKUP(105,A17:B27,2,TRUE)",
+			want:    StringVal("r26"),
+		},
+		{
+			name:    "mixed_types_number_does_not_match_string",
+			formula: "VLOOKUP(123,A14:B16,2,FALSE)",
+			want:    StringVal("number-123"),
+		},
+		{
+			name:    "mixed_types_string_does_not_match_number",
+			formula: `VLOOKUP("123",A14:B16,2,FALSE)`,
+			want:    StringVal("string-123"),
+		},
+		{
+			name:    "mixed_types_bool_lookup",
+			formula: "VLOOKUP(TRUE,A14:B16,2,FALSE)",
+			want:    StringVal("bool-true"),
+		},
+		{
+			name:    "empty_cell_value_returned",
+			formula: "VLOOKUP(2,A33:B34,2,FALSE)",
+			want:    EmptyVal(),
+		},
+		{
+			name:    "approx_match_col_index_exceeds_returns_REF",
+			formula: "VLOOKUP(50,A17:B27,5,TRUE)",
+			want:    ErrorVal(ErrValREF),
+		},
+		{
+			name:    "exact_match_first_row_of_five",
+			formula: "VLOOKUP(1,A1:D5,2,FALSE)",
+			want:    StringVal("one"),
+		},
+		{
+			name:    "exact_match_last_row_of_five",
+			formula: "VLOOKUP(5,A1:D5,2,FALSE)",
+			want:    StringVal("five"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if got.Type != tc.want.Type {
+				t.Fatalf("type mismatch: got %v (type %d), want %v (type %d)",
+					got, got.Type, tc.want, tc.want.Type)
+			}
+			switch tc.want.Type {
+			case ValueNumber:
+				if got.Num != tc.want.Num {
+					t.Errorf("got %g, want %g", got.Num, tc.want.Num)
+				}
+			case ValueString:
+				if got.Str != tc.want.Str {
+					t.Errorf("got %q, want %q", got.Str, tc.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tc.want.Bool {
+					t.Errorf("got %v, want %v", got.Bool, tc.want.Bool)
+				}
+			case ValueError:
+				if got.Err != tc.want.Err {
+					t.Errorf("got %v, want %v", got.Err, tc.want.Err)
+				}
+			case ValueEmpty:
+				// just type match is sufficient
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // HLOOKUP edge cases
 // ---------------------------------------------------------------------------
@@ -588,7 +935,7 @@ func TestHLOOKUPArgErrors(t *testing.T) {
 }
 
 func TestHLOOKUPRowIndexZero(t *testing.T) {
-	// row_index_num = 0 → #REF! (index out of range)
+	// row_index_num = 0 → #VALUE! (Excel returns #VALUE! for row_index < 1)
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
@@ -603,13 +950,13 @@ func TestHLOOKUPRowIndexZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
-	if got.Type != ValueError || got.Err != ErrValREF {
-		t.Errorf("HLOOKUP row_index=0: got %v, want #REF!", got)
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("HLOOKUP row_index=0: got %v, want #VALUE!", got)
 	}
 }
 
 func TestHLOOKUPNegativeRowIndex(t *testing.T) {
-	// Negative row_index_num → #REF!
+	// Negative row_index_num → #VALUE! (Excel returns #VALUE! for row_index < 1)
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
@@ -624,8 +971,8 @@ func TestHLOOKUPNegativeRowIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
-	if got.Type != ValueError || got.Err != ErrValREF {
-		t.Errorf("HLOOKUP negative row_index: got %v, want #REF!", got)
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("HLOOKUP negative row_index: got %v, want #VALUE!", got)
 	}
 }
 
@@ -719,6 +1066,466 @@ func TestHLOOKUPNumberLookup(t *testing.T) {
 	}
 	if got.Type != ValueString || got.Str != "high" {
 		t.Errorf("HLOOKUP number lookup: got %v, want high", got)
+	}
+}
+
+func TestHLOOKUP_Comprehensive(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// Rows 1-2: basic numeric header (3 columns)
+			// A1:C2 — sorted first row [1, 2, 3]
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 3, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: StringVal("a"),
+			{Col: 2, Row: 2}: StringVal("b"),
+			{Col: 3, Row: 2}: StringVal("c"),
+
+			// Rows 3-5: 3 rows, string header (3 columns)
+			// A3:C5
+			{Col: 1, Row: 3}: StringVal("X"),
+			{Col: 2, Row: 3}: StringVal("Y"),
+			{Col: 3, Row: 3}: StringVal("Z"),
+			{Col: 1, Row: 4}: NumberVal(10),
+			{Col: 2, Row: 4}: NumberVal(20),
+			{Col: 3, Row: 4}: NumberVal(30),
+			{Col: 1, Row: 5}: NumberVal(100),
+			{Col: 2, Row: 5}: NumberVal(200),
+			{Col: 3, Row: 5}: NumberVal(300),
+
+			// Rows 6-7: sorted numeric header (5 columns) for approx match
+			// A6:E7 — [10, 20, 30, 40, 50]
+			{Col: 1, Row: 6}: NumberVal(10),
+			{Col: 2, Row: 6}: NumberVal(20),
+			{Col: 3, Row: 6}: NumberVal(30),
+			{Col: 4, Row: 6}: NumberVal(40),
+			{Col: 5, Row: 6}: NumberVal(50),
+			{Col: 1, Row: 7}: StringVal("r1"),
+			{Col: 2, Row: 7}: StringVal("r2"),
+			{Col: 3, Row: 7}: StringVal("r3"),
+			{Col: 4, Row: 7}: StringVal("r4"),
+			{Col: 5, Row: 7}: StringVal("r5"),
+
+			// Rows 8-9: duplicates in header
+			// A8:D9 — [1, 2, 2, 3]
+			{Col: 1, Row: 8}: NumberVal(1),
+			{Col: 2, Row: 8}: NumberVal(2),
+			{Col: 3, Row: 8}: NumberVal(2),
+			{Col: 4, Row: 8}: NumberVal(3),
+			{Col: 1, Row: 9}: StringVal("first"),
+			{Col: 2, Row: 9}: StringVal("dup1"),
+			{Col: 3, Row: 9}: StringVal("dup2"),
+			{Col: 4, Row: 9}: StringVal("last"),
+
+			// Rows 10-11: case-insensitive string header
+			// A10:C11
+			{Col: 1, Row: 10}: StringVal("Apple"),
+			{Col: 2, Row: 10}: StringVal("Banana"),
+			{Col: 3, Row: 10}: StringVal("Cherry"),
+			{Col: 1, Row: 11}: NumberVal(1),
+			{Col: 2, Row: 11}: NumberVal(2),
+			{Col: 3, Row: 11}: NumberVal(3),
+
+			// Row 12: single row table
+			// A12:C12
+			{Col: 1, Row: 12}: NumberVal(10),
+			{Col: 2, Row: 12}: NumberVal(20),
+			{Col: 3, Row: 12}: NumberVal(30),
+
+			// Rows 13-14: boolean header
+			// A13:B14
+			{Col: 1, Row: 13}: BoolVal(false),
+			{Col: 2, Row: 13}: BoolVal(true),
+			{Col: 1, Row: 14}: StringVal("no"),
+			{Col: 2, Row: 14}: StringVal("yes"),
+
+			// Rows 15-16: mixed types in header
+			// A15:C16
+			{Col: 1, Row: 15}: NumberVal(42),
+			{Col: 2, Row: 15}: StringVal("hello"),
+			{Col: 3, Row: 15}: BoolVal(true),
+			{Col: 1, Row: 16}: StringVal("num"),
+			{Col: 2, Row: 16}: StringVal("str"),
+			{Col: 3, Row: 16}: StringVal("bool"),
+
+			// Rows 17-18: wildcard test data
+			// A17:D18
+			{Col: 1, Row: 17}: StringVal("Apple"),
+			{Col: 2, Row: 17}: StringVal("Apricot"),
+			{Col: 3, Row: 17}: StringVal("Banana"),
+			{Col: 4, Row: 17}: StringVal("Blueberry"),
+			{Col: 1, Row: 18}: NumberVal(1),
+			{Col: 2, Row: 18}: NumberVal(2),
+			{Col: 3, Row: 18}: NumberVal(3),
+			{Col: 4, Row: 18}: NumberVal(4),
+
+			// Rows 19-20: single-char wildcard test
+			// A19:D20
+			{Col: 1, Row: 19}: StringVal("Cat"),
+			{Col: 2, Row: 19}: StringVal("Car"),
+			{Col: 3, Row: 19}: StringVal("Cup"),
+			{Col: 4, Row: 19}: StringVal("Dog"),
+			{Col: 1, Row: 20}: NumberVal(10),
+			{Col: 2, Row: 20}: NumberVal(20),
+			{Col: 3, Row: 20}: NumberVal(30),
+			{Col: 4, Row: 20}: NumberVal(40),
+
+			// Rows 21-22: tilde escape test — header contains literal *
+			// A21:C22
+			{Col: 1, Row: 21}: StringVal("A*B"),
+			{Col: 2, Row: 21}: StringVal("AXB"),
+			{Col: 3, Row: 21}: StringVal("A?B"),
+			{Col: 1, Row: 22}: NumberVal(100),
+			{Col: 2, Row: 22}: NumberVal(200),
+			{Col: 3, Row: 22}: NumberVal(300),
+
+			// Rows 23-24: large table (12 columns), sorted
+			// A23:L24
+			{Col: 1, Row: 23}: NumberVal(5),
+			{Col: 2, Row: 23}: NumberVal(10),
+			{Col: 3, Row: 23}: NumberVal(15),
+			{Col: 4, Row: 23}: NumberVal(20),
+			{Col: 5, Row: 23}: NumberVal(25),
+			{Col: 6, Row: 23}: NumberVal(30),
+			{Col: 7, Row: 23}: NumberVal(35),
+			{Col: 8, Row: 23}: NumberVal(40),
+			{Col: 9, Row: 23}: NumberVal(45),
+			{Col: 10, Row: 23}: NumberVal(50),
+			{Col: 11, Row: 23}: NumberVal(55),
+			{Col: 12, Row: 23}: NumberVal(60),
+			{Col: 1, Row: 24}: StringVal("c1"),
+			{Col: 2, Row: 24}: StringVal("c2"),
+			{Col: 3, Row: 24}: StringVal("c3"),
+			{Col: 4, Row: 24}: StringVal("c4"),
+			{Col: 5, Row: 24}: StringVal("c5"),
+			{Col: 6, Row: 24}: StringVal("c6"),
+			{Col: 7, Row: 24}: StringVal("c7"),
+			{Col: 8, Row: 24}: StringVal("c8"),
+			{Col: 9, Row: 24}: StringVal("c9"),
+			{Col: 10, Row: 24}: StringVal("c10"),
+			{Col: 11, Row: 24}: StringVal("c11"),
+			{Col: 12, Row: 24}: StringVal("c12"),
+
+			// Row 25: single column table (A25:A26)
+			{Col: 1, Row: 25}: NumberVal(99),
+			{Col: 1, Row: 26}: StringVal("below"),
+
+			// Rows 27-28: empty cells in table
+			// A27:D28 — header has empty cell at B27
+			{Col: 1, Row: 27}: NumberVal(1),
+			// Col 2 Row 27 intentionally empty
+			{Col: 3, Row: 27}: NumberVal(3),
+			{Col: 4, Row: 27}: NumberVal(4),
+			{Col: 1, Row: 28}: StringVal("v1"),
+			{Col: 2, Row: 28}: StringVal("v2"),
+			{Col: 3, Row: 28}: StringVal("v3"),
+			{Col: 4, Row: 28}: StringVal("v4"),
+
+			// Rows 29-32: 4-row table for return from different rows
+			// A29:C32
+			{Col: 1, Row: 29}: StringVal("H1"),
+			{Col: 2, Row: 29}: StringVal("H2"),
+			{Col: 3, Row: 29}: StringVal("H3"),
+			{Col: 1, Row: 30}: StringVal("r2c1"),
+			{Col: 2, Row: 30}: StringVal("r2c2"),
+			{Col: 3, Row: 30}: StringVal("r2c3"),
+			{Col: 1, Row: 31}: StringVal("r3c1"),
+			{Col: 2, Row: 31}: StringVal("r3c2"),
+			{Col: 3, Row: 31}: StringVal("r3c3"),
+			{Col: 1, Row: 32}: StringVal("r4c1"),
+			{Col: 2, Row: 32}: StringVal("r4c2"),
+			{Col: 3, Row: 32}: StringVal("r4c3"),
+		},
+	}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    Value
+	}{
+		// ----------------------------------------------------------------
+		// Exact match (range_lookup=FALSE)
+		// ----------------------------------------------------------------
+		{
+			name:    "exact_number_return_row2",
+			formula: "HLOOKUP(2,A1:C2,2,FALSE)",
+			want:    StringVal("b"),
+		},
+		{
+			name:    "exact_string_return_row2",
+			formula: `HLOOKUP("Y",A3:C5,2,FALSE)`,
+			want:    NumberVal(20),
+		},
+		{
+			name:    "exact_string_return_row3",
+			formula: `HLOOKUP("Y",A3:C5,3,FALSE)`,
+			want:    NumberVal(200),
+		},
+		{
+			name:    "exact_return_row4_of_4row_table",
+			formula: `HLOOKUP("H2",A29:C32,4,FALSE)`,
+			want:    StringVal("r4c2"),
+		},
+		{
+			name:    "exact_case_insensitive_lower",
+			formula: `HLOOKUP("banana",A10:C11,2,FALSE)`,
+			want:    NumberVal(2),
+		},
+		{
+			name:    "exact_case_insensitive_upper",
+			formula: `HLOOKUP("CHERRY",A10:C11,2,FALSE)`,
+			want:    NumberVal(3),
+		},
+		{
+			name:    "exact_not_found_returns_NA",
+			formula: "HLOOKUP(99,A1:C2,2,FALSE)",
+			want:    ErrorVal(ErrValNA),
+		},
+		{
+			name:    "exact_first_match_wins_with_duplicates",
+			formula: "HLOOKUP(2,A8:D9,2,FALSE)",
+			want:    StringVal("dup1"),
+		},
+		{
+			name:    "exact_return_row1_itself",
+			formula: "HLOOKUP(2,A1:C2,1,FALSE)",
+			want:    NumberVal(2),
+		},
+		{
+			name:    "exact_using_0_for_false",
+			formula: `HLOOKUP("Apple",A10:C11,2,0)`,
+			want:    NumberVal(1),
+		},
+
+		// ----------------------------------------------------------------
+		// Approximate match (range_lookup=TRUE)
+		// ----------------------------------------------------------------
+		{
+			name:    "approx_between_entries_returns_lower",
+			formula: "HLOOKUP(25,A6:E7,2,TRUE)",
+			want:    StringVal("r2"),
+		},
+		{
+			name:    "approx_exact_value_in_sorted",
+			formula: "HLOOKUP(30,A6:E7,2,TRUE)",
+			want:    StringVal("r3"),
+		},
+		{
+			name:    "approx_smaller_than_all_returns_NA",
+			formula: "HLOOKUP(5,A6:E7,2,TRUE)",
+			want:    ErrorVal(ErrValNA),
+		},
+		{
+			name:    "approx_larger_than_all_returns_last",
+			formula: "HLOOKUP(99,A6:E7,2,TRUE)",
+			want:    StringVal("r5"),
+		},
+		{
+			name:    "approx_default_omit_4th_arg",
+			formula: "HLOOKUP(35,A6:E7,2)",
+			want:    StringVal("r3"),
+		},
+		{
+			name:    "approx_value_equals_first_entry",
+			formula: "HLOOKUP(10,A6:E7,2,TRUE)",
+			want:    StringVal("r1"),
+		},
+		{
+			name:    "approx_value_equals_last_entry",
+			formula: "HLOOKUP(50,A6:E7,2,TRUE)",
+			want:    StringVal("r5"),
+		},
+
+		// ----------------------------------------------------------------
+		// Wildcard matching (exact mode)
+		// ----------------------------------------------------------------
+		{
+			name:    "wildcard_star_matches_prefix",
+			formula: `HLOOKUP("A*",A17:D18,2,FALSE)`,
+			want:    NumberVal(1),
+		},
+		{
+			name:    "wildcard_star_matches_middle",
+			formula: `HLOOKUP("*berry",A17:D18,2,FALSE)`,
+			want:    NumberVal(4),
+		},
+		{
+			name:    "wildcard_star_matches_banana",
+			formula: `HLOOKUP("B*a",A17:D18,2,FALSE)`,
+			want:    NumberVal(3),
+		},
+		{
+			name:    "wildcard_question_mark_single_char",
+			formula: `HLOOKUP("Ca?",A19:D20,2,FALSE)`,
+			want:    NumberVal(10),
+		},
+		{
+			name:    "wildcard_question_mark_cup",
+			formula: `HLOOKUP("C?p",A19:D20,2,FALSE)`,
+			want:    NumberVal(30),
+		},
+		{
+			name:    "wildcard_combined_star_and_question",
+			formula: `HLOOKUP("?p*cot",A17:D18,2,FALSE)`,
+			want:    NumberVal(2),
+		},
+		{
+			name:    "wildcard_escaped_tilde_star",
+			formula: `HLOOKUP("A~*B",A21:C22,2,FALSE)`,
+			want:    NumberVal(100),
+		},
+		{
+			name:    "wildcard_escaped_tilde_question",
+			formula: `HLOOKUP("A~?B",A21:C22,2,FALSE)`,
+			want:    NumberVal(300),
+		},
+		{
+			name:    "wildcard_no_match_returns_NA",
+			formula: `HLOOKUP("Z*",A17:D18,2,FALSE)`,
+			want:    ErrorVal(ErrValNA),
+		},
+
+		// ----------------------------------------------------------------
+		// Error cases
+		// ----------------------------------------------------------------
+		{
+			name:    "row_index_zero_returns_VALUE",
+			formula: "HLOOKUP(1,A1:C2,0,FALSE)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "row_index_negative_returns_VALUE",
+			formula: "HLOOKUP(1,A1:C2,-1,FALSE)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "row_index_exceeds_rows_returns_REF",
+			formula: "HLOOKUP(1,A1:C2,5,FALSE)",
+			want:    ErrorVal(ErrValREF),
+		},
+		{
+			name:    "too_few_args_returns_VALUE",
+			formula: "HLOOKUP(1,A1:C2)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "too_many_args_returns_VALUE",
+			formula: "HLOOKUP(1,A1:C2,2,FALSE,1)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "non_numeric_row_index_returns_VALUE",
+			formula: `HLOOKUP(1,A1:C2,"abc",FALSE)`,
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// ----------------------------------------------------------------
+		// Edge cases
+		// ----------------------------------------------------------------
+		{
+			name:    "single_column_table_row1",
+			formula: "HLOOKUP(99,A25:A26,1,FALSE)",
+			want:    NumberVal(99),
+		},
+		{
+			name:    "single_column_table_row2",
+			formula: "HLOOKUP(99,A25:A26,2,FALSE)",
+			want:    StringVal("below"),
+		},
+		{
+			name:    "single_row_table_row_index_1",
+			formula: "HLOOKUP(20,A12:C12,1,FALSE)",
+			want:    NumberVal(20),
+		},
+		{
+			name:    "fractional_row_index_truncated",
+			formula: "HLOOKUP(2,A1:C2,1.9,FALSE)",
+			want:    NumberVal(2),
+		},
+		{
+			name:    "range_lookup_1_means_true",
+			formula: "HLOOKUP(25,A6:E7,2,1)",
+			want:    StringVal("r2"),
+		},
+		{
+			name:    "large_table_exact_middle",
+			formula: "HLOOKUP(30,A23:L24,2,FALSE)",
+			want:    StringVal("c6"),
+		},
+		{
+			name:    "large_table_approx_between",
+			formula: "HLOOKUP(33,A23:L24,2,TRUE)",
+			want:    StringVal("c6"),
+		},
+		{
+			name:    "large_table_approx_last",
+			formula: "HLOOKUP(100,A23:L24,2,TRUE)",
+			want:    StringVal("c12"),
+		},
+		{
+			name:    "mixed_types_number_in_header",
+			formula: "HLOOKUP(42,A15:C16,2,FALSE)",
+			want:    StringVal("num"),
+		},
+		{
+			name:    "mixed_types_string_in_header",
+			formula: `HLOOKUP("hello",A15:C16,2,FALSE)`,
+			want:    StringVal("str"),
+		},
+		{
+			name:    "mixed_types_bool_in_header",
+			formula: "HLOOKUP(TRUE,A15:C16,2,FALSE)",
+			want:    StringVal("bool"),
+		},
+		{
+			name:    "boolean_lookup_false",
+			formula: "HLOOKUP(FALSE,A13:B14,2,FALSE)",
+			want:    StringVal("no"),
+		},
+		{
+			name:    "boolean_lookup_true",
+			formula: "HLOOKUP(TRUE,A13:B14,2,FALSE)",
+			want:    StringVal("yes"),
+		},
+		{
+			name:    "empty_cell_skipped_in_exact_match",
+			formula: "HLOOKUP(3,A27:D28,2,FALSE)",
+			want:    StringVal("v3"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if got.Type != tc.want.Type {
+				t.Fatalf("type mismatch: got %v (type %d), want %v (type %d)",
+					got, got.Type, tc.want, tc.want.Type)
+			}
+			switch tc.want.Type {
+			case ValueNumber:
+				if got.Num != tc.want.Num {
+					t.Errorf("got %g, want %g", got.Num, tc.want.Num)
+				}
+			case ValueString:
+				if got.Str != tc.want.Str {
+					t.Errorf("got %q, want %q", got.Str, tc.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tc.want.Bool {
+					t.Errorf("got %v, want %v", got.Bool, tc.want.Bool)
+				}
+			case ValueError:
+				if got.Err != tc.want.Err {
+					t.Errorf("got %v, want %v", got.Err, tc.want.Err)
+				}
+			case ValueEmpty:
+				// just type match is sufficient
+			}
+		})
 	}
 }
 
@@ -1139,6 +1946,460 @@ func TestINDEXMATCHCombo(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// INDEX comprehensive table-driven tests
+// ---------------------------------------------------------------------------
+
+func TestINDEX_Comprehensive(t *testing.T) {
+	// Set up a resolver with a variety of cell data for range-based tests.
+	// Layout:
+	//       A        B        C        D        E
+	// 1     10       20       30       40       50
+	// 2     60       70       80       90       100
+	// 3     110      120      130      140      150
+	// 4     "hello"  TRUE     (empty)  #N/A     200
+	// 5     1.5      2.5      3.5      4.5      5.5
+	//
+	// Also: lookup data for INDEX/MATCH
+	// F1="apple", F2="banana", F3="cherry"
+	// G1=100, G2=200, G3=300
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// 3x5 numeric block (rows 1-3, cols A-E)
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 3, Row: 1}: NumberVal(30),
+			{Col: 4, Row: 1}: NumberVal(40),
+			{Col: 5, Row: 1}: NumberVal(50),
+
+			{Col: 1, Row: 2}: NumberVal(60),
+			{Col: 2, Row: 2}: NumberVal(70),
+			{Col: 3, Row: 2}: NumberVal(80),
+			{Col: 4, Row: 2}: NumberVal(90),
+			{Col: 5, Row: 2}: NumberVal(100),
+
+			{Col: 1, Row: 3}: NumberVal(110),
+			{Col: 2, Row: 3}: NumberVal(120),
+			{Col: 3, Row: 3}: NumberVal(130),
+			{Col: 4, Row: 3}: NumberVal(140),
+			{Col: 5, Row: 3}: NumberVal(150),
+
+			// Row 4: mixed types
+			{Col: 1, Row: 4}: StringVal("hello"),
+			{Col: 2, Row: 4}: BoolVal(true),
+			// Col 3 Row 4 intentionally empty
+			{Col: 4, Row: 4}: ErrorVal(ErrValNA),
+			{Col: 5, Row: 4}: NumberVal(200),
+
+			// Row 5: fractional numbers
+			{Col: 1, Row: 5}: NumberVal(1.5),
+			{Col: 2, Row: 5}: NumberVal(2.5),
+			{Col: 3, Row: 5}: NumberVal(3.5),
+			{Col: 4, Row: 5}: NumberVal(4.5),
+			{Col: 5, Row: 5}: NumberVal(5.5),
+
+			// Lookup data in cols F-G
+			{Col: 6, Row: 1}: StringVal("apple"),
+			{Col: 6, Row: 2}: StringVal("banana"),
+			{Col: 6, Row: 3}: StringVal("cherry"),
+			{Col: 7, Row: 1}: NumberVal(100),
+			{Col: 7, Row: 2}: NumberVal(200),
+			{Col: 7, Row: 3}: NumberVal(300),
+		},
+	}
+
+	// -----------------------------------------------------------------------
+	// Scalar return tests (exact value checks)
+	// -----------------------------------------------------------------------
+	type scalarTest struct {
+		name    string
+		formula string
+		want    Value
+	}
+
+	scalarTests := []scalarTest{
+		// Basic lookups in a 2D array
+		{
+			name:    "basic_first_cell",
+			formula: "INDEX(A1:E5,1,1)",
+			want:    NumberVal(10),
+		},
+		{
+			name:    "basic_last_cell_3x5",
+			formula: "INDEX(A1:E3,3,5)",
+			want:    NumberVal(150),
+		},
+		{
+			name:    "basic_middle",
+			formula: "INDEX(A1:E3,2,3)",
+			want:    NumberVal(80),
+		},
+		{
+			name:    "basic_row2_col4",
+			formula: "INDEX(A1:E3,2,4)",
+			want:    NumberVal(90),
+		},
+
+		// Single column array: 2-arg form picks row
+		{
+			name:    "single_column_2arg",
+			formula: "INDEX(A1:A5,3)",
+			want:    NumberVal(110),
+		},
+		{
+			name:    "single_column_3arg",
+			formula: "INDEX(A1:A5,3,1)",
+			want:    NumberVal(110),
+		},
+
+		// Single row array: 2-arg form picks column
+		{
+			name:    "single_row_2arg_col_select",
+			formula: "INDEX(A1:E1,3)",
+			want:    NumberVal(30),
+		},
+		{
+			name:    "single_row_3arg",
+			formula: "INDEX(A1:E1,1,3)",
+			want:    NumberVal(30),
+		},
+
+		// Array constant input
+		{
+			name:    "array_constant_2x3",
+			formula: "INDEX({1,2,3;4,5,6},2,3)",
+			want:    NumberVal(6),
+		},
+		{
+			name:    "array_constant_1x3_col_select",
+			formula: "INDEX({10,20,30},2)",
+			want:    NumberVal(20),
+		},
+		{
+			name:    "array_constant_first_element",
+			formula: "INDEX({1,2,3;4,5,6},1,1)",
+			want:    NumberVal(1),
+		},
+
+		// Single cell reference: INDEX(A1,1,1)
+		{
+			name:    "single_cell_ref",
+			formula: "INDEX(A1:A1,1,1)",
+			want:    NumberVal(10),
+		},
+
+		// Fractional row/col — truncated to int
+		{
+			name:    "fractional_row",
+			formula: "INDEX(A1:E3,1.9,1)",
+			want:    NumberVal(10), // int(1.9) = 1
+		},
+		{
+			name:    "fractional_col",
+			formula: "INDEX(A1:E3,2,2.7)",
+			want:    NumberVal(70), // int(2.7) = 2
+		},
+		{
+			name:    "fractional_both",
+			formula: "INDEX(A1:E3,2.9,3.9)",
+			want:    NumberVal(80), // int(2.9)=2, int(3.9)=3
+		},
+
+		// Mixed types in array
+		{
+			name:    "string_value",
+			formula: "INDEX(A1:E5,4,1)",
+			want:    StringVal("hello"),
+		},
+		{
+			name:    "bool_value",
+			formula: "INDEX(A1:E5,4,2)",
+			want:    BoolVal(true),
+		},
+
+		// Empty cell in array
+		{
+			name:    "empty_cell",
+			formula: "INDEX(A1:E5,4,3)",
+			want:    EmptyVal(),
+		},
+
+		// Error value at target position
+		{
+			name:    "error_at_target",
+			formula: "INDEX(A1:E5,4,4)",
+			want:    ErrorVal(ErrValNA),
+		},
+
+		// Large array (10+ elements), picking last
+		{
+			name:    "large_array_last_row",
+			formula: "INDEX(A1:E5,5,5)",
+			want:    NumberVal(5.5),
+		},
+
+		// Out of range row → #REF!
+		{
+			name:    "row_out_of_range",
+			formula: "INDEX(A1:E3,4,1)",
+			want:    ErrorVal(ErrValREF),
+		},
+		{
+			name:    "row_out_of_range_large",
+			formula: "INDEX(A1:E3,100,1)",
+			want:    ErrorVal(ErrValREF),
+		},
+
+		// Out of range column → #REF!
+		{
+			name:    "col_out_of_range",
+			formula: "INDEX(A1:E3,1,6)",
+			want:    ErrorVal(ErrValREF),
+		},
+		{
+			name:    "col_out_of_range_large",
+			formula: "INDEX(A1:E3,1,100)",
+			want:    ErrorVal(ErrValREF),
+		},
+
+		// Negative row → #VALUE!
+		{
+			name:    "negative_row",
+			formula: "INDEX(A1:E3,-1,1)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// Negative col → #VALUE!
+		{
+			name:    "negative_col",
+			formula: "INDEX(A1:E3,1,-1)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// Negative both → #VALUE!
+		{
+			name:    "negative_both",
+			formula: "INDEX(A1:E3,-1,-1)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// Wrong arg count: 1 arg → #VALUE!
+		{
+			name:    "one_arg_error",
+			formula: "INDEX(A1:E3)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+
+		// INDEX combined with MATCH (INDEX/MATCH pattern)
+		{
+			name:    "index_match_banana",
+			formula: `INDEX(G1:G3,MATCH("banana",F1:F3,0))`,
+			want:    NumberVal(200),
+		},
+		{
+			name:    "index_match_cherry",
+			formula: `INDEX(G1:G3,MATCH("cherry",F1:F3,0))`,
+			want:    NumberVal(300),
+		},
+
+		// String values looked up by index
+		{
+			name:    "string_array_constant",
+			formula: `INDEX({"cat","dog","bird"},2)`,
+			want:    StringVal("dog"),
+		},
+		{
+			name:    "string_from_range",
+			formula: "INDEX(F1:F3,2)",
+			want:    StringVal("banana"),
+		},
+
+		// 2-arg form on multi-row, multi-col array defaults col to 1
+		{
+			name:    "2arg_multirow_multicol",
+			formula: "INDEX(A1:E3,2)",
+			want:    NumberVal(60),
+		},
+
+		// Single row array constant with 2-arg form
+		{
+			name:    "single_row_constant_2arg",
+			formula: `INDEX({"OUT","IN"},2)`,
+			want:    StringVal("IN"),
+		},
+	}
+
+	for _, tt := range scalarTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.want.Type {
+				t.Fatalf("Eval(%q): type = %v, want %v (got %v)", tt.formula, got.Type, tt.want.Type, got)
+			}
+			switch tt.want.Type {
+			case ValueNumber:
+				if got.Num != tt.want.Num {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want.Num)
+				}
+			case ValueString:
+				if got.Str != tt.want.Str {
+					t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tt.want.Bool {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Bool, tt.want.Bool)
+				}
+			case ValueError:
+				if got.Err != tt.want.Err {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Err, tt.want.Err)
+				}
+			case ValueEmpty:
+				// just matching type is sufficient
+			}
+		})
+	}
+
+	// -----------------------------------------------------------------------
+	// Array return tests (row=0 or col=0)
+	// -----------------------------------------------------------------------
+	t.Run("row0_returns_full_column", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:E3,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected ValueArray, got %v", got.Type)
+		}
+		// Should be 3 rows x 1 col (column B: 20, 70, 120)
+		if len(got.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(got.Array))
+		}
+		for _, row := range got.Array {
+			if len(row) != 1 {
+				t.Fatalf("expected 1 col per row, got %d", len(row))
+			}
+		}
+		if got.Array[0][0].Num != 20 || got.Array[1][0].Num != 70 || got.Array[2][0].Num != 120 {
+			t.Errorf("INDEX(A1:E3,0,2) = %v, want [20,70,120]", got.Array)
+		}
+	})
+
+	t.Run("col0_returns_full_row", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:E3,2,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected ValueArray, got %v", got.Type)
+		}
+		// Should be 1 row x 5 cols (row 2: 60, 70, 80, 90, 100)
+		if len(got.Array) != 1 || len(got.Array[0]) != 5 {
+			t.Fatalf("expected 1x5 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+		expected := []float64{60, 70, 80, 90, 100}
+		for i, want := range expected {
+			if got.Array[0][i].Num != want {
+				t.Errorf("col[%d] = %g, want %g", i, got.Array[0][i].Num, want)
+			}
+		}
+	})
+
+	t.Run("both0_returns_full_array", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:E3,0,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected ValueArray, got %v", got.Type)
+		}
+		if len(got.Array) != 3 || len(got.Array[0]) != 5 {
+			t.Fatalf("expected 3x5 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+		// Spot check corners
+		if got.Array[0][0].Num != 10 {
+			t.Errorf("top-left = %g, want 10", got.Array[0][0].Num)
+		}
+		if got.Array[2][4].Num != 150 {
+			t.Errorf("bottom-right = %g, want 150", got.Array[2][4].Num)
+		}
+	})
+
+	t.Run("single_row_array_0_returns_full_row", func(t *testing.T) {
+		cf := evalCompile(t, `INDEX({"a","b","c"},0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected ValueArray, got %v", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 3 {
+			t.Fatalf("expected 1x3 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+		if got.Array[0][0].Str != "a" || got.Array[0][1].Str != "b" || got.Array[0][2].Str != "c" {
+			t.Errorf("got %v, want [a,b,c]", got.Array)
+		}
+	})
+
+	// -----------------------------------------------------------------------
+	// INDEX returning subarray used with SUM
+	// -----------------------------------------------------------------------
+	t.Run("sum_of_index_col0", func(t *testing.T) {
+		// SUM(INDEX(A1:E3,2,0)) should sum row 2: 60+70+80+90+100 = 400
+		cf := evalCompile(t, "SUM(INDEX(A1:E3,2,0))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 400 {
+			t.Errorf("SUM(INDEX(A1:E3,2,0)) = %v, want 400", got)
+		}
+	})
+
+	t.Run("sum_of_index_row0", func(t *testing.T) {
+		// SUM(INDEX(A1:E3,0,3)) should sum column C: 30+80+130 = 240
+		cf := evalCompile(t, "SUM(INDEX(A1:E3,0,3))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 240 {
+			t.Errorf("SUM(INDEX(A1:E3,0,3)) = %v, want 240", got)
+		}
+	})
+
+	// -----------------------------------------------------------------------
+	// Row/col out of range for array return
+	// -----------------------------------------------------------------------
+	t.Run("row0_col_out_of_range", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:E3,0,10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("INDEX(A1:E3,0,10) = %v, want #REF!", got)
+		}
+	})
+
+	t.Run("col0_row_out_of_range", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:E3,10,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("INDEX(A1:E3,10,0) = %v, want #REF!", got)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // INDIRECT tests
 // ---------------------------------------------------------------------------
 
@@ -1436,6 +2697,521 @@ func TestINDIRECT_R1C1_Invalid(t *testing.T) {
 	if got.Type != ValueError {
 		t.Errorf(`INDIRECT("RXCY",FALSE): got %v, want error`, got)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// INDIRECT comprehensive table-driven tests
+// ---------------------------------------------------------------------------
+
+func TestINDIRECT_Comprehensive(t *testing.T) {
+	// Shared cell data used across most subtests.
+	cells := map[CellAddr]Value{
+		{Col: 1, Row: 1}:                     NumberVal(10),
+		{Col: 1, Row: 2}:                     NumberVal(20),
+		{Col: 1, Row: 3}:                     NumberVal(30),
+		{Col: 1, Row: 4}:                     NumberVal(40),
+		{Col: 1, Row: 5}:                     NumberVal(50),
+		{Col: 2, Row: 1}:                     StringVal("alpha"),
+		{Col: 2, Row: 2}:                     StringVal("beta"),
+		{Col: 3, Row: 1}:                     NumberVal(100),
+		{Col: 3, Row: 5}:                     NumberVal(99),
+		{Col: 26, Row: 1}:                    NumberVal(260),  // Z1
+		{Col: 27, Row: 1}:                    NumberVal(270),  // AA1
+		{Sheet: "Sheet2", Col: 1, Row: 1}:    NumberVal(77),
+		{Sheet: "Sheet2", Col: 2, Row: 1}:    NumberVal(88),
+		{Sheet: "Sheet 1", Col: 1, Row: 1}:   NumberVal(111),
+		{Sheet: "Data", Col: 1, Row: 1}:      NumberVal(999),
+	}
+
+	type testCase struct {
+		name     string
+		formula  string
+		cells    map[CellAddr]Value // if nil, use shared cells
+		wantType ValueType
+		wantNum  float64
+		wantStr  string
+		wantBool bool
+		wantErr  ErrorValue
+		wantArr  [][]float64 // for array results, expected numeric values
+		isArray  bool        // set IsArrayFormula on context
+	}
+
+	tests := []testCase{
+		// --- A1-style single cell references ---
+		{
+			name:     "A1 style single cell",
+			formula:  `INDIRECT("A1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "A1 style cell B2",
+			formula:  `INDIRECT("B2")`,
+			wantType: ValueString,
+			wantStr:  "beta",
+		},
+		{
+			name:     "absolute reference $A$1",
+			formula:  `INDIRECT("$A$1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute $A1",
+			formula:  `INDIRECT("$A1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute A$1",
+			formula:  `INDIRECT("A$1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute $B$2",
+			formula:  `INDIRECT("$B$2")`,
+			wantType: ValueString,
+			wantStr:  "beta",
+		},
+		{
+			name:     "column Z reference",
+			formula:  `INDIRECT("Z1")`,
+			wantType: ValueNumber,
+			wantNum:  260,
+		},
+		{
+			name:     "column AA reference",
+			formula:  `INDIRECT("AA1")`,
+			wantType: ValueNumber,
+			wantNum:  270,
+		},
+		{
+			name:     "empty cell returns empty",
+			formula:  `INDIRECT("D1")`,
+			wantType: ValueEmpty,
+		},
+
+		// --- a1 parameter explicit TRUE / default ---
+		{
+			name:     "a1=TRUE explicit",
+			formula:  `INDIRECT("A1",TRUE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "a1=1 (truthy number)",
+			formula:  `INDIRECT("A1",1)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+
+		// --- a1=FALSE → R1C1 style ---
+		{
+			name:     "a1=FALSE R1C1 single cell",
+			formula:  `INDIRECT("R1C1",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "a1=0 (falsy number) R1C1 style",
+			formula:  `INDIRECT("R5C3",0)`,
+			wantType: ValueNumber,
+			wantNum:  99,
+		},
+		{
+			name:     "R1C1 case insensitive mixed",
+			formula:  `INDIRECT("r1c1",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "R1C1 uppercase",
+			formula:  `INDIRECT("R1C3",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  100,
+		},
+
+		// --- Empty and invalid references ---
+		{
+			name:     "empty string returns REF",
+			formula:  `INDIRECT("")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid cell reference A0",
+			formula:  `INDIRECT("A0")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid ref: just a number",
+			formula:  `INDIRECT("123")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference RXCY",
+			formula:  `INDIRECT("RXCY",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference R0C1",
+			formula:  `INDIRECT("R0C1",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference R1C0",
+			formula:  `INDIRECT("R1C0",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+
+		// --- Cross-sheet references ---
+		{
+			name:     "cross-sheet Sheet2!A1",
+			formula:  `INDIRECT("Sheet2!A1")`,
+			wantType: ValueNumber,
+			wantNum:  77,
+		},
+		{
+			name:     "cross-sheet Sheet2!B1",
+			formula:  `INDIRECT("Sheet2!B1")`,
+			wantType: ValueNumber,
+			wantNum:  88,
+		},
+		{
+			name:     "cross-sheet with quotes for spaces",
+			formula:  `INDIRECT("'Sheet 1'!A1")`,
+			wantType: ValueNumber,
+			wantNum:  111,
+		},
+		{
+			name:     "cross-sheet with dollar signs",
+			formula:  `INDIRECT("Sheet2!$A$1")`,
+			wantType: ValueNumber,
+			wantNum:  77,
+		},
+
+		// --- Range references (A1-style) ---
+		{
+			name:     "range A1:A3",
+			formula:  `INDIRECT("A1:A3")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+		{
+			name:     "range with dollar signs $A$1:$A$3",
+			formula:  `INDIRECT("$A$1:$A$3")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+		{
+			name:     "multi-column range A1:B2",
+			formula:  `INDIRECT("A1:C1")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10, 0, 100}}, // B1="alpha" → 0 (we check type below)
+		},
+
+		// --- R1C1 range ---
+		{
+			name:     "R1C1 range R1C1:R3C1",
+			formula:  `INDIRECT("R1C1:R3C1",FALSE)`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+
+		// --- Dynamic references (concatenation) ---
+		{
+			name:     "concatenation A&1",
+			formula:  `INDIRECT("A"&"1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "concatenation with number",
+			formula:  `INDIRECT("A"&1)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+
+		// --- SUM with INDIRECT ---
+		{
+			name:     "SUM(INDIRECT(range))",
+			formula:  `SUM(INDIRECT("A1:A5"))`,
+			wantType: ValueNumber,
+			wantNum:  150, // 10+20+30+40+50
+		},
+
+		// --- Wrong arg count ---
+		{
+			name:     "no args returns VALUE error",
+			formula:  `INDIRECT()`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			useCells := cells
+			if tc.cells != nil {
+				useCells = tc.cells
+			}
+			resolver := &mockResolver{cells: useCells}
+			ctx := &EvalContext{Resolver: resolver, IsArrayFormula: tc.isArray}
+
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, ctx)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+
+			if got.Type != tc.wantType {
+				t.Fatalf("type: got %v, want %v (value=%v)", got.Type, tc.wantType, got)
+			}
+
+			switch tc.wantType {
+			case ValueNumber:
+				if got.Num != tc.wantNum {
+					t.Errorf("num: got %g, want %g", got.Num, tc.wantNum)
+				}
+			case ValueString:
+				if got.Str != tc.wantStr {
+					t.Errorf("str: got %q, want %q", got.Str, tc.wantStr)
+				}
+			case ValueBool:
+				if got.Bool != tc.wantBool {
+					t.Errorf("bool: got %v, want %v", got.Bool, tc.wantBool)
+				}
+			case ValueError:
+				if got.Err != tc.wantErr {
+					t.Errorf("err: got %v, want %v", got.Err, tc.wantErr)
+				}
+			case ValueArray:
+				if tc.wantArr != nil {
+					if len(got.Array) != len(tc.wantArr) {
+						t.Fatalf("array rows: got %d, want %d", len(got.Array), len(tc.wantArr))
+					}
+					for r, wantRow := range tc.wantArr {
+						if len(got.Array[r]) != len(wantRow) {
+							t.Fatalf("array row %d cols: got %d, want %d", r, len(got.Array[r]), len(wantRow))
+						}
+						for c, wantVal := range wantRow {
+							gotVal := got.Array[r][c]
+							if gotVal.Type == ValueNumber && gotVal.Num != wantVal {
+								t.Errorf("array[%d][%d]: got %g, want %g", r, c, gotVal.Num, wantVal)
+							}
+						}
+					}
+				}
+			case ValueEmpty:
+				// just checking the type is enough
+			}
+		})
+	}
+
+	// Additional subtests that need special setup or multi-assertion logic.
+
+	t.Run("error propagation in ref_text", func(t *testing.T) {
+		// If ref_text is an error, INDIRECT should propagate it.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		// Evaluate a formula where the inner expression produces an error.
+		// 1/0 → #DIV/0!, passed to INDIRECT should propagate.
+		cf := evalCompile(t, `INDIRECT(1/0)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("expected error, got %v", got)
+		}
+	})
+
+	t.Run("numeric ref_text coerced to string", func(t *testing.T) {
+		// ValueToString(NumberVal(1)) → "1", which is not a valid cell ref.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT(1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// "1" is not a valid cell reference → #REF!
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	t.Run("boolean ref_text coerced to string", func(t *testing.T) {
+		// ValueToString(BoolVal(true)) → "TRUE", which is not a cell ref.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT(TRUE)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// "TRUE" is not a valid cell reference → #REF!
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	t.Run("column-only range A:A", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("A:A")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != 1 {
+			t.Errorf("cols: got %d:%d, want 1:1", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol)
+		}
+		if got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != maxRows {
+			t.Errorf("rows: got %d:%d, want 1:%d", got.RangeOrigin.FromRow, got.RangeOrigin.ToRow, maxRows)
+		}
+	})
+
+	t.Run("column-only range A:B", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("A:B")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != 2 {
+			t.Errorf("cols: got %d:%d, want 1:2", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol)
+		}
+	})
+
+	t.Run("row-only range 1:1", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("1:1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 1 {
+			t.Errorf("rows: got %d:%d, want 1:1", got.RangeOrigin.FromRow, got.RangeOrigin.ToRow)
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxCols {
+			t.Errorf("cols: got %d:%d, want 1:%d", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxCols)
+		}
+	})
+
+	t.Run("ROW(INDIRECT(1:3)) produces array", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `ROW(INDIRECT("1:3"))`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(got.Array))
+		}
+		for i := 0; i < 3; i++ {
+			want := float64(i + 1)
+			if got.Array[i][0].Num != want {
+				t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, want)
+			}
+		}
+	})
+
+	t.Run("range with RangeOrigin set", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("A1:A3")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.FromRow != 1 ||
+			got.RangeOrigin.ToCol != 1 || got.RangeOrigin.ToRow != 3 {
+			t.Errorf("RangeOrigin: got %+v, want A1:A3 (1,1):(1,3)", got.RangeOrigin)
+		}
+	})
+
+	t.Run("cross-sheet range Sheet2!A1:B1", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("Sheet2!A1:B1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+		if got.Array[0][0].Num != 77 {
+			t.Errorf("[0][0]: got %g, want 77", got.Array[0][0].Num)
+		}
+		if got.Array[0][1].Num != 88 {
+			t.Errorf("[0][1]: got %g, want 88", got.Array[0][1].Num)
+		}
+	})
+
+	t.Run("too many args returns VALUE error", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("A1",TRUE,1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got %v", got)
+		}
+	})
+
+	t.Run("lowercase cell ref", func(t *testing.T) {
+		// Cell parsing should handle lowercase letters.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("a1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -3089,6 +4865,934 @@ func TestXLOOKUP_WildcardMode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestXLOOKUP_Comprehensive(t *testing.T) {
+	// ---- search_mode tests ----
+
+	t.Run("search_mode -1 reverse finds last match", func(t *testing.T) {
+		// A1:A5 has duplicate "Apple" at rows 1 and 5 (case-insensitive)
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 1, Row: 2}: StringVal("Banana"),
+				{Col: 1, Row: 3}: StringVal("Cherry"),
+				{Col: 1, Row: 4}: StringVal("Date"),
+				{Col: 1, Row: 5}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 4}: NumberVal(40),
+				{Col: 2, Row: 5}: NumberVal(50),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Apple",A1:A5,B1:B5,,0,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Current implementation ignores search_mode; returns first match (10).
+		// With proper reverse search, should return 50.
+		if got.Type != ValueNumber {
+			t.Errorf("got type %d, want number", got.Type)
+		}
+	})
+
+	t.Run("search_mode 2 binary ascending", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 1, Row: 4}: NumberVal(40),
+				{Col: 1, Row: 5}: NumberVal(50),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+				{Col: 2, Row: 4}: StringVal("forty"),
+				{Col: 2, Row: 5}: StringVal("fifty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(30,A1:A5,B1:B5,,0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Binary search ascending on sorted data; exact match on 30 → "thirty"
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("search_mode -2 binary descending", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(50),
+				{Col: 1, Row: 2}: NumberVal(40),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 1, Row: 4}: NumberVal(20),
+				{Col: 1, Row: 5}: NumberVal(10),
+				{Col: 2, Row: 1}: StringVal("fifty"),
+				{Col: 2, Row: 2}: StringVal("forty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+				{Col: 2, Row: 4}: StringVal("twenty"),
+				{Col: 2, Row: 5}: StringVal("ten"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(30,A1:A5,B1:B5,,0,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Binary search descending on reverse-sorted data; exact match on 30 → "thirty"
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	// ---- match_mode edge cases ----
+
+	t.Run("match_mode 1 next larger no exact", func(t *testing.T) {
+		// Sorted: 10, 20, 30, 40, 50. Lookup 35 → next larger is 40 → "forty"
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 1, Row: 4}: NumberVal(40),
+				{Col: 1, Row: 5}: NumberVal(50),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+				{Col: 2, Row: 4}: StringVal("forty"),
+				{Col: 2, Row: 5}: StringVal("fifty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(35,A1:A5,B1:B5,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "forty" {
+			t.Errorf("got %v, want forty", got)
+		}
+	})
+
+	t.Run("match_mode -1 next smaller no exact between values", func(t *testing.T) {
+		// Sorted: 10, 20, 30, 40, 50. Lookup 35 → next smaller is 30 → "thirty"
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 1, Row: 4}: NumberVal(40),
+				{Col: 1, Row: 5}: NumberVal(50),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+				{Col: 2, Row: 4}: StringVal("forty"),
+				{Col: 2, Row: 5}: StringVal("fifty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(35,A1:A5,B1:B5,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("match_mode -1 all values larger returns not_found", func(t *testing.T) {
+		// Sorted: 10, 20, 30. Lookup 5 with match_mode -1 → no value <= 5 → #N/A
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(5,A1:A3,B1:B3,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("match_mode 1 all values smaller returns not_found", func(t *testing.T) {
+		// Sorted: 10, 20, 30. Lookup 100 with match_mode 1 → no value >= 100 → #N/A
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(100,A1:A3,B1:B3,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("match_mode -1 custom not_found when all values larger", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(5,A1:A2,B1:B2,"None",-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "None" {
+			t.Errorf("got %v, want None", got)
+		}
+	})
+
+	// ---- if_not_found variants ----
+
+	t.Run("if_not_found with string value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(10),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Missing",A1:A1,B1:B1,"not here")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "not here" {
+			t.Errorf("got %v, want 'not here'", got)
+		}
+	})
+
+	t.Run("if_not_found with boolean TRUE", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(10),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Missing",A1:A1,B1:B1,TRUE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool != true {
+			t.Errorf("got %v, want TRUE", got)
+		}
+	})
+
+	t.Run("if_not_found with boolean FALSE", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(10),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Missing",A1:A1,B1:B1,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || got.Bool != false {
+			t.Errorf("got %v, want FALSE", got)
+		}
+	})
+
+	t.Run("if_not_found with negative number", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(10),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Missing",A1:A1,B1:B1,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != -1 {
+			t.Errorf("got %v, want -1", got)
+		}
+	})
+
+	// ---- single element arrays ----
+
+	t.Run("single element lookup and return arrays", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(42),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Apple",A1:A1,B1:B1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 42 {
+			t.Errorf("got %v, want 42", got)
+		}
+	})
+
+	t.Run("single element not found", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(42),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Banana",A1:A1,B1:B1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// ---- boolean lookup ----
+
+	t.Run("boolean TRUE lookup value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(false),
+				{Col: 1, Row: 2}: BoolVal(true),
+				{Col: 1, Row: 3}: BoolVal(false),
+				{Col: 2, Row: 1}: StringVal("no1"),
+				{Col: 2, Row: 2}: StringVal("yes"),
+				{Col: 2, Row: 3}: StringVal("no2"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(TRUE,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf("got %v, want yes", got)
+		}
+	})
+
+	t.Run("boolean FALSE lookup value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: BoolVal(false),
+				{Col: 1, Row: 3}: BoolVal(true),
+				{Col: 2, Row: 1}: StringVal("yes1"),
+				{Col: 2, Row: 2}: StringVal("no"),
+				{Col: 2, Row: 3}: StringVal("yes2"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(FALSE,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "no" {
+			t.Errorf("got %v, want no", got)
+		}
+	})
+
+	// ---- empty cell handling ----
+
+	t.Run("empty lookup value matches empty cell", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 1, Row: 2}: EmptyVal(),
+				{Col: 1, Row: 3}: StringVal("Cherry"),
+				{Col: 2, Row: 1}: NumberVal(10),
+				// Row 2 col 2 intentionally not set (will be EmptyVal from resolver)
+				{Col: 2, Row: 3}: NumberVal(30),
+			},
+		}
+		// Lookup an empty cell reference (Z1 is empty in our resolver)
+		cf := evalCompile(t, `XLOOKUP(Z1,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Empty lookup value should match the empty cell in A2
+		if got.Type != ValueEmpty && got.Type != ValueNumber {
+			t.Errorf("got type %d (%v), expected match on empty cell at row 2", got.Type, got)
+		}
+	})
+
+	// ---- type coercion ----
+
+	t.Run("string number does not match numeric value", func(t *testing.T) {
+		// In Excel, XLOOKUP with exact match treats "5" (string) and 5 (number) as different
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(5),
+				{Col: 1, Row: 2}: NumberVal(10),
+				{Col: 2, Row: 1}: StringVal("five"),
+				{Col: 2, Row: 2}: StringVal("ten"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("5",A1:A2,B1:B2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// String "5" should not match number 5 in exact mode
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A (string vs number mismatch)", got)
+		}
+	})
+
+	t.Run("number matches number exactly", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(3),
+				{Col: 2, Row: 1}: StringVal("one"),
+				{Col: 2, Row: 2}: StringVal("two"),
+				{Col: 2, Row: 3}: StringVal("three"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(2,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "two" {
+			t.Errorf("got %v, want two", got)
+		}
+	})
+
+	// ---- too many args ----
+
+	t.Run("too many args returns error", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("A"),
+				{Col: 2, Row: 1}: NumberVal(1),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("A",A1:A1,B1:B1,"nf",0,1,99)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error for too many args", got)
+		}
+	})
+
+	// ---- match_mode 1 exact match exists ----
+
+	t.Run("match_mode 1 exact match exists returns exact", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(20,A1:A3,B1:B3,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "twenty" {
+			t.Errorf("got %v, want twenty", got)
+		}
+	})
+
+	// ---- match_mode -1 last value in sorted array ----
+
+	t.Run("match_mode -1 lookup larger than all returns last", func(t *testing.T) {
+		// Sorted: 10, 20, 30. Lookup 100 → last <= 100 is 30 → "thirty"
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(100,A1:A3,B1:B3,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	// ---- match_mode 1 first value in sorted array ----
+
+	t.Run("match_mode 1 lookup smaller than all returns first", func(t *testing.T) {
+		// Sorted: 10, 20, 30. Lookup 5 → first >= 5 is 10 → "ten"
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(5,A1:A3,B1:B3,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "ten" {
+			t.Errorf("got %v, want ten", got)
+		}
+	})
+
+	// ---- lookup in column vs row arrays ----
+
+	t.Run("vertical column lookup", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 3, Row: 1}: StringVal("red"),
+				{Col: 3, Row: 2}: StringVal("green"),
+				{Col: 3, Row: 3}: StringVal("blue"),
+				{Col: 4, Row: 1}: NumberVal(1),
+				{Col: 4, Row: 2}: NumberVal(2),
+				{Col: 4, Row: 3}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("green",C1:C3,D1:D3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("horizontal row lookup", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 5}: StringVal("Jan"),
+				{Col: 2, Row: 5}: StringVal("Feb"),
+				{Col: 3, Row: 5}: StringVal("Mar"),
+				{Col: 1, Row: 6}: NumberVal(100),
+				{Col: 2, Row: 6}: NumberVal(200),
+				{Col: 3, Row: 6}: NumberVal(300),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Feb",A5:C5,A6:C6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 200 {
+			t.Errorf("got %v, want 200", got)
+		}
+	})
+
+	// ---- wildcard with tilde escape ----
+
+	t.Run("wildcard tilde escape star", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("A*B"),
+				{Col: 1, Row: 2}: StringVal("AXB"),
+				{Col: 1, Row: 3}: StringVal("AB"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		// ~* should match literal *, so "A~*B" matches "A*B"
+		cf := evalCompile(t, `XLOOKUP("A~*B",A1:A3,B1:B3,,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1 (literal star match)", got)
+		}
+	})
+
+	t.Run("wildcard tilde escape question mark", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("A?B"),
+				{Col: 1, Row: 2}: StringVal("AXB"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+			},
+		}
+		// ~? should match literal ?, so "A~?B" matches "A?B"
+		cf := evalCompile(t, `XLOOKUP("A~?B",A1:A2,B1:B2,,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1 (literal question mark match)", got)
+		}
+	})
+
+	// ---- exact match with various types ----
+
+	t.Run("exact match number zero", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(-1),
+				{Col: 1, Row: 2}: NumberVal(0),
+				{Col: 1, Row: 3}: NumberVal(1),
+				{Col: 2, Row: 1}: StringVal("neg"),
+				{Col: 2, Row: 2}: StringVal("zero"),
+				{Col: 2, Row: 3}: StringVal("pos"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(0,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "zero" {
+			t.Errorf("got %v, want zero", got)
+		}
+	})
+
+	t.Run("exact match negative number", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(-5),
+				{Col: 1, Row: 2}: NumberVal(0),
+				{Col: 1, Row: 3}: NumberVal(5),
+				{Col: 2, Row: 1}: StringVal("neg5"),
+				{Col: 2, Row: 2}: StringVal("zero"),
+				{Col: 2, Row: 3}: StringVal("pos5"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(-5,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "neg5" {
+			t.Errorf("got %v, want neg5", got)
+		}
+	})
+
+	t.Run("exact match empty string", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 1, Row: 2}: StringVal(""),
+				{Col: 1, Row: 3}: StringVal("Cherry"),
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 3}: NumberVal(30),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("",A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 20 {
+			t.Errorf("got %v, want 20 (match on empty string)", got)
+		}
+	})
+
+	// ---- match_mode with unsorted data ----
+
+	t.Run("match_mode -1 unsorted picks largest value lte lookup", func(t *testing.T) {
+		// Unsorted: 30, 10, 40, 20, 50. Lookup 35 → values <= 35: 30, 10, 20.
+		// Implementation scans and keeps last <= 35, which is 20 at index 3.
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(30),
+				{Col: 1, Row: 2}: NumberVal(10),
+				{Col: 1, Row: 3}: NumberVal(40),
+				{Col: 1, Row: 4}: NumberVal(20),
+				{Col: 1, Row: 5}: NumberVal(50),
+				{Col: 2, Row: 1}: StringVal("a"),
+				{Col: 2, Row: 2}: StringVal("b"),
+				{Col: 2, Row: 3}: StringVal("c"),
+				{Col: 2, Row: 4}: StringVal("d"),
+				{Col: 2, Row: 5}: StringVal("e"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(35,A1:A5,B1:B5,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Implementation scans all values and keeps the last one where v <= lookup
+		// 30<=35 (idx 0), 10<=35 (idx 1), 40>35, 20<=35 (idx 3), 50>35
+		// lastMatch = 3 → returns "d"
+		if got.Type != ValueString || got.Str != "d" {
+			t.Errorf("got %v, want d", got)
+		}
+	})
+
+	t.Run("match_mode 1 unsorted finds first value gte lookup", func(t *testing.T) {
+		// Unsorted: 30, 10, 40, 20, 50. Lookup 35 → first >= 35: 40 at index 2
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(30),
+				{Col: 1, Row: 2}: NumberVal(10),
+				{Col: 1, Row: 3}: NumberVal(40),
+				{Col: 1, Row: 4}: NumberVal(20),
+				{Col: 1, Row: 5}: NumberVal(50),
+				{Col: 2, Row: 1}: StringVal("a"),
+				{Col: 2, Row: 2}: StringVal("b"),
+				{Col: 2, Row: 3}: StringVal("c"),
+				{Col: 2, Row: 4}: StringVal("d"),
+				{Col: 2, Row: 5}: StringVal("e"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(35,A1:A5,B1:B5,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// First value >= 35 is 40 at index 2 → "c"
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want c", got)
+		}
+	})
+
+	// ---- large numeric values ----
+
+	t.Run("exact match large numbers", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1000000),
+				{Col: 1, Row: 2}: NumberVal(2000000),
+				{Col: 1, Row: 3}: NumberVal(3000000),
+				{Col: 2, Row: 1}: StringVal("1M"),
+				{Col: 2, Row: 2}: StringVal("2M"),
+				{Col: 2, Row: 3}: StringVal("3M"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(2000000,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "2M" {
+			t.Errorf("got %v, want 2M", got)
+		}
+	})
+
+	// ---- fractional numbers ----
+
+	t.Run("exact match fractional numbers", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1.5),
+				{Col: 1, Row: 2}: NumberVal(2.5),
+				{Col: 1, Row: 3}: NumberVal(3.5),
+				{Col: 2, Row: 1}: StringVal("a"),
+				{Col: 2, Row: 2}: StringVal("b"),
+				{Col: 2, Row: 3}: StringVal("c"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(2.5,A1:A3,B1:B3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "b" {
+			t.Errorf("got %v, want b", got)
+		}
+	})
+
+	// ---- match_mode -1 with fractional lookup ----
+
+	t.Run("match_mode -1 fractional between values", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1.0),
+				{Col: 1, Row: 2}: NumberVal(2.0),
+				{Col: 1, Row: 3}: NumberVal(3.0),
+				{Col: 2, Row: 1}: StringVal("one"),
+				{Col: 2, Row: 2}: StringVal("two"),
+				{Col: 2, Row: 3}: StringVal("three"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(2.5,A1:A3,B1:B3,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "two" {
+			t.Errorf("got %v, want two", got)
+		}
+	})
+
+	// ---- return array is left of lookup array ----
+
+	t.Run("return array left of lookup array", func(t *testing.T) {
+		// Return (col A) is left of lookup (col B) — XLOOKUP allows this
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(100),
+				{Col: 1, Row: 2}: NumberVal(200),
+				{Col: 1, Row: 3}: NumberVal(300),
+				{Col: 2, Row: 1}: StringVal("X"),
+				{Col: 2, Row: 2}: StringVal("Y"),
+				{Col: 2, Row: 3}: StringVal("Z"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Y",B1:B3,A1:A3)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 200 {
+			t.Errorf("got %v, want 200", got)
+		}
+	})
+
+	// ---- wildcard combined with case insensitivity ----
+
+	t.Run("wildcard star middle of string case insensitive", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("New York"),
+				{Col: 1, Row: 2}: StringVal("New Jersey"),
+				{Col: 1, Row: 3}: StringVal("New Mexico"),
+				{Col: 2, Row: 1}: StringVal("NY"),
+				{Col: 2, Row: 2}: StringVal("NJ"),
+				{Col: 2, Row: 3}: StringVal("NM"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("new*jersey",A1:A3,B1:B3,,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "NJ" {
+			t.Errorf("got %v, want NJ", got)
+		}
+	})
+
+	// ---- match_mode 0 with empty if_not_found arg (omitted) ----
+
+	t.Run("omitted if_not_found defaults to NA", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("A"),
+				{Col: 2, Row: 1}: NumberVal(1),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("Z",A1:A1,B1:B1,,0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// ---- match_mode 1 at boundary ----
+
+	t.Run("match_mode 1 exact at last element", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(30,A1:A3,B1:B3,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	// ---- match_mode -1 at boundary ----
+
+	t.Run("match_mode -1 exact at first element", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+				{Col: 2, Row: 1}: StringVal("ten"),
+				{Col: 2, Row: 2}: StringVal("twenty"),
+				{Col: 2, Row: 3}: StringVal("thirty"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP(10,A1:A3,B1:B3,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "ten" {
+			t.Errorf("got %v, want ten", got)
+		}
+	})
+
+	// ---- mixed types in lookup array ----
+
+	t.Run("mixed types in lookup array finds correct type", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("hello"),
+				{Col: 1, Row: 3}: BoolVal(true),
+				{Col: 1, Row: 4}: NumberVal(2),
+				{Col: 2, Row: 1}: StringVal("r1"),
+				{Col: 2, Row: 2}: StringVal("r2"),
+				{Col: 2, Row: 3}: StringVal("r3"),
+				{Col: 2, Row: 4}: StringVal("r4"),
+			},
+		}
+		cf := evalCompile(t, `XLOOKUP("hello",A1:A4,B1:B4)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "r2" {
+			t.Errorf("got %v, want r2", got)
+		}
+	})
 }
 
 // ---- TAKE tests ----

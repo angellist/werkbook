@@ -229,6 +229,9 @@ func fnSWITCH(args []Value) (Value, error) {
 	}
 
 	expr := args[0]
+	if expr.Type == ValueError {
+		return expr, nil
+	}
 	rest := args[1:]
 
 	hasDefault := len(rest)%2 == 1
