@@ -114,7 +114,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | DEVSQ | Returns the sum of squared deviations from the sample mean. | Statistical | 23 |
 | DGET | Returns a single value from matching records in a database range. | Db | 1 |
 | DISC | Returns the discount rate for a security. | Financial | 3 |
-| DMAX | Returns the maximum value from matching records in a database range. | Db | 1 |
+| DMAX | Returns the maximum value from matching records in a database range. | Db | 5 |
 | DMIN | Returns the minimum value from matching records in a database range. | Db | 1 |
 | DOLLAR | Formats a number as currency text. | Text | 25 |
 | DOLLARDE | Converts a fractional dollar price to a decimal price. | Financial | 18 |
