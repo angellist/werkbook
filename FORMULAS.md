@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **412** spreadsheet formula functions.
+Werkbook supports **423** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -91,10 +91,13 @@ Werkbook supports **412** spreadsheet formula functions.
 | DATE | Date & Time | 50 |
 | DATEDIF | Date & Time | 18 |
 | DATEVALUE | Date & Time | 39 |
+| DAVERAGE | Db | 1 |
 | DAY | Date & Time | 6 |
 | DAYS | Date & Time | 17 |
 | DAYS360 | Date & Time | 7 |
 | DB | Financial | 29 |
+| DCOUNT | Db | 1 |
+| DCOUNTA | Db | 1 |
 | DDB | Financial | 27 |
 | DEC2BIN | Engineering | 37 |
 | DEC2HEX | Engineering | 45 |
@@ -103,13 +106,21 @@ Werkbook supports **412** spreadsheet formula functions.
 | DEGREES | Math & Trig | 25 |
 | DELTA | Engineering | 24 |
 | DEVSQ | Statistical | 23 |
+| DGET | Db | 1 |
 | DISC | Financial | 3 |
+| DMAX | Db | 1 |
+| DMIN | Db | 1 |
 | DOLLAR | Text | 25 |
 | DOLLARDE | Financial | 18 |
 | DOLLARFR | Financial | 17 |
+| DPRODUCT | Db | 1 |
 | DROP | Lookup & Reference | 26 |
+| DSTDEV | Db | 1 |
+| DSTDEVP | Db | 1 |
 | DSUM | Db | 7 |
 | DURATION | Financial | 2 |
+| DVAR | Db | 1 |
+| DVARP | Db | 1 |
 | EDATE | Date & Time | 19 |
 | EFFECT | Financial | 18 |
 | ENCODEURL | Text | 44 |
@@ -419,7 +430,7 @@ Werkbook supports **412** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **58** functions are not yet supported.
+The following **47** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -435,18 +446,7 @@ The following **58** functions are not yet supported.
 | BYCOL | Logical |
 | BYROW | Logical |
 | CELL | Information |
-| DAVERAGE | Database |
 | DBCS | Text |
-| DCOUNT | Database |
-| DCOUNTA | Database |
-| DGET | Database |
-| DMAX | Database |
-| DMIN | Database |
-| DPRODUCT | Database |
-| DSTDEV | Database |
-| DSTDEVP | Database |
-| DVAR | Database |
-| DVARP | Database |
 | FILTERXML | Web |
 | FINDB | Text |
 | FORECAST.ETS | Statistical |

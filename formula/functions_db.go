@@ -8,10 +8,26 @@ import (
 
 func init() {
 	Register("DSUM", NoCtx(fnDSum))
+	Register("DAVERAGE", NoCtx(fnDAverage))
+	Register("DCOUNT", NoCtx(fnDCount))
+	Register("DCOUNTA", NoCtx(fnDCountA))
+	Register("DGET", NoCtx(fnDGet))
+	Register("DMAX", NoCtx(fnDMax))
+	Register("DMIN", NoCtx(fnDMin))
+	Register("DPRODUCT", NoCtx(fnDProduct))
+	Register("DSTDEV", NoCtx(fnDStdev))
+	Register("DSTDEVP", NoCtx(fnDStdevP))
+	Register("DVAR", NoCtx(fnDVar))
+	Register("DVARP", NoCtx(fnDVarP))
 
-	// Register DSUM as an array-forcing function so that range arguments
+	// Register all D-functions as array-forcing so that range arguments
 	// are not implicitly intersected to a single cell.
-	arrayForcingFuncs["DSUM"] = true
+	for _, name := range []string{
+		"DSUM", "DAVERAGE", "DCOUNT", "DCOUNTA", "DGET",
+		"DMAX", "DMIN", "DPRODUCT", "DSTDEV", "DSTDEVP", "DVAR", "DVARP",
+	} {
+		arrayForcingFuncs[name] = true
+	}
 }
 
 // dFunc is the shared infrastructure for D-functions (DSUM, DAVERAGE, DCOUNT,
@@ -333,4 +349,284 @@ func fnDSum(args []Value) (Value, error) {
 		// Ignore text, booleans, empty cells.
 	}
 	return NumberVal(sum), nil
+}
+
+// ---------------------------------------------------------------------------
+// DAVERAGE
+// ---------------------------------------------------------------------------
+
+func fnDAverage(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	sum := 0.0
+	count := 0
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			sum += v.Num
+			count++
+		case ValueError:
+			return v, nil
+		}
+	}
+	if count == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	return NumberVal(sum / float64(count)), nil
+}
+
+// ---------------------------------------------------------------------------
+// DCOUNT
+// ---------------------------------------------------------------------------
+
+func fnDCount(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	count := 0
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			count++
+		case ValueError:
+			return v, nil
+		}
+	}
+	return NumberVal(float64(count)), nil
+}
+
+// ---------------------------------------------------------------------------
+// DCOUNTA
+// ---------------------------------------------------------------------------
+
+func fnDCountA(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	count := 0
+	for _, v := range vals {
+		switch v.Type {
+		case ValueError:
+			return v, nil
+		case ValueEmpty:
+			// skip empty
+		default:
+			count++
+		}
+	}
+	return NumberVal(float64(count)), nil
+}
+
+// ---------------------------------------------------------------------------
+// DGET
+// ---------------------------------------------------------------------------
+
+func fnDGet(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	if len(vals) == 0 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	if len(vals) > 1 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	v := vals[0]
+	if v.Type == ValueError {
+		return v, nil
+	}
+	return v, nil
+}
+
+// ---------------------------------------------------------------------------
+// DMAX
+// ---------------------------------------------------------------------------
+
+func fnDMax(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	max := 0.0
+	found := false
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			if !found || v.Num > max {
+				max = v.Num
+				found = true
+			}
+		case ValueError:
+			return v, nil
+		}
+	}
+	return NumberVal(max), nil
+}
+
+// ---------------------------------------------------------------------------
+// DMIN
+// ---------------------------------------------------------------------------
+
+func fnDMin(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	min := 0.0
+	found := false
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			if !found || v.Num < min {
+				min = v.Num
+				found = true
+			}
+		case ValueError:
+			return v, nil
+		}
+	}
+	return NumberVal(min), nil
+}
+
+// ---------------------------------------------------------------------------
+// DPRODUCT
+// ---------------------------------------------------------------------------
+
+func fnDProduct(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	product := 0.0
+	found := false
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			if !found {
+				product = v.Num
+				found = true
+			} else {
+				product *= v.Num
+			}
+		case ValueError:
+			return v, nil
+		}
+	}
+	return NumberVal(product), nil
+}
+
+// ---------------------------------------------------------------------------
+// DSTDEV (sample standard deviation, n-1 denominator)
+// ---------------------------------------------------------------------------
+
+func fnDStdev(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	variance, ev := dVariance(vals, false)
+	if ev != nil {
+		return *ev, nil
+	}
+	return NumberVal(math.Sqrt(variance)), nil
+}
+
+// ---------------------------------------------------------------------------
+// DSTDEVP (population standard deviation, n denominator)
+// ---------------------------------------------------------------------------
+
+func fnDStdevP(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	variance, ev := dVariance(vals, true)
+	if ev != nil {
+		return *ev, nil
+	}
+	return NumberVal(math.Sqrt(variance)), nil
+}
+
+// ---------------------------------------------------------------------------
+// DVAR (sample variance, n-1 denominator)
+// ---------------------------------------------------------------------------
+
+func fnDVar(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	variance, ev := dVariance(vals, false)
+	if ev != nil {
+		return *ev, nil
+	}
+	return NumberVal(variance), nil
+}
+
+// ---------------------------------------------------------------------------
+// DVARP (population variance, n denominator)
+// ---------------------------------------------------------------------------
+
+func fnDVarP(args []Value) (Value, error) {
+	vals, errv := dFunc(args)
+	if errv != nil {
+		return *errv, nil
+	}
+	variance, ev := dVariance(vals, true)
+	if ev != nil {
+		return *ev, nil
+	}
+	return NumberVal(variance), nil
+}
+
+// dVariance computes variance over numeric values. If population is true it
+// uses n as the denominator; otherwise it uses n-1 (sample variance).
+// Returns #DIV/0! if there are insufficient numeric values.
+func dVariance(vals []Value, population bool) (float64, *Value) {
+	var nums []float64
+	for _, v := range vals {
+		switch v.Type {
+		case ValueNumber:
+			nums = append(nums, v.Num)
+		case ValueError:
+			return 0, &v
+		}
+	}
+	n := len(nums)
+	if population {
+		if n < 1 {
+			e := ErrorVal(ErrValDIV0)
+			return 0, &e
+		}
+	} else {
+		if n < 2 {
+			e := ErrorVal(ErrValDIV0)
+			return 0, &e
+		}
+	}
+
+	// Compute mean.
+	sum := 0.0
+	for _, x := range nums {
+		sum += x
+	}
+	mean := sum / float64(n)
+
+	// Compute sum of squared deviations.
+	ss := 0.0
+	for _, x := range nums {
+		d := x - mean
+		ss += d * d
+	}
+
+	denom := float64(n)
+	if !population {
+		denom = float64(n - 1)
+	}
+	return ss / denom, nil
 }
