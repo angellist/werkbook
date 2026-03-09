@@ -4690,6 +4690,214 @@ func TestCHOOSEROWS(t *testing.T) {
 			args: nil,
 			want: ErrorVal(ErrValVALUE),
 		},
+		// --- additional coverage ---
+		{
+			name: "single_row_array_select_row1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10), NumberVal(20), NumberVal(30)},
+				}},
+				NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(20), NumberVal(30)},
+			}},
+		},
+		{
+			name: "single_row_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(10), NumberVal(20)},
+				}},
+				NumberVal(-1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(20)},
+			}},
+		},
+		{
+			name: "single_column_tall_array",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(1)},
+					{NumberVal(2)},
+					{NumberVal(3)},
+					{NumberVal(4)},
+					{NumberVal(5)},
+				}},
+				NumberVal(2), NumberVal(4),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2)},
+				{NumberVal(4)},
+			}},
+		},
+		{
+			name: "all_rows_selected",
+			args: []Value{base, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+			}},
+		},
+		{
+			name: "all_rows_reversed",
+			args: []Value{base, NumberVal(3), NumberVal(2), NumberVal(1)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "multiple_negative_indices",
+			args: []Value{base, NumberVal(-1), NumberVal(-2), NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "large_array_select_boundary_rows",
+			args: func() []Value {
+				rows := make([][]Value, 100)
+				for i := range rows {
+					rows[i] = []Value{NumberVal(float64(i + 1))}
+				}
+				arr := Value{Type: ValueArray, Array: rows}
+				return []Value{arr, NumberVal(1), NumberVal(50), NumberVal(100)}
+			}(),
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1)},
+				{NumberVal(50)},
+				{NumberVal(100)},
+			}},
+		},
+		{
+			name: "string_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("alpha"), StringVal("beta")},
+					{StringVal("gamma"), StringVal("delta")},
+					{StringVal("epsilon"), StringVal("zeta")},
+				}},
+				NumberVal(2),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("gamma"), StringVal("delta")},
+			}},
+		},
+		{
+			name: "boolean_array_values",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{BoolVal(true), BoolVal(false)},
+					{BoolVal(false), BoolVal(true)},
+				}},
+				NumberVal(2), NumberVal(1),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{BoolVal(false), BoolVal(true)},
+				{BoolVal(true), BoolVal(false)},
+			}},
+		},
+		{
+			name: "mixed_type_array_all_rows",
+			args: []Value{mixed, NumberVal(1), NumberVal(2), NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{StringVal("a"), BoolVal(true), ErrorVal(ErrValNA)},
+				{EmptyVal(), NumberVal(2), StringVal("z")},
+				{NumberVal(9), StringVal("tail"), BoolVal(false)},
+			}},
+		},
+		{
+			name: "bool_false_index_coerces_to_zero_errors",
+			args: []Value{base, BoolVal(false)},
+			want: ErrorVal(ErrValVALUE),
+		},
+		{
+			name: "negative_exact_boundary",
+			args: []Value{base, NumberVal(-3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
+		},
+		{
+			name: "positive_exact_boundary",
+			args: []Value{base, NumberVal(3)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+			}},
+		},
+		{
+			name: "duplicate_same_row_three_times",
+			args: []Value{base, NumberVal(2), NumberVal(2), NumberVal(2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name: "single_cell_array_row1",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(42)},
+				}},
+				NumberVal(1),
+			},
+			want: NumberVal(42),
+		},
+		{
+			name: "single_cell_array_negative_one",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{StringVal("hello")},
+				}},
+				NumberVal(-1),
+			},
+			want: StringVal("hello"),
+		},
+		{
+			name: "error_in_second_index_propagates",
+			args: []Value{base, NumberVal(1), ErrorVal(ErrValNA)},
+			want: ErrorVal(ErrValNA),
+		},
+		{
+			name: "negative_two_on_three_row_array",
+			args: []Value{base, NumberVal(-2)},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name: "large_array_negative_last",
+			args: func() []Value {
+				rows := make([][]Value, 50)
+				for i := range rows {
+					rows[i] = []Value{NumberVal(float64(i + 1))}
+				}
+				arr := Value{Type: ValueArray, Array: rows}
+				return []Value{arr, NumberVal(-1)}
+			}(),
+			want: NumberVal(50), // single-row single-col result unwraps to scalar
+		},
+		{
+			name: "multi_column_preserves_all_columns",
+			args: []Value{
+				{Type: ValueArray, Array: [][]Value{
+					{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4), NumberVal(5)},
+					{NumberVal(6), NumberVal(7), NumberVal(8), NumberVal(9), NumberVal(10)},
+					{NumberVal(11), NumberVal(12), NumberVal(13), NumberVal(14), NumberVal(15)},
+				}},
+				NumberVal(2),
+			},
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(6), NumberVal(7), NumberVal(8), NumberVal(9), NumberVal(10)},
+			}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -4765,6 +4973,80 @@ func TestCHOOSEROWS_ViaEval(t *testing.T) {
 			name:    "too_few_args_formula",
 			formula: "CHOOSEROWS(A1:C4)",
 			want:    ErrorVal(ErrValVALUE),
+		},
+		// --- additional eval coverage ---
+		{
+			name:    "index_into_chooserows_result",
+			formula: "INDEX(CHOOSEROWS(A1:C4,4,1),1,2)",
+			want:    NumberVal(11),
+		},
+		{
+			name:    "index_into_chooserows_row2",
+			formula: "INDEX(CHOOSEROWS(A1:C4,4,1),2,3)",
+			want:    NumberVal(3),
+		},
+		{
+			name:    "out_of_range_row_formula",
+			formula: "CHOOSEROWS(A1:C4,5)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "zero_row_formula",
+			formula: "CHOOSEROWS(A1:C4,0)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "negative_out_of_range_formula",
+			formula: "CHOOSEROWS(A1:C4,-5)",
+			want:    ErrorVal(ErrValVALUE),
+		},
+		{
+			name:    "duplicate_rows_formula",
+			formula: "CHOOSEROWS(A1:C4,2,2)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "all_rows_formula",
+			formula: "CHOOSEROWS(A1:C4,1,2,3,4)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+			}},
+		},
+		{
+			name:    "mix_positive_and_negative_formula",
+			formula: "CHOOSEROWS(A1:C4,1,-1)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+			}},
+		},
+		{
+			name:    "fractional_index_formula",
+			formula: "CHOOSEROWS(A1:C4,2.7)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+			}},
+		},
+		{
+			name:    "single_cell_ref_formula",
+			formula: "CHOOSEROWS(A1,1)",
+			want:    NumberVal(1),
+		},
+		{
+			name:    "multiple_negative_indices_formula",
+			formula: "CHOOSEROWS(A1:C4,-1,-2,-3,-4)",
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(10), NumberVal(11), NumberVal(12)},
+				{NumberVal(7), NumberVal(8), NumberVal(9)},
+				{NumberVal(4), NumberVal(5), NumberVal(6)},
+				{NumberVal(1), NumberVal(2), NumberVal(3)},
+			}},
 		},
 	}
 
