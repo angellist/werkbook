@@ -37,7 +37,7 @@ Werkbook is a Go library for reading and writing Excel XLSX files with a built-i
 
 ### Value system
 
-`Value` is a tagged union (`value.go`) with types: `TypeEmpty`, `TypeNumber`, `TypeString`, `TypeBool`, `TypeError`. The `toValue()` function converts Go types (all int/uint/float variants, string, bool, `time.Time`, nil) to `Value`. Dates are stored as Excel serial numbers via `timeToExcelSerial()` in `date.go`, which accounts for the Excel 1900 leap year bug.
+`Value` is a tagged union (`value.go`) with types: `TypeEmpty`, `TypeNumber`, `TypeString`, `TypeBool`, `TypeError`. The `toValue()` function converts Go types (all int/uint/float variants, string, bool, `time.Time`, nil) to `Value`. Dates are stored as Excel serial numbers via `timeToSerial()` in `date.go`, which accounts for the Excel 1900 leap year bug.
 
 ### Coordinate system
 

@@ -175,7 +175,7 @@ func cmdCalc(args []string, globals globalFlags) int {
 			if !noDatesFlag && v.Type == werkbook.TypeNumber {
 				if isDateCell(s, ref, v) {
 					cd.Type = "date"
-					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
+					cd.Formatted = werkbook.SerialToTime(v.Number).Format("2006-01-02")
 				}
 			}
 			formula, _ := s.GetFormula(ref)

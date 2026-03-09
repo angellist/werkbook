@@ -30,10 +30,10 @@ var longMonths = [13]string{"", "January", "February", "March", "April", "May", 
 var shortDays = [8]string{"", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
 var longDays = [8]string{"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
-// formatExcelNumber formats a number using a number format string.
+// formatNumber formats a number using a number format string.
 // This is the main entry point used by the TEXT() function.
 // If date1904 is true, date serial numbers use the 1904 date system.
-func formatExcelNumber(n float64, format string, date1904 bool) string {
+func formatNumber(n float64, format string, date1904 bool) string {
 	if strings.EqualFold(format, "General") {
 		return formatGeneral(n)
 	}
@@ -509,9 +509,9 @@ func stripLiterals(format string) string {
 func formatDateTime(serial float64, format string, date1904 bool) string {
 	var t time.Time
 	if date1904 {
-		t = ExcelSerialToTime1904(serial)
+		t = SerialToTime1904(serial)
 	} else {
-		t = ExcelSerialToTime(serial)
+		t = SerialToTime(serial)
 	}
 
 	// Determine if there's an AM/PM marker.
@@ -2219,6 +2219,6 @@ func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
 
 // daysSinceEpoch converts a time.Time to serial days (for internal elapsed time).
 func daysSinceEpoch(t time.Time) float64 {
-	duration := t.Sub(ExcelEpoch)
+	duration := t.Sub(Epoch1900)
 	return duration.Hours() / 24
 }

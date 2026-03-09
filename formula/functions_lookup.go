@@ -808,8 +808,8 @@ func fnINDIRECT(args []Value, ctx *EvalContext) (Value, error) {
 		if err != nil {
 			return ErrorVal(ErrValREF), nil
 		}
-		isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
-		isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+		isFullCol := addr.FromRow == 1 && addr.ToRow >= maxRows
+		isFullRow := addr.FromCol == 1 && addr.ToCol >= maxCols
 		// For full-row or full-column ranges (e.g. "1:20", "A:C"), return
 		// only the RangeOrigin metadata without resolving cell values.
 		// Functions like ROW() and COLUMN() only need the metadata, and
@@ -869,11 +869,11 @@ func indirectParseCell(s string) (col, row int, err error) {
 		return 0, 0, fmt.Errorf("invalid cell reference %q", s)
 	}
 	col = colLettersToNumber(s[:i])
-	if col < 1 || col > maxExcelCols {
+	if col < 1 || col > maxCols {
 		return 0, 0, fmt.Errorf("column out of range in %q", s)
 	}
 	row, err = strconv.Atoi(s[i:])
-	if err != nil || row < 1 || row > maxExcelRows {
+	if err != nil || row < 1 || row > maxRows {
 		return 0, 0, fmt.Errorf("invalid row in %q", s)
 	}
 	return col, row, nil
@@ -903,7 +903,7 @@ func indirectParseRange(left, right, sheet string) (RangeAddr, error) {
 		return RangeAddr{
 			Sheet:   sheet,
 			FromCol: 1, FromRow: r1,
-			ToCol: maxExcelCols, ToRow: r2,
+			ToCol: maxCols, ToRow: r2,
 		}, nil
 	}
 
@@ -920,7 +920,7 @@ func indirectParseRange(left, right, sheet string) (RangeAddr, error) {
 		return RangeAddr{
 			Sheet:   sheet,
 			FromCol: c1, FromRow: 1,
-			ToCol: c2, ToRow: maxExcelRows,
+			ToCol: c2, ToRow: maxRows,
 		}, nil
 	}
 
@@ -964,11 +964,11 @@ func parseR1C1Cell(s string) (col, row int, err error) {
 		return 0, 0, fmt.Errorf("invalid R1C1 reference %q: empty row or col", s)
 	}
 	row, err = strconv.Atoi(rowStr)
-	if err != nil || row < 1 || row > maxExcelRows {
+	if err != nil || row < 1 || row > maxRows {
 		return 0, 0, fmt.Errorf("invalid row in R1C1 reference %q", s)
 	}
 	col, err = strconv.Atoi(colStr)
-	if err != nil || col < 1 || col > maxExcelCols {
+	if err != nil || col < 1 || col > maxCols {
 		return 0, 0, fmt.Errorf("invalid col in R1C1 reference %q", s)
 	}
 	return col, row, nil

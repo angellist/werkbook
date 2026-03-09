@@ -452,7 +452,7 @@ func buildReadData(s *werkbook.Sheet, filePath, sheetName string, opts readOpts)
 			if !opts.noDates && v.Type == werkbook.TypeNumber {
 				if isDateCell(s, ref, v) {
 					cd.Type = "date"
-					cd.Formatted = werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
+					cd.Formatted = werkbook.SerialToTime(v.Number).Format("2006-01-02")
 				}
 			}
 
@@ -518,7 +518,7 @@ func displayCellValue(s *werkbook.Sheet, ref string, opts readOpts) string {
 
 	v, _ := s.GetValue(ref)
 	if !opts.noDates && v.Type == werkbook.TypeNumber && isDateCell(s, ref, v) {
-		return werkbook.ExcelSerialToTime(v.Number).Format("2006-01-02")
+		return werkbook.SerialToTime(v.Number).Format("2006-01-02")
 	}
 	return valueToString(v)
 }

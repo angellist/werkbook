@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestTimeToExcelSerial(t *testing.T) {
+func TestTimeToSerial(t *testing.T) {
 	tests := []struct {
 		name string
 		t    time.Time
@@ -22,15 +22,15 @@ func TestTimeToExcelSerial(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := timeToExcelSerial(tt.t)
+			got := timeToSerial(tt.t)
 			if math.Abs(got-tt.want) > 0.0001 {
-				t.Errorf("timeToExcelSerial(%v) = %f, want %f", tt.t, got, tt.want)
+				t.Errorf("timeToSerial(%v) = %f, want %f", tt.t, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestExcelSerialToTime(t *testing.T) {
+func TestSerialToTime(t *testing.T) {
 	tests := []struct {
 		name   string
 		serial float64
@@ -51,11 +51,11 @@ func TestExcelSerialToTime(t *testing.T) {
 	}
 }
 
-func TestExcelSerialToTimeExported(t *testing.T) {
-	got := ExcelSerialToTime(36526)
+func TestSerialToTimeExported(t *testing.T) {
+	got := SerialToTime(36526)
 	want := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	if !got.Equal(want) {
-		t.Errorf("ExcelSerialToTime(36526) = %v, want %v", got, want)
+		t.Errorf("SerialToTime(36526) = %v, want %v", got, want)
 	}
 }
 
@@ -88,7 +88,7 @@ func TestIsDateFormat(t *testing.T) {
 	}
 }
 
-func TestExcelSerialToTime1904(t *testing.T) {
+func TestSerialToTime1904(t *testing.T) {
 	tests := []struct {
 		name   string
 		serial float64
@@ -120,7 +120,7 @@ func TestDateRoundTrip(t *testing.T) {
 		time.Date(2000, 12, 31, 0, 0, 0, 0, time.UTC),
 	}
 	for _, d := range dates {
-		serial := timeToExcelSerial(d)
+		serial := timeToSerial(d)
 		got := excelSerialToTime(serial)
 		if !got.Equal(d) {
 			t.Errorf("round-trip failed: %v -> %f -> %v", d, serial, got)

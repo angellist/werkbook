@@ -181,7 +181,7 @@ func (l *Lexer) lexError() (Token, error) {
 		if ch == '!' || ch == '?' {
 			l.pos++
 			val := string(l.src[start:l.pos])
-			if isExcelError(val) {
+			if isFormulaError(val) {
 				return Token{Type: TokError, Value: val, Pos: start}, nil
 			}
 			return Token{}, fmt.Errorf("unknown error literal %q at position %d", val, start)
@@ -194,7 +194,7 @@ func (l *Lexer) lexError() (Token, error) {
 	}
 	// #N/A has no trailing ! or ?
 	val := string(l.src[start:l.pos])
-	if isExcelError(val) {
+	if isFormulaError(val) {
 		return Token{Type: TokError, Value: val, Pos: start}, nil
 	}
 	return Token{}, fmt.Errorf("unknown error literal %q at position %d", val, start)
@@ -547,7 +547,7 @@ func isIdentContinue(ch byte) bool {
 	return isAlpha(ch) || (ch >= '0' && ch <= '9') || ch == '_' || ch == '.' || ch == '$'
 }
 
-func isExcelError(s string) bool {
+func isFormulaError(s string) bool {
 	upper := strings.ToUpper(s)
 	switch upper {
 	case "#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#SPILL!", "#CALC!", "#GETTING_DATA":

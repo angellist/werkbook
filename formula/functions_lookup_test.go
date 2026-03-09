@@ -1246,9 +1246,9 @@ func TestINDIRECTRowRange(t *testing.T) {
 		t.Errorf("INDIRECT(1:3): range rows = %d:%d, want 1:3",
 			got.RangeOrigin.FromRow, got.RangeOrigin.ToRow)
 	}
-	if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxExcelCols {
+	if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxCols {
 		t.Errorf("INDIRECT(1:3): range cols = %d:%d, want 1:%d",
-			got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxExcelCols)
+			got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxCols)
 	}
 }
 

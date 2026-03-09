@@ -843,7 +843,7 @@ func coerceDateNum(v Value) (float64, *Value) {
 		for _, layout := range layouts {
 			t, err := time.Parse(layout, text)
 			if err == nil {
-				return math.Floor(TimeToExcelSerial(t)), nil
+				return math.Floor(TimeToSerial(t)), nil
 			}
 		}
 	}
@@ -1599,8 +1599,8 @@ func tbillValidate(args []Value, strictLess bool) (dsm float64, thirdArg float64
 	}
 
 	// Convert serial numbers to time.Time and check "more than one year" rule.
-	settlementTime := ExcelSerialToTime(settlement)
-	maturityTime := ExcelSerialToTime(maturity)
+	settlementTime := SerialToTime(settlement)
+	maturityTime := SerialToTime(maturity)
 
 	// Maturity must not be more than one calendar year after settlement.
 	oneYearLater := settlementTime.AddDate(1, 0, 0)
@@ -1691,8 +1691,8 @@ func fnTbillEq(args []Value) (Value, error) {
 // Both settlement and maturity should be truncated serial numbers.
 // Basis values: 0=US 30/360, 1=Actual/actual, 2=Actual/360, 3=Actual/365, 4=European 30/360.
 func dayCountBasis(settlement, maturity float64, basis int) (dsm, bYear float64) {
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	sy, sm, sd := st.Year(), int(st.Month()), st.Day()
 	ey, em, ed := mt.Year(), int(mt.Month()), mt.Day()
 
@@ -1713,7 +1713,7 @@ func dayCountBasis(settlement, maturity float64, basis int) (dsm, bYear float64)
 			bYear = 365
 			for y := sy; y <= ey; y++ {
 				if isLeapYear(y) {
-					feb29 := TimeToExcelSerial(time.Date(y, 2, 29, 0, 0, 0, 0, time.UTC))
+					feb29 := TimeToSerial(time.Date(y, 2, 29, 0, 0, 0, 0, time.UTC))
 					if feb29 >= settlement && feb29 <= maturity {
 						bYear = 366
 						break
@@ -1993,7 +1993,7 @@ func fnAccrint(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	fiTime := ExcelSerialToTime(firstInterest)
+	fiTime := SerialToTime(firstInterest)
 	monthStep := 12 / freq
 	fiD := fiTime.Day()
 
@@ -2004,9 +2004,9 @@ func fnAccrint(args []Value) (Value, error) {
 
 	if !calcMethod {
 		// Find the most recent quasi-coupon date on or before settlement.
-		settTime := ExcelSerialToTime(settlement)
+		settTime := SerialToTime(settlement)
 		pcdOfSettlement := couppcd(settTime, fiTime, freq)
-		pcdSer := TimeToExcelSerial(pcdOfSettlement)
+		pcdSer := TimeToSerial(pcdOfSettlement)
 		// Use the later of issue and pcdOfSettlement.
 		if pcdSer > issue {
 			startDate = pcdSer
@@ -2014,9 +2014,9 @@ func fnAccrint(args []Value) (Value, error) {
 	}
 
 	// Find the quasi-coupon date on or before startDate.
-	startTime := ExcelSerialToTime(startDate)
+	startTime := SerialToTime(startDate)
 	pcd := couppcd(startTime, fiTime, freq)
-	pcdSerial := TimeToExcelSerial(pcd)
+	pcdSerial := TimeToSerial(pcd)
 
 	// If pcd is after startDate (edge case), step back further.
 	for pcdSerial > startDate {
@@ -2028,7 +2028,7 @@ func fnAccrint(args []Value) (Value, error) {
 			prevYear--
 		}
 		pcd = clampDate(prevYear, prevMonth, fiD)
-		pcdSerial = TimeToExcelSerial(pcd)
+		pcdSerial = TimeToSerial(pcd)
 	}
 
 	// Walk forward through quasi-coupon periods, accumulating accrued interest.
@@ -2043,7 +2043,7 @@ func fnAccrint(args []Value) (Value, error) {
 			ncdYear++
 		}
 		ncd := clampDate(ncdYear, ncdMonth, fiD)
-		ncdSerial := TimeToExcelSerial(ncd)
+		ncdSerial := TimeToSerial(ncd)
 
 		// Determine the portion of this quasi-coupon period that falls within [startDate, settlement].
 		periodStart := pcdSerial
@@ -2058,8 +2058,8 @@ func fnAccrint(args []Value) (Value, error) {
 		if periodEnd > periodStart {
 			// Compute A_i (accrued days in this quasi-coupon period).
 			var ai float64
-			psTime := ExcelSerialToTime(periodStart)
-			peTime := ExcelSerialToTime(periodEnd)
+			psTime := SerialToTime(periodStart)
+			peTime := SerialToTime(periodEnd)
 			switch basis {
 			case 0: // US 30/360
 				ai = days360Calc(
@@ -2561,10 +2561,10 @@ func fnCouppcd(args []Value) (Value, error) {
 	if ev != nil {
 		return *ev, nil
 	}
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	pcd := couppcd(st, mt, freq)
-	return NumberVal(TimeToExcelSerial(pcd)), nil
+	return NumberVal(TimeToSerial(pcd)), nil
 }
 
 // fnCOUPNCD implements COUPNCD(settlement, maturity, frequency, [basis]).
@@ -2574,10 +2574,10 @@ func fnCoupncd(args []Value) (Value, error) {
 	if ev != nil {
 		return *ev, nil
 	}
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	ncd := coupncd(st, mt, freq)
-	return NumberVal(TimeToExcelSerial(ncd)), nil
+	return NumberVal(TimeToSerial(ncd)), nil
 }
 
 // fnCOUPNUM implements COUPNUM(settlement, maturity, frequency, [basis]).
@@ -2587,8 +2587,8 @@ func fnCoupnum(args []Value) (Value, error) {
 	if ev != nil {
 		return *ev, nil
 	}
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 
 	// Count coupon dates strictly after settlement and <= maturity.
 	count := 0
@@ -2614,8 +2614,8 @@ func fnCoupdaybs(args []Value) (Value, error) {
 	if ev != nil {
 		return *ev, nil
 	}
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	pcd := couppcd(st, mt, freq)
 
 	switch basis {
@@ -2625,7 +2625,7 @@ func fnCoupdaybs(args []Value) (Value, error) {
 		european := basis == 4
 		return NumberVal(days360Calc(sy, sm, sd, ey, em, ed, european)), nil
 	default: // basis 1, 2, 3: actual days
-		pcdSerial := TimeToExcelSerial(pcd)
+		pcdSerial := TimeToSerial(pcd)
 		return NumberVal(settlement - pcdSerial), nil
 	}
 }
@@ -2642,12 +2642,12 @@ func fnCoupdays(args []Value) (Value, error) {
 	case 0, 4: // 30/360
 		return NumberVal(360.0 / float64(freq)), nil
 	case 1: // actual/actual
-		st := ExcelSerialToTime(settlement)
-		mt := ExcelSerialToTime(maturity)
+		st := SerialToTime(settlement)
+		mt := SerialToTime(maturity)
 		pcd := couppcd(st, mt, freq)
 		ncd := coupncd(st, mt, freq)
-		pcdSerial := TimeToExcelSerial(pcd)
-		ncdSerial := TimeToExcelSerial(ncd)
+		pcdSerial := TimeToSerial(pcd)
+		ncdSerial := TimeToSerial(ncd)
 		return NumberVal(ncdSerial - pcdSerial), nil
 	case 2: // actual/360
 		return NumberVal(360.0 / float64(freq)), nil
@@ -2665,8 +2665,8 @@ func fnCoupdaysnc(args []Value) (Value, error) {
 	if ev != nil {
 		return *ev, nil
 	}
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	ncd := coupncd(st, mt, freq)
 
 	switch basis {
@@ -2679,7 +2679,7 @@ func fnCoupdaysnc(args []Value) (Value, error) {
 		cdays := 360.0 / float64(freq)
 		return NumberVal(cdays - daybs), nil
 	default: // basis 1, 2, 3: actual days
-		ncdSerial := TimeToExcelSerial(ncd)
+		ncdSerial := TimeToSerial(ncd)
 		return NumberVal(ncdSerial - settlement), nil
 	}
 }
@@ -2716,7 +2716,7 @@ func coupdaybsRaw(settlement float64, st, mt time.Time, freq, basis int) float64
 		ey, em, ed := st.Year(), int(st.Month()), st.Day()
 		return days360Calc(sy, sm, sd, ey, em, ed, basis == 4)
 	default:
-		return settlement - TimeToExcelSerial(pcd)
+		return settlement - TimeToSerial(pcd)
 	}
 }
 
@@ -2728,7 +2728,7 @@ func coupdaysRaw(settlement float64, st, mt time.Time, freq, basis int) float64 
 	case 1:
 		pcd := couppcd(st, mt, freq)
 		ncd := coupncd(st, mt, freq)
-		return TimeToExcelSerial(ncd) - TimeToExcelSerial(pcd)
+		return TimeToSerial(ncd) - TimeToSerial(pcd)
 	case 2:
 		return 360.0 / float64(freq)
 	case 3:
@@ -2748,7 +2748,7 @@ func coupdaysncRaw(settlement float64, st, mt time.Time, freq, basis int) float6
 		return 360.0/float64(freq) - daybs
 	default:
 		ncd := coupncd(st, mt, freq)
-		return TimeToExcelSerial(ncd) - settlement
+		return TimeToSerial(ncd) - settlement
 	}
 }
 
@@ -2818,8 +2818,8 @@ func fnDuration(args []Value) (Value, error) {
 
 // durationCalc computes the Macaulay duration.
 func durationCalc(settlement, maturity, coupon, yld float64, freq, basis int) float64 {
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 
 	n := coupnumRaw(st, mt, freq)
 	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
@@ -2934,8 +2934,8 @@ func fnMduration(args []Value) (Value, error) {
 // pays periodic interest. This is the core calculation shared by fnPrice and
 // the Newton solver in fnYield.
 func priceCalc(settlement, maturity, rate, yld float64, freq, basis int) float64 {
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 
 	n := coupnumRaw(st, mt, freq)
 	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
@@ -3046,8 +3046,8 @@ func fnPrice(args []Value) (Value, error) {
 
 // priceCalcRedemption computes the clean price with an arbitrary redemption value.
 func priceCalcRedemption(settlement, maturity, rate, yld, redemption float64, freq, basis int) float64 {
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 
 	n := coupnumRaw(st, mt, freq)
 	dsc := coupdaysncRaw(settlement, st, mt, freq, basis)
@@ -3140,8 +3140,8 @@ func fnYield(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	st := ExcelSerialToTime(settlement)
-	mt := ExcelSerialToTime(maturity)
+	st := SerialToTime(settlement)
+	mt := SerialToTime(maturity)
 	n := coupnumRaw(st, mt, freq)
 
 	if n == 1 {

@@ -7,7 +7,7 @@ import (
 )
 
 func excelDateSerial(year int, month time.Month, day int) float64 {
-	return math.Floor(TimeToExcelSerial(time.Date(year, month, day, 0, 0, 0, 0, time.UTC)))
+	return math.Floor(TimeToSerial(time.Date(year, month, day, 0, 0, 0, 0, time.UTC)))
 }
 
 func TestDATE(t *testing.T) {
@@ -1017,7 +1017,7 @@ func TestDATEVALUE_extended(t *testing.T) {
 			// Use current year
 			now := time.Now()
 			t := time.Date(now.Year(), 3, 4, 0, 0, 0, 0, time.UTC)
-			return math.Floor(TimeToExcelSerial(t))
+			return math.Floor(TimeToSerial(t))
 		}()},
 	}
 

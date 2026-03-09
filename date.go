@@ -15,19 +15,19 @@ var excelEpoch = time.Date(1899, 12, 31, 0, 0, 0, 0, time.UTC)
 // Unlike the 1900 system, there is no phantom "January 0" offset.
 var excel1904Epoch = time.Date(1904, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// timeToExcelSerial converts a time.Time to a serial date number.
-func timeToExcelSerial(t time.Time) float64 {
-	return timeToExcelSerialForDateSystem(t, false)
+// timeToSerial converts a time.Time to a serial date number.
+func timeToSerial(t time.Time) float64 {
+	return timeToSerialForDateSystem(t, false)
 }
 
-func timeToExcelSerialForDateSystem(t time.Time, date1904 bool) float64 {
+func timeToSerialForDateSystem(t time.Time, date1904 bool) float64 {
 	if date1904 {
-		return timeToExcelSerial1904(t)
+		return timeToSerial1904(t)
 	}
-	return timeToExcelSerial1900(t)
+	return timeToSerial1900(t)
 }
 
-func timeToExcelSerial1900(t time.Time) float64 {
+func timeToSerial1900(t time.Time) float64 {
 	// Calculate the number of days between the 1900 epoch and the given time.
 	// We cannot use t.Sub(excelEpoch) because time.Duration is an int64 of
 	// nanoseconds, which overflows for dates more than ~292 years from the epoch.
@@ -51,7 +51,7 @@ func timeToExcelSerial1900(t time.Time) float64 {
 	return days
 }
 
-func timeToExcelSerial1904(t time.Time) float64 {
+func timeToSerial1904(t time.Time) float64 {
 	y1, m1, d1 := excel1904Epoch.Date()
 	y2, m2, d2 := t.Date()
 	epochDays := julianDayNumber(y1, int(m1), d1)
@@ -76,7 +76,7 @@ func excelDateStringToSerial(s string, date1904 bool) (float64, error) {
 	for _, layout := range layouts {
 		parsed, err = time.Parse(layout, s)
 		if err == nil {
-			return timeToExcelSerialForDateSystem(parsed.UTC(), date1904), nil
+			return timeToSerialForDateSystem(parsed.UTC(), date1904), nil
 		}
 	}
 	return 0, fmt.Errorf("invalid Excel date %q", s)
@@ -91,8 +91,8 @@ func julianDayNumber(year, month, day int) int {
 	return day + (153*m+2)/5 + 365*y + y/4 - y/100 + y/400 - 32045
 }
 
-// ExcelSerialToTime converts a serial date number to a time.Time.
-func ExcelSerialToTime(serial float64) time.Time {
+// SerialToTime converts a serial date number to a time.Time.
+func SerialToTime(serial float64) time.Time {
 	return excelSerialToTime(serial)
 }
 

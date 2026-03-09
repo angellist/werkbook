@@ -24464,3 +24464,221 @@ func TestTTEST_MixedNonNumeric(t *testing.T) {
 		t.Errorf("T.TEST with mixed non-numeric = %g, want value in [0,1]", got.Num)
 	}
 }
+
+func TestFTEST(t *testing.T) {
+	const tol = 1e-4
+
+	// Shared resolver with two data sets.
+	// A1:A5 = {6,7,9,15,21}  B1:B5 = {20,28,31,38,40}
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}:  NumberVal(6),
+			{Col: 1, Row: 2}:  NumberVal(7),
+			{Col: 1, Row: 3}:  NumberVal(9),
+			{Col: 1, Row: 4}:  NumberVal(15),
+			{Col: 1, Row: 5}:  NumberVal(21),
+			{Col: 2, Row: 1}:  NumberVal(20),
+			{Col: 2, Row: 2}:  NumberVal(28),
+			{Col: 2, Row: 3}:  NumberVal(31),
+			{Col: 2, Row: 4}:  NumberVal(38),
+			{Col: 2, Row: 5}:  NumberVal(40),
+			// C1:C3 = {5,5,5} (zero variance)
+			{Col: 3, Row: 1}:  NumberVal(5),
+			{Col: 3, Row: 2}:  NumberVal(5),
+			{Col: 3, Row: 3}:  NumberVal(5),
+			// D1:D3 = {1,2,3}
+			{Col: 4, Row: 1}:  NumberVal(1),
+			{Col: 4, Row: 2}:  NumberVal(2),
+			{Col: 4, Row: 3}:  NumberVal(3),
+			// E1:E3 = mixed types: 10, TRUE, "hello"
+			{Col: 5, Row: 1}:  NumberVal(10),
+			{Col: 5, Row: 2}:  BoolVal(true),
+			{Col: 5, Row: 3}:  StringVal("hello"),
+			// F1:F5 = {0,1,2,3,4} (zeros included)
+			{Col: 6, Row: 1}:  NumberVal(0),
+			{Col: 6, Row: 2}:  NumberVal(1),
+			{Col: 6, Row: 3}:  NumberVal(2),
+			{Col: 6, Row: 4}:  NumberVal(3),
+			{Col: 6, Row: 5}:  NumberVal(4),
+			// G1:G10 = large array {1,2,...,10}
+			{Col: 7, Row: 1}:  NumberVal(1),
+			{Col: 7, Row: 2}:  NumberVal(2),
+			{Col: 7, Row: 3}:  NumberVal(3),
+			{Col: 7, Row: 4}:  NumberVal(4),
+			{Col: 7, Row: 5}:  NumberVal(5),
+			{Col: 7, Row: 6}:  NumberVal(6),
+			{Col: 7, Row: 7}:  NumberVal(7),
+			{Col: 7, Row: 8}:  NumberVal(8),
+			{Col: 7, Row: 9}:  NumberVal(9),
+			{Col: 7, Row: 10}: NumberVal(10),
+			// H1:H10 = large array {10,20,...,100}
+			{Col: 8, Row: 1}:  NumberVal(10),
+			{Col: 8, Row: 2}:  NumberVal(20),
+			{Col: 8, Row: 3}:  NumberVal(30),
+			{Col: 8, Row: 4}:  NumberVal(40),
+			{Col: 8, Row: 5}:  NumberVal(50),
+			{Col: 8, Row: 6}:  NumberVal(60),
+			{Col: 8, Row: 7}:  NumberVal(70),
+			{Col: 8, Row: 8}:  NumberVal(80),
+			{Col: 8, Row: 9}:  NumberVal(90),
+			{Col: 8, Row: 10}: NumberVal(100),
+		},
+	}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// 1. Excel documentation example.
+		{"excel_doc_example", "F.TEST(A1:A5,B1:B5)", 0.64831785, false, 0},
+
+		// 2. Same example with array literals.
+		{"array_literal", "F.TEST({6,7,9,15,21},{20,28,31,38,40})", 0.64831785, false, 0},
+
+		// 3. Identical arrays → variances equal → F=1 → p=1.0.
+		{"identical_arrays", "F.TEST(A1:A5,A1:A5)", 1.0, false, 0},
+
+		// 4. Arrays with equal variance (same data, different means).
+		{"equal_variance", "F.TEST({1,2,3,4,5},{101,102,103,104,105})", 1.0, false, 0},
+
+		// 5. Very different variances → p close to 0.
+		{"very_different_var", "F.TEST({1,2,3,4,5},{1,100,200,300,400})", 6.046573e-08, false, 0},
+
+		// 6. Different sized arrays.
+		{"diff_size", "F.TEST({1,2,3,4,5,6,7,8,9,10},{100,200,300})", 3.650840e-11, false, 0},
+
+		// 7. Negative values in arrays.
+		{"negative_values", "F.TEST({-10,-5,0,5,10},{-2,-1,0,1,2})", 0.00864816, false, 0},
+
+		// 8. Single element array1 → #DIV/0!
+		{"single_element_arr1", "F.TEST({5},{1,2,3})", 0, true, ErrValDIV0},
+
+		// 9. Single element array2 → #DIV/0!
+		{"single_element_arr2", "F.TEST({1,2,3},{5})", 0, true, ErrValDIV0},
+
+		// 10. Both single element → #DIV/0!
+		{"both_single", "F.TEST({5},{10})", 0, true, ErrValDIV0},
+
+		// 11. Zero variance array1 → #DIV/0!
+		{"zero_var_arr1", "F.TEST(C1:C3,D1:D3)", 0, true, ErrValDIV0},
+
+		// 12. Zero variance array2 → #DIV/0!
+		{"zero_var_arr2", "F.TEST(D1:D3,C1:C3)", 0, true, ErrValDIV0},
+
+		// 13. Both zero variance → #DIV/0!
+		{"both_zero_var", "F.TEST({5,5,5},{3,3,3})", 0, true, ErrValDIV0},
+
+		// 14. Wrong argument count: too few.
+		{"too_few_args", "F.TEST({1,2,3})", 0, true, ErrValVALUE},
+
+		// 15. Wrong argument count: too many.
+		{"too_many_args", "F.TEST({1,2,3},{4,5,6},{7,8,9})", 0, true, ErrValVALUE},
+
+		// 16. Arrays with zeros included.
+		{"zeros_included", "F.TEST(F1:F5,A1:A5)", 0.02013226, false, 0},
+
+		// 17. Large arrays (10 elements each) — variances differ by factor of 100.
+		{"large_arrays", "F.TEST(G1:G10,H1:H10)", 1.2309602e-07, false, 0},
+
+		// 18. Reversed argument order (should give same result as Excel doc example).
+		{"reversed_args", "F.TEST(B1:B5,A1:A5)", 0.64831785, false, 0},
+
+		// 19. Two-element arrays (minimum valid size).
+		{"two_elements", "F.TEST({1,10},{5,6})", 0.14089315, false, 0},
+
+		// 20. Large equal arrays → p near 1.
+		{"large_equal_var", "F.TEST({1,2,3,4,5,6,7,8,9,10},{11,12,13,14,15,16,17,18,19,20})", 1.0, false, 0},
+
+		// 21. Error propagation from array1.
+		{"error_in_arr1", "F.TEST({1,2,1/0},{4,5,6})", 0, true, ErrValDIV0},
+
+		// 22. Error propagation from array2.
+		{"error_in_arr2", "F.TEST({1,2,3},{4,5,1/0})", 0, true, ErrValDIV0},
+
+		// 23. Negative values both arrays.
+		{"both_negative", "F.TEST({-5,-4,-3,-2,-1},{-50,-40,-30,-20,-10})", 0.00058430, false, 0},
+
+		// 24. One large, one small variance.
+		{"one_large_one_small", "F.TEST({1,1.1,0.9,1.05,0.95},{1,100,50,200,150})", 6.096755e-12, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type == ValueError {
+				t.Fatalf("%s: unexpected error %d", tt.formula, got.Err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d", tt.formula, got.Type)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestFTEST_EmptyArrays(t *testing.T) {
+	resolver := &mockResolver{}
+	// Empty arrays (no numeric data) → #DIV/0!
+	cf := evalCompile(t, `F.TEST({TRUE,"a"},{TRUE,"b"})`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("empty arrays: want #DIV/0!, got type=%d err=%v num=%g", got.Type, got.Err, got.Num)
+	}
+}
+
+func TestFTEST_MixedNonNumeric(t *testing.T) {
+	// Array with booleans and text mixed in — collectNumeric skips non-numeric in arrays.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(5),
+			{Col: 1, Row: 3}: NumberVal(10),
+			{Col: 1, Row: 4}: BoolVal(true),   // skipped
+			{Col: 1, Row: 5}: StringVal("hi"),  // skipped
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 2, Row: 2}: NumberVal(6),
+			{Col: 2, Row: 3}: NumberVal(11),
+			{Col: 2, Row: 4}: BoolVal(false),   // skipped
+			{Col: 2, Row: 5}: StringVal("bye"), // skipped
+		},
+	}
+
+	// After filtering: array1={1,5,10}, array2={2,6,11}.
+	// Both have similar variance, so p should be close to 1.
+	cf := evalCompile(t, "F.TEST(A1:A5,B1:B5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("want number, got type=%d err=%d", got.Type, got.Err)
+	}
+	// Verify it produces a valid probability.
+	if got.Num < 0 || got.Num > 1 {
+		t.Errorf("F.TEST with mixed non-numeric = %g, want value in [0,1]", got.Num)
+	}
+	// {1,5,10} var=20.333, {2,6,11} var=20.333 → F=1 → p=1.0
+	if math.Abs(got.Num-1.0) > 1e-4 {
+		t.Errorf("F.TEST with equal-variance filtered arrays = %g, want 1.0", got.Num)
+	}
+}

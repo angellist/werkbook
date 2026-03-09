@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	maxExcelRows = 1048576 // maximum rows in a worksheet
-	maxExcelCols = 16384   // maximum columns in a worksheet (XFD)
+	maxRows = 1048576 // maximum rows in a worksheet
+	maxCols = 16384   // maximum columns in a worksheet (XFD)
 )
 
 // CellResolver abstracts cell/range lookups so the VM has no dependency on Sheet.
@@ -117,8 +117,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			// Skip implicit intersection when inside an array-forcing function
 			// (arrayCtxDepth > 0), since those functions need the full range.
 			if ctx != nil && !ctx.IsArrayFormula && arrayCtxDepth == 0 {
-				isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
-				isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+				isFullCol := addr.FromRow == 1 && addr.ToRow >= maxRows
+				isFullRow := addr.FromCol == 1 && addr.ToCol >= maxCols
 				if isFullCol && addr.FromCol == addr.ToCol && ctx.CurrentRow >= addr.FromRow {
 					// Full-column ref like F:F → intersect at current row
 					push(resolver.GetCellValue(CellAddr{
@@ -143,8 +143,8 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 			// clamps toRow to MaxRow to avoid huge allocations for
 			// full-column refs, but bounded ranges like A1:A5 need all
 			// requested rows so functions like COUNTBLANK see every blank.
-			isFullCol := addr.FromRow == 1 && addr.ToRow >= maxExcelRows
-			isFullRow := addr.FromCol == 1 && addr.ToCol >= maxExcelCols
+			isFullCol := addr.FromRow == 1 && addr.ToRow >= maxRows
+			isFullRow := addr.FromCol == 1 && addr.ToCol >= maxCols
 			if !isFullCol && !isFullRow {
 				expectedRows := addr.ToRow - addr.FromRow + 1
 				cols := addr.ToCol - addr.FromCol + 1

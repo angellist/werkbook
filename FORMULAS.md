@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **409** Excel formula functions.
+Werkbook supports **410** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -127,6 +127,7 @@ Werkbook supports **409** Excel formula functions.
 | F.DIST.RT | Statistical | 19 |
 | F.INV | Statistical | 36 |
 | F.INV.RT | Statistical | 21 |
+| F.TEST | Statistical | 26 |
 | FACT | Math & Trig | 28 |
 | FACTDOUBLE | Math & Trig | 30 |
 | FALSE | Logical | 11 |
@@ -416,7 +417,7 @@ Werkbook supports **409** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **61** Excel functions are not yet supported.
+The following **60** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -445,7 +446,6 @@ The following **61** Excel functions are not yet supported.
 | DSUM | Database |
 | DVAR | Database |
 | DVARP | Database |
-| F.TEST | Statistical |
 | FILTERXML | Web |
 | FINDB | Text |
 | FORECAST.ETS | Statistical |

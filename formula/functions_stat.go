@@ -111,6 +111,7 @@ func init() {
 	Register("CHISQ.DIST.RT", NoCtx(fnChisqDistRT))
 	Register("CHISQ.INV.RT", NoCtx(fnChisqInvRT))
 	Register("CHISQ.TEST", NoCtx(fnChisqTest))
+	Register("F.TEST", NoCtx(fnFTest))
 	Register("F.DIST", NoCtx(fnFDist))
 	Register("F.DIST.RT", NoCtx(fnFDistRT))
 	Register("F.INV", NoCtx(fnFInv))
@@ -5422,4 +5423,69 @@ func fnZTEST(args []Value) (Value, error) {
 	}
 	z := (mean - x) / (sigma / math.Sqrt(float64(n)))
 	return NumberVal(1 - normSDistCDF(z)), nil
+}
+
+// ---------------------------------------------------------------------------
+// F.TEST — F-test (two-tailed probability that variances are not different)
+// ---------------------------------------------------------------------------
+// F.TEST(array1, array2)
+//
+//	array1 – first array or range of data
+//	array2 – second array or range of data
+//
+// Returns the two-tailed probability of the F-distribution. Text, logical
+// values, and empty cells in the arrays are ignored; zeros are included.
+// If either array has fewer than 2 numeric data points or either variance
+// is zero, returns #DIV/0!.
+
+func fnFTest(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	nums1, ev := collectNumeric(args[:1])
+	if ev != nil {
+		return *ev, nil
+	}
+	nums2, ev := collectNumeric(args[1:2])
+	if ev != nil {
+		return *ev, nil
+	}
+
+	n1 := len(nums1)
+	n2 := len(nums2)
+	if n1 < 2 || n2 < 2 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	// Compute sample variances (with n-1 denominator).
+	mean1 := mean(nums1)
+	mean2 := mean(nums2)
+	var1 := sumSqDev(nums1, mean1) / float64(n1-1)
+	var2 := sumSqDev(nums2, mean2) / float64(n2-1)
+
+	if var1 == 0 || var2 == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+
+	// F-statistic: var1/var2 with df1=n1-1, df2=n2-1.
+	f := var1 / var2
+	df1 := float64(n1 - 1)
+	df2 := float64(n2 - 1)
+
+	// CDF of the F-distribution at f: I(d1*f/(d1*f+d2), d1/2, d2/2).
+	z := df1 * f / (df1*f + df2)
+	cdf := regBetaInc(z, df1/2.0, df2/2.0)
+
+	// Two-tailed p-value.
+	tail := cdf
+	if 1-cdf < tail {
+		tail = 1 - cdf
+	}
+	p := 2 * tail
+	if p > 1 {
+		p = 1
+	}
+
+	return NumberVal(p), nil
 }

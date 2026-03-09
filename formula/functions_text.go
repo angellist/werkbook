@@ -346,7 +346,7 @@ func fnTEXTWith1904(args []Value, date1904 bool) (Value, error) {
 			}
 			return *e, nil
 		}
-		return StringVal(formatExcelNumber(n, format, date1904)), nil
+		return StringVal(formatNumber(n, format, date1904)), nil
 	}
 
 	// Booleans: TEXT returns "TRUE" or "FALSE" for numeric
@@ -392,7 +392,7 @@ func fnTEXTWith1904(args []Value, date1904 bool) (Value, error) {
 		return StringVal(formatTextSection(excelNumberToString(n), format)), nil
 	}
 
-	return StringVal(formatExcelNumber(n, format, date1904)), nil
+	return StringVal(formatNumber(n, format, date1904)), nil
 }
 
 func FormatWithCommas(n float64, decimals int) string {

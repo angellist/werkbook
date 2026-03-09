@@ -81,8 +81,8 @@ const (
 	colonRightBP = 15
 	prefixRBP    = 11 // unary - and + bind tighter than ^ (convention: -2^2 = 4)
 
-	maxExcelRow = maxExcelRows // maximum row number
-	maxExcelCol = maxExcelCols // maximum column number (XFD)
+	maxRow = maxRows // maximum row number
+	maxCol = maxCols // maximum column number (XFD)
 )
 
 // parseExpression is the core Pratt parsing loop.
@@ -182,7 +182,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 				fromRef.Row = 1
 			}
 			if toRef.Row == 0 {
-				toRef.Row = maxExcelRow
+				toRef.Row = maxRow
 			}
 			// Expand row-only references (Col==0) into full-row ranges.
 			// 5:6 becomes A5:XFD6.
@@ -190,7 +190,7 @@ func (p *Parser) parseExpression(minBP int) (Node, error) {
 				fromRef.Col = 1
 			}
 			if toRef.Col == 0 {
-				toRef.Col = maxExcelCol
+				toRef.Col = maxCol
 			}
 			left = &RangeRef{From: fromRef, To: toRef}
 			for p.peek().Type == TokPercent {
