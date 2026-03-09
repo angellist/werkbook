@@ -497,6 +497,239 @@ func TestNOWTODAY(t *testing.T) {
 	}
 }
 
+func TestTODAY(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Helper: evaluate a formula and return the result value.
+	eval := func(t *testing.T, formula string) Value {
+		t.Helper()
+		cf := evalCompile(t, formula)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval(%s): %v", formula, err)
+		}
+		return got
+	}
+
+	// --- Structural and type tests (table-driven) ---
+
+	t.Run("returns_number_type", func(t *testing.T) {
+		got := eval(t, "TODAY()")
+		if got.Type != ValueNumber {
+			t.Errorf("TODAY() type = %v, want ValueNumber", got.Type)
+		}
+	})
+
+	t.Run("returns_integer_no_fractional_part", func(t *testing.T) {
+		got := eval(t, "TODAY()")
+		if got.Num != math.Floor(got.Num) {
+			t.Errorf("TODAY() = %g, expected integer (no fractional time)", got.Num)
+		}
+	})
+
+	t.Run("int_today_equals_today", func(t *testing.T) {
+		today := eval(t, "TODAY()")
+		intToday := eval(t, "INT(TODAY())")
+		if today.Num != intToday.Num {
+			t.Errorf("TODAY() = %g, INT(TODAY()) = %g, expected equal", today.Num, intToday.Num)
+		}
+	})
+
+	t.Run("no_args_works", func(t *testing.T) {
+		got := eval(t, "TODAY()")
+		if got.Type != ValueNumber {
+			t.Errorf("TODAY() should work with no arguments, got type %v", got.Type)
+		}
+	})
+
+	t.Run("one_arg_error", func(t *testing.T) {
+		got := eval(t, "TODAY(1)")
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("TODAY(1) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("string_arg_error", func(t *testing.T) {
+		got := eval(t, `TODAY("x")`)
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`TODAY("x") = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("positive_value", func(t *testing.T) {
+		got := eval(t, "TODAY()")
+		if got.Num <= 0 {
+			t.Errorf("TODAY() = %g, expected > 0", got.Num)
+		}
+	})
+
+	t.Run("reasonable_serial_lower_bound", func(t *testing.T) {
+		// Serial 44000 is approximately mid-2020
+		got := eval(t, "TODAY()")
+		if got.Num < 44000 {
+			t.Errorf("TODAY() = %g, expected > 44000 (~ year 2020)", got.Num)
+		}
+	})
+
+	t.Run("reasonable_serial_upper_bound", func(t *testing.T) {
+		// Serial 55000 is approximately year 2050
+		got := eval(t, "TODAY()")
+		if got.Num > 55000 {
+			t.Errorf("TODAY() = %g, expected < 55000 (~ year 2050)", got.Num)
+		}
+	})
+
+	t.Run("today_equals_int_now", func(t *testing.T) {
+		today := eval(t, "TODAY()")
+		intNow := eval(t, "INT(NOW())")
+		if today.Num != intNow.Num {
+			t.Errorf("TODAY() = %g, INT(NOW()) = %g, expected equal", today.Num, intNow.Num)
+		}
+	})
+
+	t.Run("tomorrow_is_today_plus_1", func(t *testing.T) {
+		today := eval(t, "TODAY()")
+		tomorrow := eval(t, "TODAY()+1")
+		if tomorrow.Num != today.Num+1 {
+			t.Errorf("TODAY()+1 = %g, TODAY() = %g, expected difference of 1", tomorrow.Num, today.Num)
+		}
+	})
+
+	t.Run("yesterday_is_today_minus_1", func(t *testing.T) {
+		today := eval(t, "TODAY()")
+		yesterday := eval(t, "TODAY()-1")
+		if yesterday.Num != today.Num-1 {
+			t.Errorf("TODAY()-1 = %g, TODAY() = %g, expected difference of -1", yesterday.Num, today.Num)
+		}
+	})
+
+	t.Run("today_minus_today_is_zero", func(t *testing.T) {
+		got := eval(t, "TODAY()-TODAY()")
+		if got.Num != 0 {
+			t.Errorf("TODAY()-TODAY() = %g, want 0", got.Num)
+		}
+	})
+
+	t.Run("year_today_reasonable", func(t *testing.T) {
+		got := eval(t, "YEAR(TODAY())")
+		if got.Type != ValueNumber {
+			t.Fatalf("YEAR(TODAY()) type = %v, want number", got.Type)
+		}
+		if got.Num < 2024 || got.Num > 2030 {
+			t.Errorf("YEAR(TODAY()) = %g, expected between 2024 and 2030", got.Num)
+		}
+	})
+
+	t.Run("month_today_in_range", func(t *testing.T) {
+		got := eval(t, "MONTH(TODAY())")
+		if got.Type != ValueNumber {
+			t.Fatalf("MONTH(TODAY()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 12 {
+			t.Errorf("MONTH(TODAY()) = %g, expected 1-12", got.Num)
+		}
+	})
+
+	t.Run("day_today_in_range", func(t *testing.T) {
+		got := eval(t, "DAY(TODAY())")
+		if got.Type != ValueNumber {
+			t.Fatalf("DAY(TODAY()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 31 {
+			t.Errorf("DAY(TODAY()) = %g, expected 1-31", got.Num)
+		}
+	})
+
+	t.Run("today_gte_date_2024_1_1", func(t *testing.T) {
+		got := eval(t, "TODAY()>=DATE(2024,1,1)")
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("TODAY()>=DATE(2024,1,1) = %v, expected TRUE", got)
+		}
+	})
+
+	t.Run("type_today_is_1", func(t *testing.T) {
+		got := eval(t, "TYPE(TODAY())")
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(TODAY()) = %v, want 1 (number)", got)
+		}
+	})
+
+	t.Run("isnumber_today_is_true", func(t *testing.T) {
+		got := eval(t, "ISNUMBER(TODAY())")
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNUMBER(TODAY()) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("istext_today_is_false", func(t *testing.T) {
+		got := eval(t, "ISTEXT(TODAY())")
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISTEXT(TODAY()) = %v, want FALSE", got)
+		}
+	})
+
+	t.Run("today_in_if_condition_truthy", func(t *testing.T) {
+		got := eval(t, `IF(TODAY(),"yes","no")`)
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf(`IF(TODAY(),"yes","no") = %v, want "yes"`, got)
+		}
+	})
+
+	t.Run("text_today_yyyy_is_4_chars", func(t *testing.T) {
+		got := eval(t, `TEXT(TODAY(),"yyyy")`)
+		if got.Type != ValueString {
+			t.Fatalf(`TEXT(TODAY(),"yyyy") type = %v, want string`, got.Type)
+		}
+		if len(got.Str) != 4 {
+			t.Errorf(`TEXT(TODAY(),"yyyy") = %q, expected a 4-character year string`, got.Str)
+		}
+	})
+
+	t.Run("today_plus_half_has_fraction", func(t *testing.T) {
+		got := eval(t, "TODAY()+0.5")
+		frac := got.Num - math.Floor(got.Num)
+		if math.Abs(frac-0.5) > 1e-9 {
+			t.Errorf("TODAY()+0.5 fractional part = %g, expected 0.5", frac)
+		}
+	})
+
+	t.Run("weekday_today_in_range", func(t *testing.T) {
+		got := eval(t, "WEEKDAY(TODAY())")
+		if got.Type != ValueNumber {
+			t.Fatalf("WEEKDAY(TODAY()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 7 {
+			t.Errorf("WEEKDAY(TODAY()) = %g, expected 1-7", got.Num)
+		}
+	})
+
+	t.Run("today_matches_go_time_now", func(t *testing.T) {
+		// Verify TODAY() matches the Go-computed serial for today's date.
+		now := time.Now()
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		expected := math.Floor(TimeToSerial(today))
+		got := eval(t, "TODAY()")
+		if got.Num != expected {
+			t.Errorf("TODAY() = %g, expected %g (from Go time.Now())", got.Num, expected)
+		}
+	})
+
+	t.Run("today_times_1_equals_today", func(t *testing.T) {
+		today := eval(t, "TODAY()")
+		product := eval(t, "TODAY()*1")
+		if product.Num != today.Num {
+			t.Errorf("TODAY()*1 = %g, TODAY() = %g, expected equal", product.Num, today.Num)
+		}
+	})
+
+	t.Run("today_plus_7_minus_today_equals_7", func(t *testing.T) {
+		got := eval(t, "(TODAY()+7)-TODAY()")
+		if got.Num != 7 {
+			t.Errorf("(TODAY()+7)-TODAY() = %g, want 7", got.Num)
+		}
+	})
+}
+
 func TestDAYS360(t *testing.T) {
 	resolver := &mockResolver{}
 
