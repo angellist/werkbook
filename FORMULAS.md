@@ -300,7 +300,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | PERCENTILE.INC | Returns the inclusive percentile of a data set. | Statistical | 45 |
 | PERCENTRANK | Returns the rank of a value as a percentage of a data set. | Statistical | 26 |
 | PERCENTRANK.EXC | Returns the exclusive percentage rank of a value in a data set. | Statistical | 29 |
-| PERCENTRANK.INC | Returns the inclusive percentage rank of a value in a data set. | Statistical | 3 |
+| PERCENTRANK.INC | Returns the inclusive percentage rank of a value in a data set. | Statistical | 52 |
 | PERMUT | Returns the number of permutations for a number of objects. | Math & Trig | 39 |
 | PERMUTATIONA | Returns the number of permutations with repetitions. | Statistical | 17 |
 | PHI | Returns the standard normal density at a value. | Statistical | 11 |

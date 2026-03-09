@@ -8513,6 +8513,82 @@ func TestPERCENTRANK(t *testing.T) {
 		},
 	}
 
+	// Two element array: {10,20} in G1:G2
+	twoElemResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 7, Row: 1}: NumberVal(10),
+			{Col: 7, Row: 2}: NumberVal(20),
+		},
+	}
+
+	// Duplicates: {1,5,5,10,15,20} in H1:H6
+	dupResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 8, Row: 1}: NumberVal(1),
+			{Col: 8, Row: 2}: NumberVal(5),
+			{Col: 8, Row: 3}: NumberVal(5),
+			{Col: 8, Row: 4}: NumberVal(10),
+			{Col: 8, Row: 5}: NumberVal(15),
+			{Col: 8, Row: 6}: NumberVal(20),
+		},
+	}
+
+	// Boolean values mixed with numbers: {10,TRUE,20,30} in I1:I4
+	boolResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 9, Row: 1}: NumberVal(10),
+			{Col: 9, Row: 2}: BoolVal(true),
+			{Col: 9, Row: 3}: NumberVal(20),
+			{Col: 9, Row: 4}: NumberVal(30),
+		},
+	}
+
+	// Decimal/fractional data: {0.5,1.5,2.5,3.5,4.5} in J1:J5
+	decimalResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 10, Row: 1}: NumberVal(0.5),
+			{Col: 10, Row: 2}: NumberVal(1.5),
+			{Col: 10, Row: 3}: NumberVal(2.5),
+			{Col: 10, Row: 4}: NumberVal(3.5),
+			{Col: 10, Row: 5}: NumberVal(4.5),
+		},
+	}
+
+	// Large data set: {1..20} in K1:K20
+	largeResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 11, Row: 1}:  NumberVal(1),
+			{Col: 11, Row: 2}:  NumberVal(2),
+			{Col: 11, Row: 3}:  NumberVal(3),
+			{Col: 11, Row: 4}:  NumberVal(4),
+			{Col: 11, Row: 5}:  NumberVal(5),
+			{Col: 11, Row: 6}:  NumberVal(6),
+			{Col: 11, Row: 7}:  NumberVal(7),
+			{Col: 11, Row: 8}:  NumberVal(8),
+			{Col: 11, Row: 9}:  NumberVal(9),
+			{Col: 11, Row: 10}: NumberVal(10),
+			{Col: 11, Row: 11}: NumberVal(11),
+			{Col: 11, Row: 12}: NumberVal(12),
+			{Col: 11, Row: 13}: NumberVal(13),
+			{Col: 11, Row: 14}: NumberVal(14),
+			{Col: 11, Row: 15}: NumberVal(15),
+			{Col: 11, Row: 16}: NumberVal(16),
+			{Col: 11, Row: 17}: NumberVal(17),
+			{Col: 11, Row: 18}: NumberVal(18),
+			{Col: 11, Row: 19}: NumberVal(19),
+			{Col: 11, Row: 20}: NumberVal(20),
+		},
+	}
+
+	// Error in array: {5,#DIV/0!,15} in L1:L3
+	errorResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 12, Row: 1}: NumberVal(5),
+			{Col: 12, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 12, Row: 3}: NumberVal(15),
+		},
+	}
+
 	tests := []struct {
 		name     string
 		formula  string
@@ -8563,10 +8639,90 @@ func TestPERCENTRANK(t *testing.T) {
 		// Mixed types in array (non-numeric ignored)
 		{name: "mixed_types", formula: "PERCENTRANK(E1:E4,20)", resolver: mixedResolver, wantNum: 0.5},
 
-		// PERCENTRANK.INC gives same results
+		// PERCENTRANK.INC gives same results as PERCENTRANK (alias equivalence)
 		{name: "inc_same_as_base", formula: "PERCENTRANK.INC(A1:A10,2)", resolver: testResolver, wantNum: 0.333},
 		{name: "inc_interp", formula: "PERCENTRANK.INC(A1:A10,5)", resolver: testResolver, wantNum: 0.583},
 		{name: "inc_max", formula: "PERCENTRANK.INC(B1:B5,5)", resolver: simpleResolver, wantNum: 1},
+
+		// --- Comprehensive PERCENTRANK.INC test cases ---
+
+		// Basic happy path: middle value
+		{name: "inc_basic_middle", formula: "PERCENTRANK.INC(B1:B5,3)", resolver: simpleResolver, wantNum: 0.5},
+
+		// Min and max of range
+		{name: "inc_min", formula: "PERCENTRANK.INC(B1:B5,1)", resolver: simpleResolver, wantNum: 0},
+		{name: "inc_max_simple", formula: "PERCENTRANK.INC(B1:B5,5)", resolver: simpleResolver, wantNum: 1},
+
+		// Interpolated values: x between data points
+		{name: "inc_interp_1.5", formula: "PERCENTRANK.INC(B1:B5,1.5)", resolver: simpleResolver, wantNum: 0.125},
+		{name: "inc_interp_2.5", formula: "PERCENTRANK.INC(B1:B5,2.5)", resolver: simpleResolver, wantNum: 0.375},
+		{name: "inc_interp_3.5", formula: "PERCENTRANK.INC(B1:B5,3.5)", resolver: simpleResolver, wantNum: 0.625},
+		{name: "inc_interp_4.5", formula: "PERCENTRANK.INC(B1:B5,4.5)", resolver: simpleResolver, wantNum: 0.875},
+
+		// Doc examples via PERCENTRANK.INC
+		{name: "inc_doc_x=2", formula: "PERCENTRANK.INC(A1:A10,2)", resolver: testResolver, wantNum: 0.333},
+		{name: "inc_doc_x=4", formula: "PERCENTRANK.INC(A1:A10,4)", resolver: testResolver, wantNum: 0.555},
+		{name: "inc_doc_x=8", formula: "PERCENTRANK.INC(A1:A10,8)", resolver: testResolver, wantNum: 0.666},
+
+		// Significance parameter via PERCENTRANK.INC
+		{name: "inc_default_sig_3", formula: "PERCENTRANK.INC(B1:B5,2)", resolver: simpleResolver, wantNum: 0.25},
+		{name: "inc_sig_1", formula: "PERCENTRANK.INC(A1:A10,5,1)", resolver: testResolver, wantNum: 0.5},
+		{name: "inc_sig_2", formula: "PERCENTRANK.INC(A1:A10,5,2)", resolver: testResolver, wantNum: 0.58},
+		{name: "inc_sig_5", formula: "PERCENTRANK.INC(A1:A10,5,5)", resolver: testResolver, wantNum: 0.58333},
+		{name: "inc_sig_6", formula: "PERCENTRANK.INC(A1:A10,5,6)", resolver: testResolver, wantNum: 0.583333},
+
+		// Single element array
+		{name: "inc_single_element_match", formula: "PERCENTRANK.INC(C1:C1,42)", resolver: singleResolver, wantNum: 1},
+		{name: "inc_single_element_no_match_below", formula: "PERCENTRANK.INC(C1:C1,10)", resolver: singleResolver, wantErr: ErrValNA},
+		{name: "inc_single_element_no_match_above", formula: "PERCENTRANK.INC(C1:C1,50)", resolver: singleResolver, wantErr: ErrValNA},
+
+		// Two element array
+		{name: "inc_two_elem_min", formula: "PERCENTRANK.INC(G1:G2,10)", resolver: twoElemResolver, wantNum: 0},
+		{name: "inc_two_elem_max", formula: "PERCENTRANK.INC(G1:G2,20)", resolver: twoElemResolver, wantNum: 1},
+		{name: "inc_two_elem_mid", formula: "PERCENTRANK.INC(G1:G2,15)", resolver: twoElemResolver, wantNum: 0.5},
+		{name: "inc_two_elem_interp", formula: "PERCENTRANK.INC(G1:G2,12)", resolver: twoElemResolver, wantNum: 0.2},
+
+		// Duplicate values in data
+		{name: "inc_duplicate_min", formula: "PERCENTRANK.INC(A1:A10,1)", resolver: testResolver, wantNum: 0},
+		{name: "inc_duplicate_mid", formula: "PERCENTRANK.INC(H1:H6,5)", resolver: dupResolver, wantNum: 0.2},
+
+		// Negative numbers in data
+		{name: "inc_neg_min", formula: "PERCENTRANK.INC(D1:D5,-10)", resolver: negResolver, wantNum: 0},
+		{name: "inc_neg_max", formula: "PERCENTRANK.INC(D1:D5,10)", resolver: negResolver, wantNum: 1},
+		{name: "inc_neg_mid", formula: "PERCENTRANK.INC(D1:D5,0)", resolver: negResolver, wantNum: 0.5},
+		{name: "inc_neg_interp", formula: "PERCENTRANK.INC(D1:D5,-3)", resolver: negResolver, wantNum: 0.35},
+
+		// x outside range → #N/A
+		{name: "inc_x_below_min", formula: "PERCENTRANK.INC(B1:B5,0)", resolver: simpleResolver, wantErr: ErrValNA},
+		{name: "inc_x_above_max", formula: "PERCENTRANK.INC(B1:B5,6)", resolver: simpleResolver, wantErr: ErrValNA},
+		{name: "inc_x_far_below", formula: "PERCENTRANK.INC(B1:B5,-100)", resolver: simpleResolver, wantErr: ErrValNA},
+		{name: "inc_x_far_above", formula: "PERCENTRANK.INC(B1:B5,1000)", resolver: simpleResolver, wantErr: ErrValNA},
+
+		// significance < 1 → #NUM!
+		{name: "inc_sig_zero", formula: "PERCENTRANK.INC(B1:B5,2,0)", resolver: simpleResolver, wantErr: ErrValNUM},
+		{name: "inc_sig_negative", formula: "PERCENTRANK.INC(B1:B5,2,-1)", resolver: simpleResolver, wantErr: ErrValNUM},
+
+		// Mixed types in array (non-numeric ignored)
+		{name: "inc_mixed_types", formula: "PERCENTRANK.INC(E1:E4,20)", resolver: mixedResolver, wantNum: 0.5},
+
+		// Boolean values in array (ignored in ranges)
+		{name: "inc_bool_in_array", formula: "PERCENTRANK.INC(I1:I4,20)", resolver: boolResolver, wantNum: 0.5},
+
+		// Unsorted data produces same result as sorted
+		{name: "inc_unsorted_data", formula: "PERCENTRANK.INC(A1:A10,13)", resolver: testResolver, wantNum: 1},
+
+		// Decimal/fractional data values
+		{name: "inc_decimal_exact", formula: "PERCENTRANK.INC(J1:J5,2.5)", resolver: decimalResolver, wantNum: 0.5},
+		{name: "inc_decimal_min", formula: "PERCENTRANK.INC(J1:J5,0.5)", resolver: decimalResolver, wantNum: 0},
+		{name: "inc_decimal_max", formula: "PERCENTRANK.INC(J1:J5,4.5)", resolver: decimalResolver, wantNum: 1},
+		{name: "inc_decimal_interp", formula: "PERCENTRANK.INC(J1:J5,3.0)", resolver: decimalResolver, wantNum: 0.625},
+
+		// Large data set (20 values)
+		{name: "inc_large_min", formula: "PERCENTRANK.INC(K1:K20,1)", resolver: largeResolver, wantNum: 0},
+		{name: "inc_large_max", formula: "PERCENTRANK.INC(K1:K20,20)", resolver: largeResolver, wantNum: 1},
+		{name: "inc_large_mid", formula: "PERCENTRANK.INC(K1:K20,10)", resolver: largeResolver, wantNum: 0.473},
+		{name: "inc_large_interp", formula: "PERCENTRANK.INC(K1:K20,10.5)", resolver: largeResolver, wantNum: 0.5},
+
 	}
 
 	for _, tt := range tests {
@@ -8627,6 +8783,54 @@ func TestPERCENTRANK(t *testing.T) {
 		}
 		if got.Type != ValueError || got.Err != ErrValNUM {
 			t.Errorf("expected #NUM!, got type=%d err=%d", got.Type, got.Err)
+		}
+	})
+
+	// PERCENTRANK.INC argument count tests
+	t.Run("inc_too_few_args", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTRANK.INC(B1:B5)")
+		got, err := Eval(cf, simpleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("expected error, got type=%d", got.Type)
+		}
+	})
+
+	t.Run("inc_too_many_args", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTRANK.INC(B1:B5,2,3,4)")
+		got, err := Eval(cf, simpleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("expected error, got type=%d", got.Type)
+		}
+	})
+
+	// PERCENTRANK.INC empty array → #NUM!
+	t.Run("inc_empty_array", func(t *testing.T) {
+		emptyResolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "PERCENTRANK.INC(F1:F3,1)")
+		got, err := Eval(cf, emptyResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("expected #NUM!, got type=%d err=%d", got.Type, got.Err)
+		}
+	})
+
+	// PERCENTRANK.INC error propagation from array (#DIV/0! in data)
+	t.Run("inc_error_in_array", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTRANK.INC(L1:L3,5)")
+		got, err := Eval(cf, errorResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("expected #DIV/0!, got type=%d err=%d", got.Type, got.Err)
 		}
 	})
 }
