@@ -497,6 +497,278 @@ func TestNOWTODAY(t *testing.T) {
 	}
 }
 
+func TestNOW(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Helper: evaluate a formula and return the result value.
+	eval := func(t *testing.T, formula string) Value {
+		t.Helper()
+		cf := evalCompile(t, formula)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval(%s): %v", formula, err)
+		}
+		return got
+	}
+
+	// --- Basic return type ---
+
+	t.Run("returns_number_type", func(t *testing.T) {
+		got := eval(t, "NOW()")
+		if got.Type != ValueNumber {
+			t.Errorf("NOW() type = %v, want ValueNumber", got.Type)
+		}
+	})
+
+	t.Run("no_args_works", func(t *testing.T) {
+		got := eval(t, "NOW()")
+		if got.Type == ValueError {
+			t.Errorf("NOW() returned error: %v", got)
+		}
+	})
+
+	// --- Wrong argument count ---
+
+	t.Run("one_arg_error", func(t *testing.T) {
+		got := eval(t, "NOW(1)")
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("NOW(1) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("string_arg_error", func(t *testing.T) {
+		got := eval(t, `NOW("x")`)
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`NOW("x") = %v, want #VALUE! error`, got)
+		}
+	})
+
+	// --- Value range checks ---
+
+	t.Run("positive_value", func(t *testing.T) {
+		got := eval(t, "NOW()")
+		if got.Num <= 0 {
+			t.Errorf("NOW() = %g, expected > 0", got.Num)
+		}
+	})
+
+	t.Run("reasonable_serial_lower_bound", func(t *testing.T) {
+		// Serial 44000 is approximately mid-2020
+		got := eval(t, "NOW()")
+		if got.Num < 44000 {
+			t.Errorf("NOW() = %g, expected > 44000 (~ year 2020)", got.Num)
+		}
+	})
+
+	t.Run("reasonable_serial_upper_bound", func(t *testing.T) {
+		// Serial 55000 is approximately year 2050
+		got := eval(t, "NOW()")
+		if got.Num > 55000 {
+			t.Errorf("NOW() = %g, expected < 55000 (~ year 2050)", got.Num)
+		}
+	})
+
+	// --- Fractional part (NOW includes time, unlike TODAY) ---
+
+	t.Run("fractional_part_valid_range", func(t *testing.T) {
+		// The fractional part of NOW() should be >= 0 and < 1.
+		// This is always true regardless of time of day.
+		got := eval(t, "NOW()")
+		frac := got.Num - math.Floor(got.Num)
+		if frac < 0 || frac >= 1 {
+			t.Errorf("NOW() fractional part = %g, expected 0 <= frac < 1", frac)
+		}
+	})
+
+	// --- Relationship between NOW and TODAY ---
+
+	t.Run("int_now_equals_today", func(t *testing.T) {
+		intNow := eval(t, "INT(NOW())")
+		today := eval(t, "TODAY()")
+		if intNow.Num != today.Num {
+			t.Errorf("INT(NOW()) = %g, TODAY() = %g, expected equal", intNow.Num, today.Num)
+		}
+	})
+
+	// --- Arithmetic ---
+
+	t.Run("now_plus_1_is_tomorrow_same_time", func(t *testing.T) {
+		now := eval(t, "NOW()")
+		nowPlus1 := eval(t, "NOW()+1")
+		// The difference should be very close to 1 (may differ slightly due to evaluation time)
+		diff := nowPlus1.Num - now.Num
+		if diff < 0.999 || diff > 1.001 {
+			t.Errorf("NOW()+1 - NOW() = %g, expected ~1.0", diff)
+		}
+	})
+
+	t.Run("now_minus_now_approx_zero", func(t *testing.T) {
+		got := eval(t, "NOW()-NOW()")
+		// Both NOW() calls evaluate very close in time; allow small delta
+		if got.Num < -0.001 || got.Num > 0.001 {
+			t.Errorf("NOW()-NOW() = %g, expected ~0", got.Num)
+		}
+	})
+
+	// --- Date component extraction ---
+
+	t.Run("year_now_reasonable", func(t *testing.T) {
+		got := eval(t, "YEAR(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("YEAR(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 2024 || got.Num > 2030 {
+			t.Errorf("YEAR(NOW()) = %g, expected between 2024 and 2030", got.Num)
+		}
+	})
+
+	t.Run("month_now_in_range", func(t *testing.T) {
+		got := eval(t, "MONTH(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("MONTH(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 12 {
+			t.Errorf("MONTH(NOW()) = %g, expected 1-12", got.Num)
+		}
+	})
+
+	t.Run("day_now_in_range", func(t *testing.T) {
+		got := eval(t, "DAY(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("DAY(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 31 {
+			t.Errorf("DAY(NOW()) = %g, expected 1-31", got.Num)
+		}
+	})
+
+	t.Run("hour_now_in_range", func(t *testing.T) {
+		got := eval(t, "HOUR(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("HOUR(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 0 || got.Num > 23 {
+			t.Errorf("HOUR(NOW()) = %g, expected 0-23", got.Num)
+		}
+	})
+
+	t.Run("minute_now_in_range", func(t *testing.T) {
+		got := eval(t, "MINUTE(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("MINUTE(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 0 || got.Num > 59 {
+			t.Errorf("MINUTE(NOW()) = %g, expected 0-59", got.Num)
+		}
+	})
+
+	t.Run("second_now_in_range", func(t *testing.T) {
+		got := eval(t, "SECOND(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("SECOND(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 0 || got.Num > 59 {
+			t.Errorf("SECOND(NOW()) = %g, expected 0-59", got.Num)
+		}
+	})
+
+	// --- Type checking functions ---
+
+	t.Run("type_now_is_1", func(t *testing.T) {
+		got := eval(t, "TYPE(NOW())")
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(NOW()) = %v, want 1 (number)", got)
+		}
+	})
+
+	t.Run("isnumber_now_is_true", func(t *testing.T) {
+		got := eval(t, "ISNUMBER(NOW())")
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNUMBER(NOW()) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("istext_now_is_false", func(t *testing.T) {
+		got := eval(t, "ISTEXT(NOW())")
+		if got.Type != ValueBool || got.Bool {
+			t.Errorf("ISTEXT(NOW()) = %v, want FALSE", got)
+		}
+	})
+
+	// --- Truthiness ---
+
+	t.Run("now_in_if_condition_truthy", func(t *testing.T) {
+		got := eval(t, `IF(NOW(),"yes","no")`)
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf(`IF(NOW(),"yes","no") = %v, want "yes"`, got)
+		}
+	})
+
+	// --- Boundary comparisons ---
+
+	t.Run("now_gt_today_minus_1", func(t *testing.T) {
+		got := eval(t, "NOW()>TODAY()-1")
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("NOW()>TODAY()-1 = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("now_lt_today_plus_2", func(t *testing.T) {
+		got := eval(t, "NOW()<TODAY()+2")
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("NOW()<TODAY()+2 = %v, want TRUE", got)
+		}
+	})
+
+	// --- WEEKDAY ---
+
+	t.Run("weekday_now_in_range", func(t *testing.T) {
+		got := eval(t, "WEEKDAY(NOW())")
+		if got.Type != ValueNumber {
+			t.Fatalf("WEEKDAY(NOW()) type = %v, want number", got.Type)
+		}
+		if got.Num < 1 || got.Num > 7 {
+			t.Errorf("WEEKDAY(NOW()) = %g, expected 1-7", got.Num)
+		}
+	})
+
+	// --- Cross-check with Go time ---
+
+	t.Run("now_matches_go_time_now_approx", func(t *testing.T) {
+		// Verify NOW() is close to the Go-computed serial for time.Now().
+		goSerial := TimeToSerial(time.Now())
+		got := eval(t, "NOW()")
+		diff := got.Num - goSerial
+		if diff < 0 {
+			diff = -diff
+		}
+		// Allow up to ~1 second of difference (1/86400 of a day)
+		if diff > 1.0/86400.0*2 {
+			t.Errorf("NOW() = %g, Go TimeToSerial = %g, differ by %g (too large)", got.Num, goSerial, diff)
+		}
+	})
+
+	// --- Excel doc examples ---
+
+	t.Run("now_minus_half_is_12_hours_ago", func(t *testing.T) {
+		now := eval(t, "NOW()")
+		halfAgo := eval(t, "NOW()-0.5")
+		diff := now.Num - halfAgo.Num
+		if diff < 0.499 || diff > 0.501 {
+			t.Errorf("NOW() - (NOW()-0.5) = %g, expected ~0.5", diff)
+		}
+	})
+
+	t.Run("now_plus_7_is_one_week_ahead", func(t *testing.T) {
+		now := eval(t, "NOW()")
+		weekAhead := eval(t, "NOW()+7")
+		diff := weekAhead.Num - now.Num
+		if diff < 6.999 || diff > 7.001 {
+			t.Errorf("NOW()+7 - NOW() = %g, expected ~7", diff)
+		}
+	})
+}
+
 func TestTODAY(t *testing.T) {
 	resolver := &mockResolver{}
 
