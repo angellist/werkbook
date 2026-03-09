@@ -2224,9 +2224,26 @@ func TestDCOUNTA_WrongArgCount(t *testing.T) {
 func TestDGET(t *testing.T) {
 	db := standardDB()
 
+	// Database with mixed value types for targeted tests.
+	mixedDB := [][]Value{
+		{StringVal("Name"), StringVal("Value"), StringVal("Active")},
+		{StringVal("Alpha"), NumberVal(10), BoolVal(true)},
+		{StringVal("Beta"), StringVal("hello"), BoolVal(false)},
+		{StringVal("Gamma"), NumberVal(30), BoolVal(true)},
+		{StringVal("Delta"), EmptyVal(), BoolVal(false)},
+		{StringVal("Epsilon"), NumberVal(50), BoolVal(true)},
+	}
+
+	// Single-record database.
+	singleDB := [][]Value{
+		{StringVal("Item"), StringVal("Price"), StringVal("Qty")},
+		{StringVal("Widget"), NumberVal(9.99), NumberVal(42)},
+	}
+
 	tests := []dbTestCase{
+		// --- basic: single matching record returns the field value ---
 		{
-			name: "dget single match returns value",
+			name: "single match returns numeric value",
 			db:   db,
 			crit: [][]Value{
 				{StringVal("Tree")},
@@ -2236,24 +2253,27 @@ func TestDGET(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  105,
 		},
+		// --- no matching records → #VALUE! ---
 		{
-			name:     "dget no matches returns VALUE error",
+			name:     "no matches returns VALUE error",
 			db:       db,
 			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
 			field:    `"Profit"`,
 			wantType: ValueError,
 			wantErr:  ErrValVALUE,
 		},
+		// --- multiple matching records → #NUM! ---
 		{
-			name:     "dget multiple matches returns NUM error",
+			name:     "multiple matches returns NUM error",
 			db:       db,
 			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
 			field:    `"Profit"`,
 			wantType: ValueError,
 			wantErr:  ErrValNUM,
 		},
+		// --- retrieving string values ---
 		{
-			name: "dget returns string value",
+			name: "returns string value from matching record",
 			db:   db,
 			crit: [][]Value{
 				{StringVal("Tree"), StringVal("Height")},
@@ -2263,8 +2283,9 @@ func TestDGET(t *testing.T) {
 			wantType: ValueString,
 			wantStr:  "Cherry",
 		},
+		// --- AND criteria (multiple columns in one criteria row) ---
 		{
-			name: "dget with specific AND criteria yields one match",
+			name: "AND criteria narrows to single match",
 			db:   db,
 			crit: [][]Value{
 				{StringVal("Tree"), StringVal("Height")},
@@ -2273,6 +2294,376 @@ func TestDGET(t *testing.T) {
 			field:    `"Profit"`,
 			wantType: ValueNumber,
 			wantNum:  105,
+		},
+		// --- AND criteria narrowing Apple by Age ---
+		{
+			name: "AND criteria Apple with Age=15",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Age")},
+				{StringVal("Apple"), StringVal("=15")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75,
+		},
+		// --- field specified by column number ---
+		{
+			name: "field by column number 5 (Profit)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    "5",
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "field by column number 1 (Tree)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Cherry"), StringVal("=13")},
+			},
+			field:    "1",
+			wantType: ValueString,
+			wantStr:  "Cherry",
+		},
+		// --- case-insensitive field matching ---
+		{
+			name: "field name case insensitive - lowercase",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "field name case insensitive - mixed case",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"PROFIT"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		// --- numeric comparison operators ---
+		{
+			name: "greater than narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">17")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Apple", // only Apple has Height=18 > 17
+		},
+		{
+			name: "less than narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Age")},
+				{StringVal("<9")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Pear", // Pear age=8
+		},
+		{
+			name: "greater-equal narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=18")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "less-equal narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=8")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Apple", // Apple row with Height=8
+		},
+		{
+			name: "not-equal produces multiple matches → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("<>Apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM, // Cherry + 2 Pears = 3 matches
+		},
+		// --- OR criteria (multiple criteria rows) → multiple matches → #NUM! ---
+		{
+			name: "OR criteria causes multiple matches returns NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+				{StringVal("Pear")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM, // Cherry + 2 Pears = 3 matches
+		},
+		// --- OR criteria where each row matches one record → still #NUM! ---
+		{
+			name: "OR criteria two rows each matching one record → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal("=18")},
+				{StringVal("Cherry"), StringVal("=13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		// --- wildcard * ---
+		{
+			name: "wildcard * matches single unique prefix",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Ch*")}, // matches Cherry only
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "wildcard * matches multiple → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("A*")}, // matches all 3 Apples
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		// --- wildcard ? ---
+		{
+			name: "wildcard ? matches multiple → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")}, // matches Pear (x2)
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		{
+			name: "wildcard ? narrows to single match with AND",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Age")},
+				{StringVal("Pea?"), StringVal("=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  96, // only Pear with Age=12
+		},
+		// --- exact match with = prefix ---
+		{
+			name: "exact match with = prefix",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("=Cherry")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  13,
+		},
+		// --- cross-column criteria: use different columns in criteria vs field ---
+		{
+			name: "cross-column criteria - get Age from Height criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("=9")},
+			},
+			field:    `"Age"`,
+			wantType: ValueNumber,
+			wantNum:  8, // Pear has Height=9, Age=8
+		},
+		// --- retrieving boolean values ---
+		{
+			name: "retrieve boolean value true",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Alpha")},
+			},
+			field:    `"Active"`,
+			wantType: ValueBool,
+			wantBool: true,
+		},
+		{
+			name: "retrieve boolean value false",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Beta")},
+			},
+			field:    `"Active"`,
+			wantType: ValueBool,
+			wantBool: false,
+		},
+		// --- retrieving text values from mixed DB ---
+		{
+			name: "retrieve text value from mixed DB",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Beta")},
+			},
+			field:    `"Value"`,
+			wantType: ValueString,
+			wantStr:  "hello",
+		},
+		// --- empty cell in matching record ---
+		{
+			name: "retrieve empty cell value from matching record",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Delta")},
+			},
+			field:    `"Value"`,
+			wantType: ValueEmpty,
+		},
+		// --- single record database: always a single match ---
+		{
+			name: "single record DB returns the value",
+			db:   singleDB,
+			crit: [][]Value{
+				{StringVal("Item")},
+				{StringVal("Widget")},
+			},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  9.99,
+		},
+		{
+			name: "single record DB blank criteria returns the value",
+			db:   singleDB,
+			crit: [][]Value{
+				{StringVal("Item")},
+				{StringVal("")},
+			},
+			field:    `"Qty"`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		// --- all records match empty criteria → #NUM! (if >1 record) ---
+		{
+			name: "blank criteria on multi-record DB returns NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		{
+			name: "no criteria rows matches all → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		// --- field name not found → #VALUE! ---
+		{
+			name:     "field name not found returns VALUE error",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+			field:    `"NonExistent"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		// --- field index out of range → #VALUE! ---
+		{
+			name:     "field index too large returns VALUE error",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+			field:    "99",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "field index zero returns VALUE error",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+			field:    "0",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "field index negative returns VALUE error",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+			field:    "-1",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		// --- criteria matching single unique record among many ---
+		{
+			name: "unique Yield value identifies single record",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Yield")},
+				{StringVal("=14")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Apple", // only Apple row 1 has Yield=14
+		},
+		{
+			name: "unique Profit=76.8 identifies single Pear",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Profit")},
+				{StringVal("=76.8")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Pear",
+		},
+		// --- AND criteria with numeric comparisons narrowing to single match ---
+		{
+			name: "AND with > and < narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height"), StringVal("Age")},
+				{StringVal(">13"), StringVal("<16")},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Apple", // Apple Height=14, Age=15
 		},
 	}
 
