@@ -17536,8 +17536,8 @@ func TestCONFIDENCE_T_convergesToNorm(t *testing.T) {
 }
 
 func TestPERCENTILE_INC(t *testing.T) {
-	// PERCENTILE.INC is an alias for PERCENTILE — verify it works identically
-	resolver := &mockResolver{
+	// Basic dataset: {1,2,3,4} in A1:A4
+	basicResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(1),
 			{Col: 1, Row: 2}: NumberVal(2),
@@ -17545,28 +17545,323 @@ func TestPERCENTILE_INC(t *testing.T) {
 			{Col: 1, Row: 4}: NumberVal(4),
 		},
 	}
-	tests := []struct {
-		name    string
-		formula string
-		want    float64
-	}{
-		{"basic", "PERCENTILE.INC(A1:A4,0.3)", 1.9},
-		{"min", "PERCENTILE.INC(A1:A4,0)", 1},
-		{"max", "PERCENTILE.INC(A1:A4,1)", 4},
-		{"median", "PERCENTILE.INC(A1:A4,0.5)", 2.5},
+
+	// Five element dataset: {1,2,3,4,5} in B1:B5
+	fiveResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 4}: NumberVal(4),
+			{Col: 2, Row: 5}: NumberVal(5),
+		},
 	}
+
+	// Single element: C1=5
+	singleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 3, Row: 1}: NumberVal(5),
+		},
+	}
+
+	// Two elements: D1=10, D2=20
+	twoResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 4, Row: 1}: NumberVal(10),
+			{Col: 4, Row: 2}: NumberVal(20),
+		},
+	}
+
+	// Large dataset {1..20} in E1:E20
+	largeResolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+	for i := 1; i <= 20; i++ {
+		largeResolver.cells[CellAddr{Col: 5, Row: i}] = NumberVal(float64(i))
+	}
+
+	// Unsorted data: F1:F5 = {5,1,4,2,3}
+	unsortedResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 6, Row: 1}: NumberVal(5),
+			{Col: 6, Row: 2}: NumberVal(1),
+			{Col: 6, Row: 3}: NumberVal(4),
+			{Col: 6, Row: 4}: NumberVal(2),
+			{Col: 6, Row: 5}: NumberVal(3),
+		},
+	}
+
+	// Duplicate values: G1:G6 = {3,3,5,5,7,7}
+	dupResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 7, Row: 1}: NumberVal(3),
+			{Col: 7, Row: 2}: NumberVal(3),
+			{Col: 7, Row: 3}: NumberVal(5),
+			{Col: 7, Row: 4}: NumberVal(5),
+			{Col: 7, Row: 5}: NumberVal(7),
+			{Col: 7, Row: 6}: NumberVal(7),
+		},
+	}
+
+	// Negative numbers: H1:H4 = {-10,-5,0,5}
+	negResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 8, Row: 1}: NumberVal(-10),
+			{Col: 8, Row: 2}: NumberVal(-5),
+			{Col: 8, Row: 3}: NumberVal(0),
+			{Col: 8, Row: 4}: NumberVal(5),
+		},
+	}
+
+	// Mixed positive/negative: I1:I6 = {-3,-1,0,2,4,6}
+	mixedPosNegResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 9, Row: 1}: NumberVal(-3),
+			{Col: 9, Row: 2}: NumberVal(-1),
+			{Col: 9, Row: 3}: NumberVal(0),
+			{Col: 9, Row: 4}: NumberVal(2),
+			{Col: 9, Row: 5}: NumberVal(4),
+			{Col: 9, Row: 6}: NumberVal(6),
+		},
+	}
+
+	// All same values: J1:J4 = {7,7,7,7}
+	sameResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 10, Row: 1}: NumberVal(7),
+			{Col: 10, Row: 2}: NumberVal(7),
+			{Col: 10, Row: 3}: NumberVal(7),
+			{Col: 10, Row: 4}: NumberVal(7),
+		},
+	}
+
+	// Empty range
+	emptyResolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+
+	// Mixed types: K1=1, K2="hello", K3=3, K4=TRUE
+	mixedTypeResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 11, Row: 1}: NumberVal(1),
+			{Col: 11, Row: 2}: StringVal("hello"),
+			{Col: 11, Row: 3}: NumberVal(3),
+			{Col: 11, Row: 4}: BoolVal(true),
+		},
+	}
+
+	// Error in range: L1=1, L2=#DIV/0!, L3=3
+	errResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 12, Row: 1}: NumberVal(1),
+			{Col: 12, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 12, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Doc example: {1,2,3,6,6,6,7,8,9} in M1:M9
+	docResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 13, Row: 1}: NumberVal(1),
+			{Col: 13, Row: 2}: NumberVal(2),
+			{Col: 13, Row: 3}: NumberVal(3),
+			{Col: 13, Row: 4}: NumberVal(6),
+			{Col: 13, Row: 5}: NumberVal(6),
+			{Col: 13, Row: 6}: NumberVal(6),
+			{Col: 13, Row: 7}: NumberVal(7),
+			{Col: 13, Row: 8}: NumberVal(8),
+			{Col: 13, Row: 9}: NumberVal(9),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		formula  string
+		resolver *mockResolver
+		want     float64
+		wantErr  ErrorValue
+	}{
+		// Basic happy path: PERCENTILE.INC({1,2,3,4,5}, 0.5) = 3 (median)
+		{"five_median", "PERCENTILE.INC(B1:B5,0.5)", fiveResolver, 3, 0},
+
+		// Different k values on {1,2,3,4}
+		// k=0 → minimum
+		{"k_zero_min", "PERCENTILE.INC(A1:A4,0)", basicResolver, 1, 0},
+		// k=0.25 → Q1: rank=0.25*3=0.75, 1+0.75*(2-1)=1.75
+		{"k_25th", "PERCENTILE.INC(A1:A4,0.25)", basicResolver, 1.75, 0},
+		// k=0.5 → median: rank=0.5*3=1.5, 2+0.5*(3-2)=2.5
+		{"k_50th_median", "PERCENTILE.INC(A1:A4,0.5)", basicResolver, 2.5, 0},
+		// k=0.75 → Q3: rank=0.75*3=2.25, 3+0.25*(4-3)=3.25
+		{"k_75th", "PERCENTILE.INC(A1:A4,0.75)", basicResolver, 3.25, 0},
+		// k=1 → maximum
+		{"k_one_max", "PERCENTILE.INC(A1:A4,1)", basicResolver, 4, 0},
+
+		// Interpolation: k values that fall between data points
+		// k=0.1: rank=0.1*3=0.3, 1+0.3*(2-1)=1.3
+		{"interp_k10", "PERCENTILE.INC(A1:A4,0.1)", basicResolver, 1.3, 0},
+		// k=0.33: rank=0.33*3=0.99, 1+0.99*(2-1)=1.99
+		{"interp_k33", "PERCENTILE.INC(A1:A4,0.33)", basicResolver, 1.99, 0},
+		// k=0.9: rank=0.9*3=2.7, 3+0.7*(4-3)=3.7
+		{"interp_k90", "PERCENTILE.INC(A1:A4,0.9)", basicResolver, 3.7, 0},
+		// Doc example: PERCENTILE.INC({1,2,3,4},0.3) = 1.9
+		{"doc_example", "PERCENTILE.INC(A1:A4,0.3)", basicResolver, 1.9, 0},
+
+		// Single element array: any k returns that element
+		{"single_k0", "PERCENTILE.INC(C1:C1,0)", singleResolver, 5, 0},
+		{"single_k05", "PERCENTILE.INC(C1:C1,0.5)", singleResolver, 5, 0},
+		{"single_k1", "PERCENTILE.INC(C1:C1,1)", singleResolver, 5, 0},
+
+		// Two element array: interpolation between two values
+		// k=0 → 10
+		{"two_k0", "PERCENTILE.INC(D1:D2,0)", twoResolver, 10, 0},
+		// k=0.5 → 15
+		{"two_median", "PERCENTILE.INC(D1:D2,0.5)", twoResolver, 15, 0},
+		// k=0.25 → rank=0.25*1=0.25, 10+0.25*(20-10)=12.5
+		{"two_k25", "PERCENTILE.INC(D1:D2,0.25)", twoResolver, 12.5, 0},
+		// k=1 → 20
+		{"two_k1", "PERCENTILE.INC(D1:D2,1)", twoResolver, 20, 0},
+
+		// Large dataset {1..20}
+		// k=0.5 → rank=0.5*19=9.5, 10+0.5*(11-10)=10.5
+		{"large_median", "PERCENTILE.INC(E1:E20,0.5)", largeResolver, 10.5, 0},
+		// k=0.25 → rank=0.25*19=4.75, 5+0.75*(6-5)=5.75
+		{"large_25th", "PERCENTILE.INC(E1:E20,0.25)", largeResolver, 5.75, 0},
+		// k=0.75 → rank=0.75*19=14.25, 15+0.25*(16-15)=15.25
+		{"large_75th", "PERCENTILE.INC(E1:E20,0.75)", largeResolver, 15.25, 0},
+
+		// Unsorted data {5,1,4,2,3} — same result as sorted {1,2,3,4,5}
+		// k=0.5 → rank=0.5*4=2, sorted[2]=3
+		{"unsorted_median", "PERCENTILE.INC(F1:F5,0.5)", unsortedResolver, 3, 0},
+		// k=0 → minimum=1
+		{"unsorted_min", "PERCENTILE.INC(F1:F5,0)", unsortedResolver, 1, 0},
+		// k=1 → maximum=5
+		{"unsorted_max", "PERCENTILE.INC(F1:F5,1)", unsortedResolver, 5, 0},
+
+		// Duplicate values: {3,3,5,5,7,7}
+		// k=0.5 → rank=0.5*5=2.5, sorted[2]=5, sorted[3]=5 → 5
+		{"dup_median", "PERCENTILE.INC(G1:G6,0.5)", dupResolver, 5, 0},
+		// k=0 → 3
+		{"dup_min", "PERCENTILE.INC(G1:G6,0)", dupResolver, 3, 0},
+		// k=1 → 7
+		{"dup_max", "PERCENTILE.INC(G1:G6,1)", dupResolver, 7, 0},
+		// k=0.25 → rank=0.25*5=1.25, sorted[1]=3, sorted[2]=5 → 3+0.25*(5-3)=3.5
+		{"dup_25th", "PERCENTILE.INC(G1:G6,0.25)", dupResolver, 3.5, 0},
+
+		// Negative numbers: sorted {-10,-5,0,5}
+		// k=0.5 → rank=1.5, -5+0.5*(0-(-5))=-2.5
+		{"neg_median", "PERCENTILE.INC(H1:H4,0.5)", negResolver, -2.5, 0},
+		// k=0 → -10
+		{"neg_k0", "PERCENTILE.INC(H1:H4,0)", negResolver, -10, 0},
+		// k=1 → 5
+		{"neg_k1", "PERCENTILE.INC(H1:H4,1)", negResolver, 5, 0},
+
+		// Mixed positive/negative: sorted {-3,-1,0,2,4,6}
+		// k=0.5 → rank=0.5*5=2.5, sorted[2]=0, sorted[3]=2 → 0+0.5*2=1
+		{"mixed_posneg_median", "PERCENTILE.INC(I1:I6,0.5)", mixedPosNegResolver, 1, 0},
+		// k=0.1 → rank=0.1*5=0.5, sorted[0]=-3, sorted[1]=-1 → -3+0.5*2=-2
+		{"mixed_posneg_k10", "PERCENTILE.INC(I1:I6,0.1)", mixedPosNegResolver, -2, 0},
+		// k=0.9 → rank=0.9*5=4.5, sorted[4]=4, sorted[5]=6 → 4+0.5*2=5
+		{"mixed_posneg_k90", "PERCENTILE.INC(I1:I6,0.9)", mixedPosNegResolver, 5, 0},
+
+		// All same values → always returns that value
+		{"same_k0", "PERCENTILE.INC(J1:J4,0)", sameResolver, 7, 0},
+		{"same_k05", "PERCENTILE.INC(J1:J4,0.5)", sameResolver, 7, 0},
+		{"same_k1", "PERCENTILE.INC(J1:J4,1)", sameResolver, 7, 0},
+
+		// k < 0 → #NUM!
+		{"k_negative", "PERCENTILE.INC(A1:A4,-0.1)", basicResolver, 0, ErrValNUM},
+		// k > 1 → #NUM!
+		{"k_over_one", "PERCENTILE.INC(A1:A4,1.5)", basicResolver, 0, ErrValNUM},
+
+		// Empty array → #NUM!
+		{"empty_array", "PERCENTILE.INC(Z1:Z3,0.5)", emptyResolver, 0, ErrValNUM},
+
+		// String values in array are ignored: {1,3} → k=0.5 → 2
+		{"mixed_ignore_strings", "PERCENTILE.INC(K1:K4,0.5)", mixedTypeResolver, 2, 0},
+
+		// Doc example with duplicates: {1,2,3,6,6,6,7,8,9}, k=0.3
+		// rank=0.3*8=2.4, sorted[2]=3, sorted[3]=6 → 3+0.4*(6-3)=4.2
+		{"doc_example_dupes", "PERCENTILE.INC(M1:M9,0.3)", docResolver, 4.2, 0},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cf := evalCompile(t, tt.formula)
-			got, err := Eval(cf, resolver, nil)
+			got, err := Eval(cf, tt.resolver, nil)
 			if err != nil {
 				t.Fatalf("Eval: %v", err)
 			}
-			if got.Type != ValueNumber || math.Abs(got.Num-tt.want) > 1e-9 {
-				t.Errorf("%s = %v, want %g", tt.formula, got, tt.want)
+			if tt.wantErr != 0 {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("got %v, want error %v", got, tt.wantErr)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("got type %v, want number", got.Type)
+			}
+			if math.Abs(got.Num-tt.want) > 1e-9 {
+				t.Errorf("got %g, want %g", got.Num, tt.want)
 			}
 		})
 	}
+
+	// Error propagation: error in range propagates
+	t.Run("error_propagation", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTILE.INC(L1:L3,0.5)")
+		got, err := Eval(cf, errResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	// Too few arguments
+	t.Run("too_few_args", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTILE.INC(A1:A4)")
+		got, err := Eval(cf, basicResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error", got)
+		}
+	})
+
+	// Too many arguments
+	t.Run("too_many_args", func(t *testing.T) {
+		cf := evalCompile(t, "PERCENTILE.INC(A1:A4,0.5,1)")
+		got, err := Eval(cf, basicResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error", got)
+		}
+	})
+
+	// Equivalence with PERCENTILE: PERCENTILE.INC should produce identical results
+	t.Run("equivalence_with_PERCENTILE", func(t *testing.T) {
+		for _, k := range []string{"0", "0.25", "0.5", "0.75", "1"} {
+			incF := evalCompile(t, "PERCENTILE.INC(A1:A4,"+k+")")
+			incV, err := Eval(incF, basicResolver, nil)
+			if err != nil {
+				t.Fatalf("Eval PERCENTILE.INC k=%s: %v", k, err)
+			}
+
+			pf := evalCompile(t, "PERCENTILE(A1:A4,"+k+")")
+			pv, err := Eval(pf, basicResolver, nil)
+			if err != nil {
+				t.Fatalf("Eval PERCENTILE k=%s: %v", k, err)
+			}
+
+			if math.Abs(incV.Num-pv.Num) > 1e-9 {
+				t.Errorf("PERCENTILE.INC(k=%s)=%g != PERCENTILE(k=%s)=%g", k, incV.Num, k, pv.Num)
+			}
+		}
+	})
 }
 
 func TestQUARTILE_INC(t *testing.T) {

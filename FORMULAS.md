@@ -295,9 +295,9 @@ Werkbook supports **437** spreadsheet formula functions.
 | OR | Returns TRUE when any supplied condition is TRUE. | Logical | 50 |
 | PDURATION | Returns the periods required for an investment to reach a target value. | Financial | 23 |
 | PEARSON | Returns the Pearson correlation coefficient. | Statistical | 23 |
-| PERCENTILE | Returns the percentile of a data set. | Statistical | 32 |
+| PERCENTILE | Returns the percentile of a data set. | Statistical | 33 |
 | PERCENTILE.EXC | Returns the exclusive percentile of a data set. | Statistical | 31 |
-| PERCENTILE.INC | Returns the inclusive percentile of a data set. | Statistical | 4 |
+| PERCENTILE.INC | Returns the inclusive percentile of a data set. | Statistical | 45 |
 | PERCENTRANK | Returns the rank of a value as a percentage of a data set. | Statistical | 26 |
 | PERCENTRANK.EXC | Returns the exclusive percentage rank of a value in a data set. | Statistical | 29 |
 | PERCENTRANK.INC | Returns the inclusive percentage rank of a value in a data set. | Statistical | 3 |
