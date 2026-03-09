@@ -33,6 +33,7 @@ const (
 	OpEnterArrayCtx           // operand: unused; pushes array context (suppresses implicit intersection)
 	OpLeaveArrayCtx           // operand: unused; pops array context
 	OpLoad3DRange             // operand: index into Ranges; loads values across multiple sheets
+	OpRefResultToBool         // operand: unused; pops value, pushes TRUE if non-error (for ISREF wrapping ref-returning funcs)
 )
 
 var opNames = [...]string{
@@ -62,7 +63,8 @@ var opNames = [...]string{
 	OpLoadCellRef:   "LoadCellRef",
 	OpEnterArrayCtx: "EnterArrayCtx",
 	OpLeaveArrayCtx: "LeaveArrayCtx",
-	OpLoad3DRange:   "Load3DRange",
+	OpLoad3DRange:      "Load3DRange",
+	OpRefResultToBool: "RefResultToBool",
 }
 
 func (op OpCode) String() string {

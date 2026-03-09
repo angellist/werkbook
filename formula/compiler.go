@@ -230,6 +230,22 @@ func (c *compiler) compileNode(node Node) error {
 					c.emit(OpCall, uint32(funcID)<<8|uint32(argc))
 					return nil
 				}
+				// INDIRECT (and OFFSET) are ref-returning functions.
+				// When wrapped in ISREF, compile the inner call normally
+				// and then use OpRefResultToBool: non-error → TRUE,
+				// error → FALSE.
+				if fc, ok := n.Args[0].(*FuncCall); ok {
+					inner := strings.ToUpper(fc.Name)
+					inner = strings.TrimPrefix(inner, "_XLFN._XLWS.")
+					inner = strings.TrimPrefix(inner, "_XLFN.")
+					if inner == "INDIRECT" || inner == "OFFSET" {
+						if err := c.compileNode(fc); err != nil {
+							return err
+						}
+						c.emit(OpRefResultToBool, 0)
+						return nil
+					}
+				}
 			}
 		}
 		arrayCtx := IsArrayFunc(name)

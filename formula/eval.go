@@ -452,6 +452,17 @@ func Eval(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext) (Value, 
 				arrayCtxDepth--
 			}
 
+		case OpRefResultToBool:
+			// Used by ISREF wrapping ref-returning functions (e.g. INDIRECT).
+			// A ref-returning function produces a reference on success and an
+			// error on failure.  ISREF should return TRUE for non-error results
+			// and FALSE for errors.
+			v, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			push(BoolVal(v.Type != ValueError))
+
 		default:
 			return Value{}, fmt.Errorf("unknown opcode %d", inst.Op)
 		}
