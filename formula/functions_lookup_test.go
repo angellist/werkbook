@@ -2686,6 +2686,521 @@ func TestINDIRECT_R1C1_Invalid(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// INDIRECT comprehensive table-driven tests
+// ---------------------------------------------------------------------------
+
+func TestINDIRECT_Comprehensive(t *testing.T) {
+	// Shared cell data used across most subtests.
+	cells := map[CellAddr]Value{
+		{Col: 1, Row: 1}:                     NumberVal(10),
+		{Col: 1, Row: 2}:                     NumberVal(20),
+		{Col: 1, Row: 3}:                     NumberVal(30),
+		{Col: 1, Row: 4}:                     NumberVal(40),
+		{Col: 1, Row: 5}:                     NumberVal(50),
+		{Col: 2, Row: 1}:                     StringVal("alpha"),
+		{Col: 2, Row: 2}:                     StringVal("beta"),
+		{Col: 3, Row: 1}:                     NumberVal(100),
+		{Col: 3, Row: 5}:                     NumberVal(99),
+		{Col: 26, Row: 1}:                    NumberVal(260),  // Z1
+		{Col: 27, Row: 1}:                    NumberVal(270),  // AA1
+		{Sheet: "Sheet2", Col: 1, Row: 1}:    NumberVal(77),
+		{Sheet: "Sheet2", Col: 2, Row: 1}:    NumberVal(88),
+		{Sheet: "Sheet 1", Col: 1, Row: 1}:   NumberVal(111),
+		{Sheet: "Data", Col: 1, Row: 1}:      NumberVal(999),
+	}
+
+	type testCase struct {
+		name     string
+		formula  string
+		cells    map[CellAddr]Value // if nil, use shared cells
+		wantType ValueType
+		wantNum  float64
+		wantStr  string
+		wantBool bool
+		wantErr  ErrorValue
+		wantArr  [][]float64 // for array results, expected numeric values
+		isArray  bool        // set IsArrayFormula on context
+	}
+
+	tests := []testCase{
+		// --- A1-style single cell references ---
+		{
+			name:     "A1 style single cell",
+			formula:  `INDIRECT("A1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "A1 style cell B2",
+			formula:  `INDIRECT("B2")`,
+			wantType: ValueString,
+			wantStr:  "beta",
+		},
+		{
+			name:     "absolute reference $A$1",
+			formula:  `INDIRECT("$A$1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute $A1",
+			formula:  `INDIRECT("$A1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute A$1",
+			formula:  `INDIRECT("A$1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "mixed absolute $B$2",
+			formula:  `INDIRECT("$B$2")`,
+			wantType: ValueString,
+			wantStr:  "beta",
+		},
+		{
+			name:     "column Z reference",
+			formula:  `INDIRECT("Z1")`,
+			wantType: ValueNumber,
+			wantNum:  260,
+		},
+		{
+			name:     "column AA reference",
+			formula:  `INDIRECT("AA1")`,
+			wantType: ValueNumber,
+			wantNum:  270,
+		},
+		{
+			name:     "empty cell returns empty",
+			formula:  `INDIRECT("D1")`,
+			wantType: ValueEmpty,
+		},
+
+		// --- a1 parameter explicit TRUE / default ---
+		{
+			name:     "a1=TRUE explicit",
+			formula:  `INDIRECT("A1",TRUE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "a1=1 (truthy number)",
+			formula:  `INDIRECT("A1",1)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+
+		// --- a1=FALSE → R1C1 style ---
+		{
+			name:     "a1=FALSE R1C1 single cell",
+			formula:  `INDIRECT("R1C1",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "a1=0 (falsy number) R1C1 style",
+			formula:  `INDIRECT("R5C3",0)`,
+			wantType: ValueNumber,
+			wantNum:  99,
+		},
+		{
+			name:     "R1C1 case insensitive mixed",
+			formula:  `INDIRECT("r1c1",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "R1C1 uppercase",
+			formula:  `INDIRECT("R1C3",FALSE)`,
+			wantType: ValueNumber,
+			wantNum:  100,
+		},
+
+		// --- Empty and invalid references ---
+		{
+			name:     "empty string returns REF",
+			formula:  `INDIRECT("")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid cell reference A0",
+			formula:  `INDIRECT("A0")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid ref: just a number",
+			formula:  `INDIRECT("123")`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference RXCY",
+			formula:  `INDIRECT("RXCY",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference R0C1",
+			formula:  `INDIRECT("R0C1",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+		{
+			name:     "invalid R1C1 reference R1C0",
+			formula:  `INDIRECT("R1C0",FALSE)`,
+			wantType: ValueError,
+			wantErr:  ErrValREF,
+		},
+
+		// --- Cross-sheet references ---
+		{
+			name:     "cross-sheet Sheet2!A1",
+			formula:  `INDIRECT("Sheet2!A1")`,
+			wantType: ValueNumber,
+			wantNum:  77,
+		},
+		{
+			name:     "cross-sheet Sheet2!B1",
+			formula:  `INDIRECT("Sheet2!B1")`,
+			wantType: ValueNumber,
+			wantNum:  88,
+		},
+		{
+			name:     "cross-sheet with quotes for spaces",
+			formula:  `INDIRECT("'Sheet 1'!A1")`,
+			wantType: ValueNumber,
+			wantNum:  111,
+		},
+		{
+			name:     "cross-sheet with dollar signs",
+			formula:  `INDIRECT("Sheet2!$A$1")`,
+			wantType: ValueNumber,
+			wantNum:  77,
+		},
+
+		// --- Range references (A1-style) ---
+		{
+			name:     "range A1:A3",
+			formula:  `INDIRECT("A1:A3")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+		{
+			name:     "range with dollar signs $A$1:$A$3",
+			formula:  `INDIRECT("$A$1:$A$3")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+		{
+			name:     "multi-column range A1:B2",
+			formula:  `INDIRECT("A1:C1")`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10, 0, 100}}, // B1="alpha" → 0 (we check type below)
+		},
+
+		// --- R1C1 range ---
+		{
+			name:     "R1C1 range R1C1:R3C1",
+			formula:  `INDIRECT("R1C1:R3C1",FALSE)`,
+			wantType: ValueArray,
+			wantArr:  [][]float64{{10}, {20}, {30}},
+		},
+
+		// --- Dynamic references (concatenation) ---
+		{
+			name:     "concatenation A&1",
+			formula:  `INDIRECT("A"&"1")`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		{
+			name:     "concatenation with number",
+			formula:  `INDIRECT("A"&1)`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+
+		// --- SUM with INDIRECT ---
+		{
+			name:     "SUM(INDIRECT(range))",
+			formula:  `SUM(INDIRECT("A1:A5"))`,
+			wantType: ValueNumber,
+			wantNum:  150, // 10+20+30+40+50
+		},
+
+		// --- Wrong arg count ---
+		{
+			name:     "no args returns VALUE error",
+			formula:  `INDIRECT()`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			useCells := cells
+			if tc.cells != nil {
+				useCells = tc.cells
+			}
+			resolver := &mockResolver{cells: useCells}
+			ctx := &EvalContext{Resolver: resolver, IsArrayFormula: tc.isArray}
+
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, ctx)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+
+			if got.Type != tc.wantType {
+				t.Fatalf("type: got %v, want %v (value=%v)", got.Type, tc.wantType, got)
+			}
+
+			switch tc.wantType {
+			case ValueNumber:
+				if got.Num != tc.wantNum {
+					t.Errorf("num: got %g, want %g", got.Num, tc.wantNum)
+				}
+			case ValueString:
+				if got.Str != tc.wantStr {
+					t.Errorf("str: got %q, want %q", got.Str, tc.wantStr)
+				}
+			case ValueBool:
+				if got.Bool != tc.wantBool {
+					t.Errorf("bool: got %v, want %v", got.Bool, tc.wantBool)
+				}
+			case ValueError:
+				if got.Err != tc.wantErr {
+					t.Errorf("err: got %v, want %v", got.Err, tc.wantErr)
+				}
+			case ValueArray:
+				if tc.wantArr != nil {
+					if len(got.Array) != len(tc.wantArr) {
+						t.Fatalf("array rows: got %d, want %d", len(got.Array), len(tc.wantArr))
+					}
+					for r, wantRow := range tc.wantArr {
+						if len(got.Array[r]) != len(wantRow) {
+							t.Fatalf("array row %d cols: got %d, want %d", r, len(got.Array[r]), len(wantRow))
+						}
+						for c, wantVal := range wantRow {
+							gotVal := got.Array[r][c]
+							if gotVal.Type == ValueNumber && gotVal.Num != wantVal {
+								t.Errorf("array[%d][%d]: got %g, want %g", r, c, gotVal.Num, wantVal)
+							}
+						}
+					}
+				}
+			case ValueEmpty:
+				// just checking the type is enough
+			}
+		})
+	}
+
+	// Additional subtests that need special setup or multi-assertion logic.
+
+	t.Run("error propagation in ref_text", func(t *testing.T) {
+		// If ref_text is an error, INDIRECT should propagate it.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		// Evaluate a formula where the inner expression produces an error.
+		// 1/0 → #DIV/0!, passed to INDIRECT should propagate.
+		cf := evalCompile(t, `INDIRECT(1/0)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("expected error, got %v", got)
+		}
+	})
+
+	t.Run("numeric ref_text coerced to string", func(t *testing.T) {
+		// ValueToString(NumberVal(1)) → "1", which is not a valid cell ref.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT(1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// "1" is not a valid cell reference → #REF!
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	t.Run("boolean ref_text coerced to string", func(t *testing.T) {
+		// ValueToString(BoolVal(true)) → "TRUE", which is not a cell ref.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT(TRUE)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// "TRUE" is not a valid cell reference → #REF!
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	t.Run("column-only range A:A", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("A:A")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != 1 {
+			t.Errorf("cols: got %d:%d, want 1:1", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol)
+		}
+		if got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != maxRows {
+			t.Errorf("rows: got %d:%d, want 1:%d", got.RangeOrigin.FromRow, got.RangeOrigin.ToRow, maxRows)
+		}
+	})
+
+	t.Run("column-only range A:B", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("A:B")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != 2 {
+			t.Errorf("cols: got %d:%d, want 1:2", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol)
+		}
+	})
+
+	t.Run("row-only range 1:1", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `INDIRECT("1:1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 1 {
+			t.Errorf("rows: got %d:%d, want 1:1", got.RangeOrigin.FromRow, got.RangeOrigin.ToRow)
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.ToCol != maxCols {
+			t.Errorf("cols: got %d:%d, want 1:%d", got.RangeOrigin.FromCol, got.RangeOrigin.ToCol, maxCols)
+		}
+	})
+
+	t.Run("ROW(INDIRECT(1:3)) produces array", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver, IsArrayFormula: true}
+		cf := evalCompile(t, `ROW(INDIRECT("1:3"))`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(got.Array))
+		}
+		for i := 0; i < 3; i++ {
+			want := float64(i + 1)
+			if got.Array[i][0].Num != want {
+				t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, want)
+			}
+		}
+	})
+
+	t.Run("range with RangeOrigin set", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("A1:A3")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.RangeOrigin == nil {
+			t.Fatal("expected RangeOrigin to be set")
+		}
+		if got.RangeOrigin.FromCol != 1 || got.RangeOrigin.FromRow != 1 ||
+			got.RangeOrigin.ToCol != 1 || got.RangeOrigin.ToRow != 3 {
+			t.Errorf("RangeOrigin: got %+v, want A1:A3 (1,1):(1,3)", got.RangeOrigin)
+		}
+	})
+
+	t.Run("cross-sheet range Sheet2!A1:B1", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("Sheet2!A1:B1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+		if got.Array[0][0].Num != 77 {
+			t.Errorf("[0][0]: got %g, want 77", got.Array[0][0].Num)
+		}
+		if got.Array[0][1].Num != 88 {
+			t.Errorf("[0][1]: got %g, want 88", got.Array[0][1].Num)
+		}
+	})
+
+	t.Run("too many args returns VALUE error", func(t *testing.T) {
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("A1",TRUE,1)`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got %v", got)
+		}
+	})
+
+	t.Run("lowercase cell ref", func(t *testing.T) {
+		// Cell parsing should handle lowercase letters.
+		resolver := &mockResolver{cells: cells}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, `INDIRECT("a1")`)
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // TRANSPOSE tests
 // ---------------------------------------------------------------------------
 
