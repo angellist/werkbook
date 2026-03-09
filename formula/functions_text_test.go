@@ -2274,7 +2274,7 @@ func TestUNICHAR(t *testing.T) {
 func TestCHAR_Windows1252(t *testing.T) {
 	resolver := &mockResolver{}
 
-	tests := []struct {
+	strTests := []struct {
 		name    string
 		formula string
 		want    string
@@ -2292,9 +2292,61 @@ func TestCHAR_Windows1252(t *testing.T) {
 		// Latin-1 supplement — same in both encodings
 		{"CHAR(192) = A-grave", `CHAR(192)`, "À"},
 		{"CHAR(167) = Section", `CHAR(167)`, "§"},
+
+		// Minimum valid code
+		{"CHAR(1) = SOH", `CHAR(1)`, "\x01"},
+
+		// Control characters
+		{"CHAR(9) = tab", `CHAR(9)`, "\t"},
+		{"CHAR(10) = newline", `CHAR(10)`, "\n"},
+		{"CHAR(13) = carriage_return", `CHAR(13)`, "\r"},
+
+		// Space
+		{"CHAR(32) = space", `CHAR(32)`, " "},
+
+		// Common punctuation
+		{"CHAR(33) = exclamation", `CHAR(33)`, "!"},
+		{"CHAR(63) = question_mark", `CHAR(63)`, "?"},
+		{"CHAR(64) = at_sign", `CHAR(64)`, "@"},
+
+		// Digit boundaries
+		{"CHAR(48) = digit_0", `CHAR(48)`, "0"},
+		{"CHAR(57) = digit_9", `CHAR(57)`, "9"},
+
+		// Uppercase boundaries
+		{"CHAR(65) = uppercase_A", `CHAR(65)`, "A"},
+		{"CHAR(90) = uppercase_Z", `CHAR(90)`, "Z"},
+
+		// Lowercase boundaries
+		{"CHAR(97) = lowercase_a", `CHAR(97)`, "a"},
+		{"CHAR(122) = lowercase_z", `CHAR(122)`, "z"},
+
+		// High codes (Latin-1 supplement)
+		{"CHAR(200) = E-grave", `CHAR(200)`, "È"},
+		{"CHAR(255) = y-diaeresis", `CHAR(255)`, "ÿ"},
+
+		// Additional Windows-1252 special characters
+		{"CHAR(130) = single_low_quote", `CHAR(130)`, "‚"},
+		{"CHAR(145) = left_single_quote", `CHAR(145)`, "\u2018"},
+		{"CHAR(146) = right_single_quote", `CHAR(146)`, "\u2019"},
+
+		// Decimal truncation: int(65.9) = 65
+		{"CHAR(65.9) = truncate_to_A", `CHAR(65.9)`, "A"},
+		{"CHAR(65.1) = truncate_to_A", `CHAR(65.1)`, "A"},
+		{"CHAR(66.5) = truncate_to_B", `CHAR(66.5)`, "B"},
+
+		// String coercion
+		{"CHAR_string_65", `CHAR("65")`, "A"},
+		{"CHAR_string_97", `CHAR("97")`, "a"},
+
+		// Boolean coercion: TRUE = 1
+		{"CHAR_bool_true", `CHAR(TRUE)`, "\x01"},
+
+		// Concatenation with CHAR
+		{"CHAR_concat_AB", `CHAR(65)&CHAR(66)`, "AB"},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range strTests {
 		t.Run(tt.name, func(t *testing.T) {
 			cf := evalCompile(t, tt.formula)
 			got, err := Eval(cf, resolver, nil)
@@ -2306,6 +2358,51 @@ func TestCHAR_Windows1252(t *testing.T) {
 			}
 		})
 	}
+
+	// Error result tests
+	errTests := []struct {
+		name    string
+		formula string
+		wantErr ErrorValue
+	}{
+		// Zero is invalid (valid range is 1-255)
+		{"zero", `CHAR(0)`, ErrValVALUE},
+		// Negative values
+		{"negative_1", `CHAR(-1)`, ErrValVALUE},
+		// Above max code 255
+		{"code_256", `CHAR(256)`, ErrValVALUE},
+		{"code_1000", `CHAR(1000)`, ErrValVALUE},
+		// Non-numeric string
+		{"non_numeric_string", `CHAR("abc")`, ErrValVALUE},
+		// Wrong number of arguments
+		{"no_args", `CHAR()`, ErrValVALUE},
+		{"two_args", `CHAR(65,66)`, ErrValVALUE},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueError || got.Err != tt.wantErr {
+				t.Errorf("Eval(%q) = %v (type %d, err %d), want error %d", tt.formula, got, got.Type, got.Err, tt.wantErr)
+			}
+		})
+	}
+
+	// CODE(CHAR(65)) roundtrip should return 65
+	t.Run("CODE_CHAR_roundtrip", func(t *testing.T) {
+		cf := evalCompile(t, `CODE(CHAR(65))`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval(CODE(CHAR(65))): %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 65 {
+			t.Errorf("Eval(CODE(CHAR(65))) = %v, want 65", got)
+		}
+	})
 }
 
 func TestROMAN(t *testing.T) {

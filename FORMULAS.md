@@ -50,7 +50,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | CEILING | Rounds a number up to the nearest multiple of a significance. | Math & Trig | 51 |
 | CEILING.MATH | Rounds a number up using Excel's CEILING.MATH rules. | Math & Trig | 37 |
 | CEILING.PRECISE | Rounds a number up to the nearest significance, ignoring the sign of the significance. | Math & Trig | 37 |
-| CHAR | Returns the character for a numeric code. | Text | 8 |
+| CHAR | Returns the character for a numeric code. | Text | 41 |
 | CHISQ.DIST | Returns the chi-square distribution. | Statistical | 39 |
 | CHISQ.DIST.RT | Returns the right-tailed chi-square probability. | Statistical | 19 |
 | CHISQ.INV | Returns the inverse of the chi-square cumulative distribution. | Statistical | 36 |
@@ -60,7 +60,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | CHOOSECOLS | Returns selected columns from an array. | Lookup & Reference | 7 |
 | CHOOSEROWS | Returns selected rows from an array. | Lookup & Reference | 7 |
 | CLEAN | Removes non-printing characters from text. | Text | 25 |
-| CODE | Returns the numeric code for the first character in text. | Text | 12 |
+| CODE | Returns the numeric code for the first character in text. | Text | 13 |
 | COLUMN | Returns the column number of a reference. | Information | 23 |
 | COLUMNS | Returns the number of columns in a reference or array. | Information | 30 |
 | COMBIN | Returns the number of combinations for a given number of items. | Math & Trig | 40 |
