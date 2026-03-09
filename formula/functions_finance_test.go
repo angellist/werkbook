@@ -839,6 +839,82 @@ func TestFV_Comprehensive(t *testing.T) {
 			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), EmptyVal()},
 			want: 1233.56,
 		},
+		// --- Additional scenario coverage ---
+		{
+			name: "retirement savings 30 years monthly",
+			args: numArgs(0.07/12, 360, -500),
+			want: 609985.50,
+		},
+		{
+			name: "lump sum annual compound no pmt",
+			args: numArgs(0.05, 10, 0, -10000),
+			want: 16288.95,
+		},
+		{
+			name: "very small rate 360 periods",
+			args: numArgs(0.0001, 360, -100),
+			want: 36653.98,
+		},
+		{
+			name: "large payment 360 months",
+			args: numArgs(0.05/12, 360, -5000),
+			want: 4161293.18,
+		},
+		{
+			name: "very long term 50 years monthly",
+			args: numArgs(0.05/12, 600, -100),
+			want: 266865.20,
+		},
+		{
+			name: "mixed signs negative pmt positive pv loan paydown",
+			args: numArgs(0.06/12, 24, -100, 5000),
+			want: -3092.60,
+		},
+		{
+			name: "high rate 24 pct annual monthly",
+			args: numArgs(0.24/12, 36, -200),
+			want: 10398.87,
+		},
+		{
+			name: "beginning of period no pv",
+			args: numArgs(0.08/12, 60, -200, 0, 1),
+			want: 14793.34,
+		},
+		{
+			name: "beginning of period with pv",
+			args: numArgs(0.06/12, 120, -500, -10000, 1),
+			want: 100543.34,
+		},
+		{
+			name: "all string coercion",
+			args: []Value{StringVal("0.06"), StringVal("12"), StringVal("-1000")},
+			want: 16869.94,
+		},
+		{
+			name: "zero rate 12 periods pmt only",
+			args: numArgs(0, 12, -100),
+			want: 1200.00,
+		},
+		{
+			name: "zero rate 10 periods pmt and pv",
+			args: numArgs(0, 10, -100, -500),
+			want: 1500.00,
+		},
+		{
+			name: "annual compound 8 pct no pmt",
+			args: numArgs(0.08, 5, 0, -1000),
+			want: 1469.33,
+		},
+		{
+			name: "positive pmt receiving money",
+			args: numArgs(0.05/12, 60, 1000),
+			want: -68006.08,
+		},
+		{
+			name: "pv zero pmt zero rate nonzero",
+			args: numArgs(0.05, 10, 0, 0),
+			want: 0,
+		},
 	}
 
 	for _, tc := range tests {
