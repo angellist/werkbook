@@ -1,5 +1,82 @@
 # Changelog
 
+## v0.7.0
+
+### New formula functions (64 functions)
+
+#### Financial functions (25)
+- `ACCRINT`, `ACCRINTM`
+- `AMORDEGRC`, `AMORLINC`
+- `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`
+- `DISC`, `INTRATE`, `RECEIVED`
+- `DURATION`, `MDURATION`
+- `FVSCHEDULE`
+- `PRICE`, `YIELD`, `PRICEDISC`, `YIELDDISC`, `PRICEMAT`, `YIELDMAT`
+- `TBILLPRICE`, `TBILLYIELD`, `TBILLEQ`
+
+#### Statistical functions (10)
+- `AGGREGATE`
+- `BINOM.DIST.RANGE`, `PROB`
+- `CHISQ.TEST`, `F.TEST`, `T.TEST`, `Z.TEST`
+- `MODE.MULT`, `STDEVA`, `STDEVPA`
+
+#### Database functions (12)
+- `DSUM`, `DAVERAGE`, `DCOUNT`, `DCOUNTA`
+- `DGET`, `DMAX`, `DMIN`, `DPRODUCT`
+- `DSTDEV`, `DSTDEVP`, `DVAR`, `DVARP`
+
+#### Regression and array functions (6)
+- `LINEST`, `LOGEST`, `TREND`, `GROWTH`
+- `EXPAND`, `RANDARRAY`
+
+#### Engineering functions (5)
+- `BESSELI`, `BESSELJ`, `BESSELK`, `BESSELY`
+- `IMSEC`
+
+#### Other new functions (6)
+- `ENCODEURL`, `HYPERLINK`
+- `ISO.CEILING`
+- `ISREF`
+- `LET`, `OFFSET`
+
+### Features
+
+- **Core properties support**: Read and write workbook core properties (title, author, description, etc.)
+- **Range guards**: Bounds checking for range operations
+- **Qualified local names**: Formula engine supports qualified local defined name references
+
+### Bug fixes
+
+- **VLOOKUP**: Exact match now supports wildcards and skips empty cells
+- **HLOOKUP**: Added wildcard matching; returns `#VALUE!` for `row_index < 1`
+- **XLOOKUP**: Fixed `search_mode`, binary search support, and omitted `if_not_found` handling
+- **SUMPRODUCT**: Treats boolean and text cell values as 0 to match Excel
+- **SWITCH**, **LEN**, **UNICHAR**: Aligned behavior with Excel
+- **OFFSET**: Match Excel behavior for negative height/width and nesting
+- **T()**: Propagates error values instead of converting to string
+- **DAY**, **MONTH**, **YEAR**: Accept date strings like Excel
+- **WEEKDAY**: Match Excel behavior for serial numbers <= 60
+- **PV**: Returns `#NUM!` instead of `Inf` for degenerate inputs
+- **FVSCHEDULE**: Rejects booleans in schedule to match Excel
+- **SYD**: Fixed argument validation and evaluation
+- **AMORDEGRC**: Fixed rounding to match Excel behavior
+- **AMORLINC**: Match Excel behavior
+- **LINEST/LOGEST**: Fixed F-statistic calculation for near-perfect and perfect fit data
+- **NORM.S.INV**: Improved precision with Newton-Raphson refinement
+- **NORM.S.DIST**: Fixed spec/xlsx desync for 1-arg error case
+- **PROB**: Match Excel behavior for zero and negative probabilities
+- **T.TEST**: Paired mode skips non-numeric pairs to match Excel
+- **BESSELI/BESSELJ**: Improved precision to match Excel
+- **TBILLEQ**: Uses semi-annual compounding for DSM > 182 days
+- **DISC/INTRATE/RECEIVED**: Fixed basis=1 day count for cross-year periods
+- **COUP/DURATION** functions: Match Excel behavior
+- **ISREF**: Returns `TRUE` for `INDIRECT`/`OFFSET` ref-returning functions
+- **collectNumeric**: Ignores text/bool/empty cell refs (affects STDEV.S and other statistical functions)
+
+### Test coverage
+
+- Added comprehensive tests for 80+ formula functions
+
 ## v0.6.1
 
 ### Improvements

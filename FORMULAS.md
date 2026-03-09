@@ -212,7 +212,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | IMSUM | Returns the sum of complex numbers. | Engineering | 37 |
 | IMTAN | Returns the tangent of a complex number. | Engineering | 28 |
 | INDEX | Returns a value or subrange at a row and column position. | Lookup & Reference | 80 |
-| INDIRECT | Turns text into a reference and returns its value. | Lookup & Reference | 60 |
+| INDIRECT | Turns text into a reference and returns its value. | Lookup & Reference | 61 |
 | INT | Rounds a number down to the nearest integer. | Math & Trig | 27 |
 | INTERCEPT | Returns the y-intercept of a linear regression line. | Statistical | 16 |
 | INTRATE | Returns the interest rate for a fully invested security. | Financial | 3 |
@@ -368,7 +368,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 23 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 32 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 55 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 57 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 39 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 42 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 38 |
