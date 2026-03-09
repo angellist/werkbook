@@ -183,7 +183,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 32 |
-| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 57 |
+| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 58 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
 | IMABS | Returns the absolute value of a complex number. | Engineering | 38 |
@@ -238,7 +238,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 30 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
-| LEN | Returns the number of characters in text. | Text | 31 |
+| LEN | Returns the number of characters in text. | Text | 32 |
 | LET | Assigns names to intermediate values within a formula. | Logical | 33 |
 | LINEST | Returns linear regression statistics. | Statistical | 3 |
 | LN | Returns the natural logarithm of a number. | Math & Trig | 32 |

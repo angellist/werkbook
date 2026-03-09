@@ -1901,6 +1901,7 @@ func TestLEN(t *testing.T) {
 		// Wrong argument count
 		{name: "no_args", formula: `LEN()`, isErr: true},
 		{name: "two_args", formula: `LEN("a","b")`, isErr: true},
+		{name: "error_arg", formula: `LEN(NA())`, isErr: true},
 
 		// Nested formula
 		{name: "nested_concat", formula: `LEN(CONCATENATE("ab","cd"))`, wantNum: 4},
@@ -2273,9 +2274,6 @@ func TestUNICHAR(t *testing.T) {
 		// Emoji (supplementary plane)
 		{"grinning_face", `UNICHAR(128512)`, "\U0001F600"}, // 😀
 
-		// Max valid Unicode code point
-		{"max_unicode", `UNICHAR(1114111)`, "\U0010FFFF"},
-
 		// Non-integer inputs should truncate
 		{"truncate_65.1", `UNICHAR(65.1)`, "A"},
 		{"truncate_65.9", `UNICHAR(65.9)`, "A"},
@@ -2298,8 +2296,6 @@ func TestUNICHAR(t *testing.T) {
 		// Unicode noncharacters — Excel accepts them
 		{"nonchar_fdd0", `UNICHAR(64976)`, "\uFDD0"},
 		{"nonchar_fffe", `UNICHAR(65534)`, "\uFFFE"},
-		{"nonchar_ffff", `UNICHAR(65535)`, "\uFFFF"},
-
 		// Boolean TRUE coerces to 1
 		{"bool_true", `UNICHAR(TRUE)`, "\x01"},
 	}
@@ -2335,6 +2331,9 @@ func TestUNICHAR(t *testing.T) {
 		{"surrogate_start", `UNICHAR(55296)`, ErrValVALUE}, // 0xD800
 		{"surrogate_mid", `UNICHAR(56000)`, ErrValVALUE},   // 0xDAC0
 		{"surrogate_end", `UNICHAR(57343)`, ErrValVALUE},   // 0xDFFF
+		// Plane-terminal U+FFFF noncharacters → #N/A
+		{"nonchar_ffff", `UNICHAR(65535)`, ErrValNA},
+		{"max_unicode", `UNICHAR(1114111)`, ErrValNA},
 		// Non-numeric string → #VALUE!
 		{"non_numeric_string", `UNICHAR("hello")`, ErrValVALUE},
 		// Wrong number of args

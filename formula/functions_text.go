@@ -200,6 +200,9 @@ func fnLEN(args []Value) (Value, error) {
 	if len(args) != 1 {
 		return ErrorVal(ErrValVALUE), nil
 	}
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
 	s := ValueToString(args[0])
 	return NumberVal(float64(utf8.RuneCountInString(s))), nil
 }
@@ -453,6 +456,10 @@ func fnUnichar(args []Value) (Value, error) {
 	// Surrogate code points (U+D800–U+DFFF) are not valid Unicode characters.
 	if code >= 0xD800 && code <= 0xDFFF {
 		return ErrorVal(ErrValVALUE), nil
+	}
+	// Excel returns #N/A for plane-terminal U+FFFF noncharacters.
+	if code&0xFFFF == 0xFFFF {
+		return ErrorVal(ErrValNA), nil
 	}
 	return StringVal(string(rune(code))), nil
 }
