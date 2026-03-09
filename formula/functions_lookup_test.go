@@ -7985,3 +7985,196 @@ func TestEXPAND_ViaEval(t *testing.T) {
 		t.Errorf("expected #N/A at [2][2], got %v", got.Array[2][2])
 	}
 }
+
+func TestHYPERLINK(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("http://example.com"),
+			{Col: 2, Row: 1}: StringVal("Example Site"),
+			{Col: 1, Row: 2}: NumberVal(42),
+			{Col: 2, Row: 2}: NumberVal(100),
+			{Col: 1, Row: 3}: BoolVal(true),
+		},
+	}
+
+	tests := []struct {
+		name    string
+		formula string
+		wantType ValueType
+		wantStr  string
+		wantNum  float64
+		wantBool bool
+		wantErr  ErrorValue
+	}{
+		{
+			name:     "basic with friendly name",
+			formula:  `HYPERLINK("http://example.com","Click me")`,
+			wantType: ValueString,
+			wantStr:  "Click me",
+		},
+		{
+			name:     "URL only no friendly name",
+			formula:  `HYPERLINK("http://example.com")`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "numeric friendly name",
+			formula:  `HYPERLINK("http://example.com",42)`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		{
+			name:     "boolean friendly name TRUE",
+			formula:  `HYPERLINK("http://example.com",TRUE)`,
+			wantType: ValueBool,
+			wantBool: true,
+		},
+		{
+			name:     "boolean friendly name FALSE",
+			formula:  `HYPERLINK("http://example.com",FALSE)`,
+			wantType: ValueBool,
+			wantBool: false,
+		},
+		{
+			name:     "empty string friendly name",
+			formula:  `HYPERLINK("http://example.com","")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "empty string link location",
+			formula:  `HYPERLINK("")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "error in link location",
+			formula:  `HYPERLINK(1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "error in friendly name",
+			formula:  `HYPERLINK("http://example.com",1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "error in both args propagates link_location error",
+			formula:  `HYPERLINK(1/0,1/0)`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name:     "zero args returns VALUE error",
+			formula:  `HYPERLINK()`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "numeric link location no friendly name",
+			formula:  `HYPERLINK(12345)`,
+			wantType: ValueString,
+			wantStr:  "12345",
+		},
+		{
+			name:     "boolean link location no friendly name",
+			formula:  `HYPERLINK(TRUE)`,
+			wantType: ValueString,
+			wantStr:  "TRUE",
+		},
+		{
+			name:     "cell reference for link location",
+			formula:  `HYPERLINK(A1)`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "cell reference for friendly name",
+			formula:  `HYPERLINK("http://example.com",B1)`,
+			wantType: ValueString,
+			wantStr:  "Example Site",
+		},
+		{
+			name:     "cell reference numeric friendly name",
+			formula:  `HYPERLINK("http://example.com",B2)`,
+			wantType: ValueNumber,
+			wantNum:  100,
+		},
+		{
+			name:     "nested CONCATENATE in link location",
+			formula:  `HYPERLINK(CONCATENATE("http://","example.com"))`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "nested UPPER in friendly name",
+			formula:  `HYPERLINK("http://example.com",UPPER("click"))`,
+			wantType: ValueString,
+			wantStr:  "CLICK",
+		},
+		{
+			name:     "string concatenation with ampersand in link",
+			formula:  `HYPERLINK("http://"&"example.com")`,
+			wantType: ValueString,
+			wantStr:  "http://example.com",
+		},
+		{
+			name:     "friendly name with number from cell",
+			formula:  `HYPERLINK(A1,A2)`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		{
+			name:     "friendly name empty cell returns empty",
+			formula:  `HYPERLINK("http://example.com",C5)`,
+			wantType: ValueEmpty,
+		},
+		{
+			name:     "link location with empty friendly name string",
+			formula:  `HYPERLINK("http://example.com","")`,
+			wantType: ValueString,
+			wantStr:  "",
+		},
+		{
+			name:     "numeric link and numeric friendly",
+			formula:  `HYPERLINK(123,456)`,
+			wantType: ValueNumber,
+			wantNum:  456,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.wantType {
+				t.Fatalf("got type %v, want %v (value=%v)", got.Type, tt.wantType, got)
+			}
+			switch tt.wantType {
+			case ValueString:
+				if got.Str != tt.wantStr {
+					t.Errorf("got %q, want %q", got.Str, tt.wantStr)
+				}
+			case ValueNumber:
+				if got.Num != tt.wantNum {
+					t.Errorf("got %g, want %g", got.Num, tt.wantNum)
+				}
+			case ValueBool:
+				if got.Bool != tt.wantBool {
+					t.Errorf("got %v, want %v", got.Bool, tt.wantBool)
+				}
+			case ValueError:
+				if got.Err != tt.wantErr {
+					t.Errorf("got %v, want %v", got.Err, tt.wantErr)
+				}
+			case ValueEmpty:
+				// nothing to check beyond type
+			}
+		})
+	}
+}

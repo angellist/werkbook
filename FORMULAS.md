@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **427** spreadsheet formula functions.
+Werkbook supports **428** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -174,6 +174,7 @@ Werkbook supports **427** spreadsheet formula functions.
 | HLOOKUP | Lookup & Reference | 22 |
 | HOUR | Date & Time | 16 |
 | HSTACK | Lookup & Reference | 18 |
+| HYPERLINK | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Statistical | 37 |
 | IF | Logical | 23 |
 | IFERROR | Logical | 50 |
@@ -434,7 +435,7 @@ Werkbook supports **427** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **43** functions are not yet supported.
+The following **42** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -458,7 +459,6 @@ The following **43** functions are not yet supported.
 | FORECAST.ETS.SEASONALITY | Statistical |
 | FORECAST.ETS.STAT | Statistical |
 | GETPIVOTDATA | Lookup & Reference |
-| HYPERLINK | Lookup & Reference |
 | INFO | Information |
 | LAMBDA | Logical |
 | LEFTB | Text |

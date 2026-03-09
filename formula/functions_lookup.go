@@ -31,6 +31,7 @@ func init() {
 	Register("WRAPROWS", NoCtx(fnWRAPROWS))
 	Register("HSTACK", NoCtx(fnHSTACK))
 	Register("VSTACK", NoCtx(fnVSTACK))
+	Register("HYPERLINK", NoCtx(fnHyperlink))
 	Register("XLOOKUP", NoCtx(fnXLOOKUP))
 	Register("XMATCH", NoCtx(fnXMATCH))
 }
@@ -2278,4 +2279,30 @@ func xmatchNextLargest(lookup Value, values []Value, searchMode int) Value {
 		}
 	}
 	return ErrorVal(ErrValNA)
+}
+
+// fnHyperlink implements HYPERLINK(link_location, [friendly_name]).
+// It returns the friendly_name (or link_location if omitted) as the display value.
+func fnHyperlink(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Evaluate link_location — propagate errors.
+	loc := args[0]
+	if loc.Type == ValueError {
+		return loc, nil
+	}
+
+	// If friendly_name is provided, return it as-is (propagating errors).
+	if len(args) == 2 {
+		fn := args[1]
+		if fn.Type == ValueError {
+			return fn, nil
+		}
+		return fn, nil
+	}
+
+	// No friendly_name — return link_location coerced to string.
+	return StringVal(ValueToString(loc)), nil
 }
