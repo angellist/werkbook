@@ -2255,7 +2255,7 @@ func TestUNICHAR(t *testing.T) {
 		{"lowercase_z", `UNICHAR(122)`, "z"},
 		{"tilde", `UNICHAR(126)`, "~"},
 
-		// Tab, LF, CR are the only control chars Excel allows
+		// Common control characters
 		{"tab", `UNICHAR(9)`, "\t"},
 		{"line_feed", `UNICHAR(10)`, "\n"},
 		{"carriage_return", `UNICHAR(13)`, "\r"},
@@ -2285,7 +2285,23 @@ func TestUNICHAR(t *testing.T) {
 		{"string_65", `UNICHAR("65")`, "A"},
 		{"string_66", `UNICHAR("66")`, "B"},
 
-		// Boolean TRUE = 1 → now #VALUE! since code 1 is a control char
+		// Control characters — Excel accepts all of them
+		{"control_1", `UNICHAR(1)`, "\x01"},
+		{"control_2", `UNICHAR(2)`, "\x02"},
+		{"control_31", `UNICHAR(31)`, "\x1F"},
+
+		// DEL and C1 control characters — Excel accepts them
+		{"del", `UNICHAR(127)`, "\x7F"},
+		{"c1_128", `UNICHAR(128)`, "\u0080"},
+		{"c1_159", `UNICHAR(159)`, "\u009F"},
+
+		// Unicode noncharacters — Excel accepts them
+		{"nonchar_fdd0", `UNICHAR(64976)`, "\uFDD0"},
+		{"nonchar_fffe", `UNICHAR(65534)`, "\uFFFE"},
+		{"nonchar_ffff", `UNICHAR(65535)`, "\uFFFF"},
+
+		// Boolean TRUE coerces to 1
+		{"bool_true", `UNICHAR(TRUE)`, "\x01"},
 	}
 
 	for _, tt := range strTests {
@@ -2315,16 +2331,6 @@ func TestUNICHAR(t *testing.T) {
 		// Above max Unicode code point
 		{"too_large", `UNICHAR(1114112)`, ErrValVALUE},
 		{"very_large", `UNICHAR(9999999)`, ErrValVALUE},
-		// Control characters → #VALUE!
-		{"control_1", `UNICHAR(1)`, ErrValVALUE},
-		{"control_31", `UNICHAR(31)`, ErrValVALUE},
-		{"bool_true", `UNICHAR(TRUE)`, ErrValVALUE}, // TRUE=1, control char
-		{"del", `UNICHAR(127)`, ErrValVALUE},         // 0x7F
-		{"c1_control", `UNICHAR(159)`, ErrValVALUE},  // 0x9F
-		// Unicode noncharacters → #VALUE!
-		{"nonchar_ffff", `UNICHAR(65535)`, ErrValVALUE},  // U+FFFF
-		{"nonchar_fffe", `UNICHAR(65534)`, ErrValVALUE},  // U+FFFE
-		{"nonchar_fdd0", `UNICHAR(64976)`, ErrValVALUE},  // U+FDD0
 		// Surrogate code points → #VALUE!
 		{"surrogate_start", `UNICHAR(55296)`, ErrValVALUE}, // 0xD800
 		{"surrogate_mid", `UNICHAR(56000)`, ErrValVALUE},   // 0xDAC0
