@@ -452,6 +452,63 @@ func TestPMT_Comprehensive(t *testing.T) {
 			args:    numArgs(0.05),
 			wantErr: true,
 		},
+
+		// --- Additional parity cases ---
+		{
+			name: "30-year mortgage at 6%",
+			args: numArgs(0.06/12, 360, 200000),
+			want: -1199.10,
+		},
+		{
+			name: "5-year car loan at 5%",
+			args: numArgs(0.05/12, 60, 25000),
+			want: -471.78,
+		},
+		{
+			name: "zero rate 12 periods $12000",
+			args: numArgs(0, 12, 12000),
+			want: -1000,
+		},
+		{
+			name: "rate=0 with fv only",
+			args: numArgs(0, 10, 0, 10000),
+			want: -1000,
+		},
+		{
+			name: "negative pv with positive fv",
+			args: numArgs(0.1/12, 60, -5000, 20000),
+			want: -152.04,
+		},
+		{
+			name: "type=1 with pv and fv (8%/12, 24 periods)",
+			args: numArgs(0.08/12, 24, 10000, 5000, 1),
+			want: -640.80,
+		},
+		{
+			name: "very small rate 0.0001 over 360 periods",
+			args: numArgs(0.0001, 360, 100000),
+			want: -282.82,
+		},
+		{
+			name: "50-year loan at 5%",
+			args: numArgs(0.05/12, 600, 100000),
+			want: -454.14,
+		},
+		{
+			name: "negative pv 8%/12 over 120 periods",
+			args: numArgs(0.08/12, 120, -50000),
+			want: 606.64,
+		},
+		{
+			name: "pv=20000 fv=-5000 at 5%/12 over 60 months",
+			args: numArgs(0.05/12, 60, 20000, -5000),
+			want: -303.90,
+		},
+		{
+			name: "string coercion: all three args as strings",
+			args: []Value{StringVal("0.05"), StringVal("12"), StringVal("1000")},
+			want: -112.83,
+		},
 	}
 
 	for _, tt := range tests {
