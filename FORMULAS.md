@@ -25,7 +25,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | ATAN2 | Returns the arctangent from x and y coordinates. | Math & Trig | 30 |
 | ATANH | Returns the inverse hyperbolic tangent of a number. | Math & Trig | 31 |
 | AVEDEV | Returns the average absolute deviation from the mean. | Statistical | 22 |
-| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 31 |
+| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 32 |
 | AVERAGEA | Returns the average of supplied values, including logical values and text coercions. | Statistical | 24 |
 | AVERAGEIF | Returns the average of values that match one condition. | Statistical | 42 |
 | AVERAGEIFS | Returns the average of values that match all supplied conditions. | Statistical | 48 |
@@ -61,13 +61,13 @@ Werkbook supports **437** spreadsheet formula functions.
 | CHOOSEROWS | Returns selected rows from an array. | Lookup & Reference | 16 |
 | CLEAN | Removes non-printing characters from text. | Text | 25 |
 | CODE | Returns the numeric code for the first character in text. | Text | 13 |
-| COLUMN | Returns the column number of a reference. | Information | 24 |
+| COLUMN | Returns the column number of a reference. | Information | 25 |
 | COLUMNS | Returns the number of columns in a reference or array. | Information | 30 |
 | COMBIN | Returns the number of combinations for a given number of items. | Math & Trig | 40 |
 | COMBINA | Returns the number of combinations with repetitions. | Math & Trig | 31 |
 | COMPLEX | Builds a complex number from real and imaginary parts. | Engineering | 51 |
 | CONCAT | Joins text from multiple values or ranges. | Text | 33 |
-| CONCATENATE | Joins multiple text values into one string. | Text | 42 |
+| CONCATENATE | Joins multiple text values into one string. | Text | 45 |
 | CONFIDENCE.NORM | Returns a normal-distribution confidence interval half-width. | Statistical | 25 |
 | CONFIDENCE.T | Returns a Student's t-distribution confidence interval half-width. | Statistical | 29 |
 | CONVERT | Converts a number from one measurement system to another. | Engineering | 57 |
@@ -159,7 +159,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | FLOOR.PRECISE | Rounds a number down to the nearest significance, ignoring the sign of the significance. | Math & Trig | 36 |
 | FORECAST | Predicts a future value using linear regression. | Statistical | 20 |
 | FORECAST.LINEAR | Predicts a future value using linear regression. | Statistical | 22 |
-| FORMULATEXT | Returns the formula text from a referenced cell. | Information | 33 |
+| FORMULATEXT | Returns the formula text from a referenced cell. | Information | 39 |
 | FREQUENCY | Returns a frequency distribution for numeric bins. | Statistical | 25 |
 | FV | Returns the future value of an investment or annuity. | Financial | 4 |
 | FVSCHEDULE | Returns a future value after applying a schedule of interest rates. | Financial | 1 |
@@ -182,7 +182,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | HSTACK | Stacks arrays horizontally. | Lookup & Reference | 18 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
-| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 26 |
+| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 29 |
 | IFERROR | Returns a fallback value when a formula returns an error. | Logical | 57 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
@@ -222,7 +222,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | ISERR | Returns TRUE for any error except #N/A. | Information | 22 |
 | ISERROR | Returns TRUE for any error value. | Information | 22 |
 | ISEVEN | Returns TRUE when a number is even. | Information | 33 |
-| ISFORMULA | Returns TRUE when a referenced cell contains a formula. | Information | 9 |
+| ISFORMULA | Returns TRUE when a referenced cell contains a formula. | Information | 34 |
 | ISLOGICAL | Returns TRUE when a value is logical. | Information | 27 |
 | ISNA | Returns TRUE when a value is #N/A. | Information | 30 |
 | ISNONTEXT | Returns TRUE when a value is not text. | Information | 26 |
@@ -238,7 +238,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 30 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
-| LEN | Returns the number of characters in text. | Text | 30 |
+| LEN | Returns the number of characters in text. | Text | 31 |
 | LET | Assigns names to intermediate values within a formula. | Logical | 33 |
 | LINEST | Returns linear regression statistics. | Statistical | 2 |
 | LN | Returns the natural logarithm of a number. | Math & Trig | 32 |
@@ -250,14 +250,14 @@ Werkbook supports **437** spreadsheet formula functions.
 | LOOKUP | Looks up a value in a one-dimensional range and returns the matching result. | Lookup & Reference | 24 |
 | LOWER | Converts text to lowercase. | Text | 23 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 16 |
-| MAX | Returns the largest numeric value. | Statistical | 32 |
+| MAX | Returns the largest numeric value. | Statistical | 33 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
 | MDURATION | Returns the modified duration of a security. | Financial | 2 |
 | MEDIAN | Returns the median of a data set. | Statistical | 27 |
 | MID | Returns characters from the middle of a text value. | Text | 50 |
-| MIN | Returns the smallest numeric value. | Statistical | 31 |
+| MIN | Returns the smallest numeric value. | Statistical | 32 |
 | MINA | Returns the smallest value, counting logical values and text coercions. | Statistical | 16 |
 | MINIFS | Returns the minimum value that matches all supplied conditions. | Statistical | 49 |
 | MINUTE | Returns the minute from a time or datetime value. | Date & Time | 16 |
@@ -282,7 +282,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | NORM.INV | Returns the inverse of the normal cumulative distribution. | Statistical | 28 |
 | NORM.S.DIST | Returns the standard normal distribution. | Statistical | 27 |
 | NORM.S.INV | Returns the inverse of the standard normal cumulative distribution. | Statistical | 27 |
-| NOT | Returns the opposite of a logical value. | Logical | 10 |
+| NOT | Returns the opposite of a logical value. | Logical | 12 |
 | NOW | Returns the current date and time. | Date & Time | 2 |
 | NPER | Returns the number of periods for an investment or loan. | Financial | 3 |
 | NPV | Returns the net present value of periodic cash flows. | Financial | 25 |
@@ -368,7 +368,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 23 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 32 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 48 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 50 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 37 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 42 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 22 |
@@ -411,7 +411,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | UNICHAR | Returns the Unicode character for a code point. | Text | 37 |
 | UNICODE | Returns the Unicode code point for the first character in text. | Text | 36 |
 | UNIQUE | Returns distinct rows or columns from an array. | Lookup & Reference | 29 |
-| UPPER | Converts text to uppercase. | Text | 25 |
+| UPPER | Converts text to uppercase. | Text | 27 |
 | VALUE | Converts text that looks like a number into a numeric value. | Text | 31 |
 | VALUETOTEXT | Converts a value to a text representation. | Text | 26 |
 | VAR | Returns the sample variance. | Statistical | 25 |
