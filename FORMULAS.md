@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **423** spreadsheet formula functions.
+Werkbook supports **424** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -166,6 +166,7 @@ Werkbook supports **423** spreadsheet formula functions.
 | GCD | Math & Trig | 37 |
 | GEOMEAN | Statistical | 24 |
 | GESTEP | Engineering | 29 |
+| GROWTH | Statistical | 13 |
 | HARMEAN | Statistical | 21 |
 | HEX2BIN | Engineering | 38 |
 | HEX2DEC | Engineering | 39 |
@@ -430,7 +431,7 @@ Werkbook supports **423** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **47** functions are not yet supported.
+The following **46** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -454,7 +455,6 @@ The following **47** functions are not yet supported.
 | FORECAST.ETS.SEASONALITY | Statistical |
 | FORECAST.ETS.STAT | Statistical |
 | GETPIVOTDATA | Lookup & Reference |
-| GROWTH | Statistical |
 | HYPERLINK | Lookup & Reference |
 | INFO | Information |
 | LAMBDA | Logical |

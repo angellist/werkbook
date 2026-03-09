@@ -24984,3 +24984,573 @@ func TestModeMult(t *testing.T) {
 		assertArrayResult(t, got, []float64{2})
 	})
 }
+
+// ---------------------------------------------------------------------------
+// GROWTH
+// ---------------------------------------------------------------------------
+
+func TestGROWTH(t *testing.T) {
+	const tol = 1e-1 // GROWTH predictions can have small rounding diffs
+
+	// Excel doc example:
+	// known_y = {33100, 47300, 69000, 102000, 150000, 220000}
+	// known_x = {11, 12, 13, 14, 15, 16}
+	docResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// Column A: y values
+			{Col: 1, Row: 1}: NumberVal(33100),
+			{Col: 1, Row: 2}: NumberVal(47300),
+			{Col: 1, Row: 3}: NumberVal(69000),
+			{Col: 1, Row: 4}: NumberVal(102000),
+			{Col: 1, Row: 5}: NumberVal(150000),
+			{Col: 1, Row: 6}: NumberVal(220000),
+			// Column B: x values
+			{Col: 2, Row: 1}: NumberVal(11),
+			{Col: 2, Row: 2}: NumberVal(12),
+			{Col: 2, Row: 3}: NumberVal(13),
+			{Col: 2, Row: 4}: NumberVal(14),
+			{Col: 2, Row: 5}: NumberVal(15),
+			{Col: 2, Row: 6}: NumberVal(16),
+			// Column C: new x values for prediction
+			{Col: 3, Row: 1}: NumberVal(17),
+			{Col: 3, Row: 2}: NumberVal(18),
+		},
+	}
+
+	// Simple exponential: y = 2^x for x=1,2,3 -> y = 2, 4, 8
+	simpleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(8), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Two data points: y = {10, 100}, x = {1, 2}
+	twoPtResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(100), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Single data point: y = {5}, x = {3}
+	singleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5), {Col: 2, Row: 1}: NumberVal(3),
+		},
+	}
+
+	// Negative y value -> #NUM!
+	negYResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(-5), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Zero y value -> #NUM!
+	zeroYResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(0), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Mismatched dimensions
+	mismatchResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(30),
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// All y values the same: y = {5, 5, 5}, x = {1, 2, 3}
+	flatResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Error propagation: y contains #VALUE!
+	errResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: ErrorVal(ErrValVALUE), {Col: 2, Row: 2}: NumberVal(2),
+		},
+	}
+
+	// Error in x
+	errXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(20), {Col: 2, Row: 2}: ErrorVal(ErrValNUM),
+		},
+	}
+
+	t.Run("doc_example_fitted_values", func(t *testing.T) {
+		// GROWTH(A1:A6,B1:B6) returns fitted values for x=11..16
+		cf := evalCompile(t, "GROWTH(A1:A6,B1:B6)")
+		got, err := Eval(cf, docResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		expected := []float64{32618.3, 47729.4, 69841.3, 102197.1, 149542.5, 218821.9}
+		flat := flattenArray(got)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("doc_example_predict_new_x", func(t *testing.T) {
+		// GROWTH(A1:A6,B1:B6,C1:C2) predicts for x=17,18
+		cf := evalCompile(t, "GROWTH(A1:A6,B1:B6,C1:C2)")
+		got, err := Eval(cf, docResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		expected := []float64{320196.7, 468536.1}
+		flat := flattenArray(got)
+		if len(flat) != len(expected) {
+			t.Fatalf("expected %d values, got %d", len(expected), len(flat))
+		}
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > tol {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("simple_exponential_fitted", func(t *testing.T) {
+		// y = 2^x: GROWTH({2,4,8},{1,2,3}) should return {2,4,8}
+		cf := evalCompile(t, "GROWTH(A1:A3,B1:B3)")
+		got, err := Eval(cf, simpleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		expected := []float64{2, 4, 8}
+		flat := flattenArray(got)
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > 0.01 {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("simple_exponential_predict", func(t *testing.T) {
+		// y = 2^x: predict x=4 -> 16, x=5 -> 32
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(8), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 3, Row: 1}: NumberVal(4),
+				{Col: 3, Row: 2}: NumberVal(5),
+			},
+		}
+		cf := evalCompile(t, "GROWTH(A1:A3,B1:B3,C1:C2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		expected := []float64{16, 32}
+		flat := flattenArray(got)
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > 0.01 {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("omit_known_x_defaults_to_1_2_3", func(t *testing.T) {
+		// GROWTH({2,4,8}) should use known_x={1,2,3}
+		// This is equivalent to GROWTH({2,4,8},{1,2,3})
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		expected := []float64{2, 4, 8}
+		flat := flattenArray(v)
+		for i, want := range expected {
+			if math.Abs(flat[i]-want) > 0.01 {
+				t.Errorf("index %d: got %f, want %f", i, flat[i], want)
+			}
+		}
+	})
+
+	t.Run("omit_new_x_defaults_to_known_x", func(t *testing.T) {
+		// GROWTH(A1:A3,B1:B3) with no new_x's should predict for known_x
+		cf := evalCompile(t, "GROWTH(A1:A3,B1:B3)")
+		got, err := Eval(cf, simpleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		if len(flat) != 3 {
+			t.Fatalf("expected 3 values, got %d", len(flat))
+		}
+	})
+
+	t.Run("const_false", func(t *testing.T) {
+		// const=FALSE forces b=1, so model is y = m^x
+		// With y={2,4,8}, x={1,2,3}: ln(y)={0.693,1.386,2.079}
+		// slope = sum(x*lny)/sum(x^2) = (0.693+2.772+6.238)/(1+4+9) = 9.704/14 ~ 0.693
+		// So predicted y(x) = exp(0.693*x) = 2^x
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		flat := flattenArray(v)
+		if len(flat) != 1 {
+			t.Fatalf("expected 1 value, got %d", len(flat))
+		}
+		// predict x=4 -> exp(0.693*4) ~ 16
+		if math.Abs(flat[0]-16) > 0.1 {
+			t.Errorf("got %f, want ~16", flat[0])
+		}
+	})
+
+	t.Run("const_true_explicit", func(t *testing.T) {
+		// const=TRUE is same as default
+		v1, _ := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+			BoolVal(true),
+		})
+		v2, _ := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4)}}},
+		})
+		flat1 := flattenArray(v1)
+		flat2 := flattenArray(v2)
+		if len(flat1) != 1 || len(flat2) != 1 {
+			t.Fatalf("expected 1 value each")
+		}
+		if math.Abs(flat1[0]-flat2[0]) > 1e-10 {
+			t.Errorf("const=TRUE result %f differs from default %f", flat1[0], flat2[0])
+		}
+	})
+
+	t.Run("two_data_points", func(t *testing.T) {
+		// y={10,100}, x={1,2}: ln(y)={2.303,4.605}
+		// slope = (4.605-2.303)/(2-1) = 2.303
+		// intercept = lnybar - slope*xbar = 3.454 - 2.303*1.5 = 0
+		// predict x=3 -> exp(0 + 2.303*3) = exp(6.908) ~ 1000
+		cf := evalCompile(t, "GROWTH(A1:A2,B1:B2)")
+		got, err := Eval(cf, twoPtResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		if len(flat) != 2 {
+			t.Fatalf("expected 2 values, got %d", len(flat))
+		}
+		// fitted: should recover {10, 100}
+		if math.Abs(flat[0]-10) > 0.1 {
+			t.Errorf("index 0: got %f, want ~10", flat[0])
+		}
+		if math.Abs(flat[1]-100) > 0.1 {
+			t.Errorf("index 1: got %f, want ~100", flat[1])
+		}
+	})
+
+	t.Run("single_data_point", func(t *testing.T) {
+		// With n=1, all x values the same (trivially), slope=0, intercept=ln(5)
+		// prediction for any x = exp(ln(5)) = 5
+		cf := evalCompile(t, "GROWTH(A1:A1,B1:B1)")
+		got, err := Eval(cf, singleResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		// A1:A1 is a 1x1 range, so result is a 1x1 array
+		flat := flattenArray(got)
+		if len(flat) != 1 {
+			t.Fatalf("expected 1 value, got %d", len(flat))
+		}
+		if math.Abs(flat[0]-5) > 0.01 {
+			t.Errorf("got %f, want 5", flat[0])
+		}
+	})
+
+	t.Run("negative_y_num_error", func(t *testing.T) {
+		cf := evalCompile(t, "GROWTH(A1:A2,B1:B2)")
+		got, err := Eval(cf, negYResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("expected #NUM!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("zero_y_num_error", func(t *testing.T) {
+		cf := evalCompile(t, "GROWTH(A1:A2,B1:B2)")
+		got, err := Eval(cf, zeroYResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("expected #NUM!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("zero_args", func(t *testing.T) {
+		v, err := fnGROWTH([]Value{})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("five_args", func(t *testing.T) {
+		v, err := fnGROWTH([]Value{NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(1), NumberVal(1)})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("mismatched_dimensions", func(t *testing.T) {
+		cf := evalCompile(t, "GROWTH(A1:A3,B1:B2)")
+		got, err := Eval(cf, mismatchResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("all_y_same_flat_line", func(t *testing.T) {
+		// y={5,5,5}, x={1,2,3}: slope=0, intercept=ln(5)
+		// All predictions should be 5
+		cf := evalCompile(t, "GROWTH(A1:A3,B1:B3)")
+		got, err := Eval(cf, flatResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		flat := flattenArray(got)
+		for i, v := range flat {
+			if math.Abs(v-5) > 0.01 {
+				t.Errorf("index %d: got %f, want 5", i, v)
+			}
+		}
+	})
+
+	t.Run("error_propagation_y", func(t *testing.T) {
+		cf := evalCompile(t, "GROWTH(A1:A2,B1:B2)")
+		got, err := Eval(cf, errResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("error_propagation_x", func(t *testing.T) {
+		cf := evalCompile(t, "GROWTH(A1:A2,B1:B2)")
+		got, err := Eval(cf, errXResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("expected #NUM!, got type=%d err=%v", got.Type, got.Err)
+		}
+	})
+
+	t.Run("array_literal_inputs", func(t *testing.T) {
+		// GROWTH({2,4,8},{1,2,3},{4,5})
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4), NumberVal(5)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		flat := flattenArray(v)
+		if len(flat) != 2 {
+			t.Fatalf("expected 2 values, got %d", len(flat))
+		}
+		// y=2^x, predict x=4 -> 16, x=5 -> 32
+		if math.Abs(flat[0]-16) > 0.1 {
+			t.Errorf("got %f, want ~16", flat[0])
+		}
+		if math.Abs(flat[1]-32) > 0.1 {
+			t.Errorf("got %f, want ~32", flat[1])
+		}
+	})
+
+	t.Run("scalar_new_x_returns_scalar", func(t *testing.T) {
+		// GROWTH({2,4,8},{1,2,3},4) should return a single number, not array
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected scalar number, got type=%d", v.Type)
+		}
+		if math.Abs(v.Num-16) > 0.1 {
+			t.Errorf("got %f, want ~16", v.Num)
+		}
+	})
+
+	t.Run("column_array_returns_column", func(t *testing.T) {
+		// new_x as column (3x1 array)
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{
+				{NumberVal(4)},
+				{NumberVal(5)},
+				{NumberVal(6)},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(v.Array))
+		}
+		for _, row := range v.Array {
+			if len(row) != 1 {
+				t.Errorf("expected 1 column, got %d", len(row))
+			}
+		}
+	})
+
+	t.Run("row_array_returns_row", func(t *testing.T) {
+		// new_x as row (1x3 array)
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(4), NumberVal(5), NumberVal(6)}}},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 {
+			t.Fatalf("expected 1 row, got %d", len(v.Array))
+		}
+		if len(v.Array[0]) != 3 {
+			t.Errorf("expected 3 columns, got %d", len(v.Array[0]))
+		}
+	})
+
+	t.Run("const_false_all_x_zero_div0", func(t *testing.T) {
+		// const=FALSE with all x=0 -> sum(x^2)=0 -> #DIV/0!
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(0), NumberVal(0)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1)}}},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValDIV0 {
+			t.Errorf("expected #DIV/0!, got type=%d err=%v", v.Type, v.Err)
+		}
+	})
+
+	t.Run("predict_x_zero", func(t *testing.T) {
+		// y=2^x, predict x=0 -> exp(intercept) = exp(0) = 1
+		// For perfect y=2^x with x={1,2,3}: intercept = lnybar - slope*xbar
+		// lnybar = (ln2+ln4+ln8)/3 = (0.693+1.386+2.079)/3 = 1.386
+		// slope = ln(2) = 0.693
+		// intercept = 1.386 - 0.693*2 = 0
+		// predict x=0: exp(0) = 1
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(2), NumberVal(4), NumberVal(8)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2), NumberVal(3)}}},
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		if math.Abs(v.Num-1) > 0.01 {
+			t.Errorf("got %f, want ~1", v.Num)
+		}
+	})
+
+	t.Run("large_growth_factor", func(t *testing.T) {
+		// y grows by 10x each step: y={1,10,100}, x={0,1,2}
+		// predict x=3 -> 1000
+		v, err := fnGROWTH([]Value{
+			{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(10), NumberVal(100)}}},
+			{Type: ValueArray, Array: [][]Value{{NumberVal(0), NumberVal(1), NumberVal(2)}}},
+			NumberVal(3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", v.Type)
+		}
+		if math.Abs(v.Num-1000) > 1 {
+			t.Errorf("got %f, want ~1000", v.Num)
+		}
+	})
+}
+
+// flattenArray is a test helper that extracts all float64 values from a Value.
+func flattenArray(v Value) []float64 {
+	if v.Type == ValueNumber {
+		return []float64{v.Num}
+	}
+	if v.Type != ValueArray {
+		return nil
+	}
+	var out []float64
+	for _, row := range v.Array {
+		for _, cell := range row {
+			if cell.Type == ValueNumber {
+				out = append(out, cell.Num)
+			}
+		}
+	}
+	return out
+}

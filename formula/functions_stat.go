@@ -34,6 +34,7 @@ func init() {
 	Register("GAMMALN", NoCtx(fnGAMMALN))
 	Register("GAMMALN.PRECISE", NoCtx(fnGAMMALN))
 	Register("GEOMEAN", NoCtx(fnGEOMEAN))
+	Register("GROWTH", NoCtx(fnGROWTH))
 	Register("HARMEAN", NoCtx(fnHARMEAN))
 	Register("LARGE", NoCtx(fnLARGE))
 	Register("MAX", NoCtx(fnMAX))
@@ -5537,4 +5538,197 @@ func fnFTest(args []Value) (Value, error) {
 	}
 
 	return NumberVal(p), nil
+}
+
+// fnGROWTH implements GROWTH(known_y's, [known_x's], [new_x's], [const]).
+// It returns predicted y-values for new x-values based on an exponential
+// regression model y = b * m^x (equivalently, linear regression on ln(y) vs x).
+func fnGROWTH(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- arrayDims returns (rows, cols) for an array, or (1,1) for scalar. ----
+	arrayDims := func(v Value) (int, int) {
+		if v.Type == ValueArray {
+			rows := len(v.Array)
+			if rows == 0 {
+				return 0, 0
+			}
+			return rows, len(v.Array[0])
+		}
+		return 1, 1
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+	// All known_y must be > 0.
+	for _, y := range knownY {
+		if y <= 0 {
+			return ErrorVal(ErrValNUM), nil
+		}
+	}
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. new_x's ----
+	var newX []float64
+	newXRows, newXCols := 1, 1
+	isNewXScalar := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		newX, ev = flattenNums(args[2])
+		if ev != nil {
+			return *ev, nil
+		}
+		newXRows, newXCols = arrayDims(args[2])
+		isNewXScalar = args[2].Type != ValueArray
+	} else {
+		newX = make([]float64, len(knownX))
+		copy(newX, knownX)
+		// Shape matches known_x's shape.
+		if len(args) >= 2 && args[1].Type != ValueEmpty {
+			newXRows, newXCols = arrayDims(args[1])
+			isNewXScalar = args[1].Type != ValueArray
+		} else {
+			newXRows, newXCols = arrayDims(args[0])
+			isNewXScalar = args[0].Type != ValueArray
+		}
+	}
+
+	// ---- 4. const ----
+	useConst := true
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		cv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 5. Compute ln(y) ----
+	lnY := make([]float64, n)
+	for i, y := range knownY {
+		lnY[i] = math.Log(y)
+	}
+
+	// ---- 6. Linear regression of lnY on knownX ----
+	var slope, intercept float64
+	if useConst {
+		// Compute means.
+		sumX, sumLnY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumLnY += lnY[i]
+		}
+		meanX := sumX / float64(n)
+		meanLnY := sumLnY / float64(n)
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX := 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (lnY[i] - meanLnY)
+			ssqX += dx * dx
+		}
+
+		if ssqX == 0 {
+			// All x values are the same. slope=0, intercept=meanLnY.
+			slope = 0
+			intercept = meanLnY
+		} else {
+			slope = cov / ssqX
+			intercept = meanLnY - slope*meanX
+		}
+	} else {
+		// const=FALSE: force intercept=0, so lnY = slope*x.
+		// slope = Σ(x*lnY) / Σ(x²)
+		sumXLnY := 0.0
+		sumXX := 0.0
+		for i := 0; i < n; i++ {
+			sumXLnY += knownX[i] * lnY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXLnY / sumXX
+		intercept = 0
+	}
+
+	// ---- 7. Predict ----
+	predicted := make([]float64, len(newX))
+	for i, x := range newX {
+		predicted[i] = math.Exp(intercept + slope*x)
+	}
+
+	// ---- 8. Return result ----
+	if isNewXScalar && len(predicted) == 1 {
+		return NumberVal(predicted[0]), nil
+	}
+
+	// Build array matching the shape of new_x's.
+	result := make([][]Value, newXRows)
+	idx := 0
+	for r := 0; r < newXRows; r++ {
+		row := make([]Value, newXCols)
+		for c := 0; c < newXCols; c++ {
+			if idx < len(predicted) {
+				row[c] = NumberVal(predicted[idx])
+				idx++
+			}
+		}
+		result[r] = row
+	}
+	return Value{Type: ValueArray, Array: result}, nil
 }
