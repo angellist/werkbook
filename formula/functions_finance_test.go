@@ -1900,6 +1900,273 @@ func TestIPMT_Comprehensive(t *testing.T) {
 			args:    []Value{NumberVal(0.05), StringVal("xyz"), NumberVal(12), NumberVal(10000)},
 			wantErr: true,
 		},
+
+		// --- Negative pv (investment perspective) ---
+		{
+			name: "negative pv gives positive interest",
+			// IPMT(0.05/12, 1, 360, -200000) — lender perspective
+			args: numArgs(0.05/12, 1, 360, -200000),
+			want: 833.33,
+		},
+
+		// --- Single period ---
+		{
+			name: "single period nper=1 type=0",
+			// IPMT(0.10, 1, 1, 1000) — entire loan repaid in one period
+			args: numArgs(0.10, 1, 1, 1000),
+			want: -100.00,
+		},
+		{
+			name: "single period nper=1 type=1",
+			// IPMT(0.10, 1, 1, 1000, 0, 1) — beginning of period, no interest accrued
+			args: numArgs(0.10, 1, 1, 1000, 0, 1),
+			want: 0,
+		},
+
+		// --- Very high interest rate ---
+		{
+			name: "very high rate 100% per period",
+			// IPMT(1.0, 1, 12, 10000) — extreme rate
+			args: numArgs(1.0, 1, 12, 10000),
+			want: -10000.00,
+		},
+		{
+			name: "very high rate 50% middle period",
+			// IPMT(0.5, 5, 10, 10000)
+			args: numArgs(0.5, 5, 10, 10000),
+			want: -4641.53,
+		},
+
+		// --- Very small interest rate ---
+		{
+			name: "very small rate 0.001% per period",
+			// IPMT(0.00001, 1, 360, 200000)
+			args: numArgs(0.00001, 1, 360, 200000),
+			want: -2.00,
+		},
+
+		// --- Both pv and fv specified ---
+		{
+			name: "pv and fv both specified first period",
+			// IPMT(0.06/12, 1, 60, 10000, 5000)
+			args: numArgs(0.06/12, 1, 60, 10000, 5000),
+			want: -50.00,
+		},
+		{
+			name: "pv and fv both specified last period",
+			// IPMT(0.06/12, 60, 60, 10000, 5000)
+			args: numArgs(0.06/12, 60, 60, 10000, 5000),
+			want: 23.56,
+		},
+
+		// --- fv only (saving with target future value, pv=0) ---
+		{
+			name: "saving with fv only pv=0 first period",
+			// IPMT(0.05/12, 1, 60, 0, 10000)
+			args: numArgs(0.05/12, 1, 60, 0, 10000),
+			want: 0,
+		},
+		{
+			name: "saving with fv only middle period",
+			// IPMT(0.05/12, 30, 60, 0, 10000)
+			args: numArgs(0.05/12, 30, 60, 0, 10000),
+			want: 18.84,
+		},
+
+		// --- Large nper values ---
+		{
+			name: "large nper 600 months first payment",
+			// IPMT(0.03/12, 1, 600, 100000) — 50 year mortgage first payment
+			args: numArgs(0.03/12, 1, 600, 100000),
+			want: -250.00,
+		},
+		{
+			name: "large nper 600 months last payment",
+			// IPMT(0.03/12, 600, 600, 100000) — 50 year mortgage last payment
+			args: numArgs(0.03/12, 600, 600, 100000),
+			want: -0.80,
+		},
+
+		// --- Type=1 with future value ---
+		{
+			name: "type=1 with fv period 1",
+			// IPMT(0.06/12, 1, 60, 10000, 5000, 1) — beginning of period
+			args: numArgs(0.06/12, 1, 60, 10000, 5000, 1),
+			want: 0,
+		},
+		{
+			name: "type=1 with fv period 2",
+			// IPMT(0.06/12, 2, 60, 10000, 5000, 1)
+			args: numArgs(0.06/12, 2, 60, 10000, 5000, 1),
+			want: -48.68,
+		},
+		{
+			name: "type=1 last period with fv",
+			// IPMT(0.06/12, 60, 60, 10000, 5000, 1)
+			args: numArgs(0.06/12, 60, 60, 10000, 5000, 1),
+			want: 23.44,
+		},
+
+		// --- String coercion ---
+		{
+			name: "string coercion for rate",
+			args: []Value{StringVal("0.1"), NumberVal(1), NumberVal(36), NumberVal(8000)},
+			want: -800.00,
+		},
+		{
+			name: "string coercion for per",
+			args: []Value{NumberVal(0.1 / 12), StringVal("1"), NumberVal(36), NumberVal(8000)},
+			want: -66.67,
+		},
+		{
+			name: "string coercion for nper",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), StringVal("36"), NumberVal(8000)},
+			want: -66.67,
+		},
+		{
+			name: "string coercion for pv",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(36), StringVal("8000")},
+			want: -66.67,
+		},
+		{
+			name: "string coercion for fv",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(60), NumberVal(50000), StringVal("10000")},
+			want: -416.67,
+		},
+		{
+			name: "string coercion for type",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), StringVal("1")},
+			want: 0,
+		},
+
+		// --- Boolean coercion ---
+		{
+			name: "bool TRUE as rate coerced to 1",
+			args: []Value{BoolVal(true), NumberVal(1), NumberVal(12), NumberVal(10000)},
+			want: -10000.00,
+		},
+		{
+			name: "bool FALSE as rate coerced to 0",
+			args: []Value{BoolVal(false), NumberVal(5), NumberVal(10), NumberVal(10000)},
+			want: 0,
+		},
+		{
+			name: "bool TRUE as type (beginning of period)",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), BoolVal(true)},
+			want: 0,
+		},
+		{
+			name: "bool FALSE as type (end of period)",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), BoolVal(false)},
+			want: -83.33,
+		},
+		{
+			name: "bool TRUE as per coerced to 1",
+			args: []Value{NumberVal(0.05 / 12), BoolVal(true), NumberVal(360), NumberVal(200000)},
+			want: -833.33,
+		},
+
+		// --- Empty cell references (coerce to 0) ---
+		{
+			name: "empty val for rate coerces to 0",
+			args: []Value{EmptyVal(), NumberVal(5), NumberVal(10), NumberVal(10000)},
+			want: 0,
+		},
+		{
+			name: "empty val for fv coerces to 0",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(36), NumberVal(8000), EmptyVal()},
+			want: -66.67,
+		},
+		{
+			name: "empty val for type coerces to 0 end of period",
+			args: []Value{NumberVal(0.1 / 12), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), EmptyVal()},
+			want: -83.33,
+		},
+
+		// --- Error propagation ---
+		{
+			name:    "error propagation in rate",
+			args:    []Value{ErrorVal(ErrValNUM), NumberVal(1), NumberVal(12), NumberVal(10000)},
+			wantErr: true,
+		},
+		{
+			name:    "error propagation in per",
+			args:    []Value{NumberVal(0.05), ErrorVal(ErrValNA), NumberVal(12), NumberVal(10000)},
+			wantErr: true,
+		},
+		{
+			name:    "error propagation in nper",
+			args:    []Value{NumberVal(0.05), NumberVal(1), ErrorVal(ErrValREF), NumberVal(10000)},
+			wantErr: true,
+		},
+		{
+			name:    "error propagation in pv",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), ErrorVal(ErrValDIV0)},
+			wantErr: true,
+		},
+		{
+			name:    "error propagation in fv",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), NumberVal(10000), ErrorVal(ErrValVALUE)},
+			wantErr: true,
+		},
+		{
+			name:    "error propagation in type",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), ErrorVal(ErrValNUM)},
+			wantErr: true,
+		},
+
+		// --- Non-numeric errors for remaining args ---
+		{
+			name:    "non-numeric nper",
+			args:    []Value{NumberVal(0.05), NumberVal(1), StringVal("bad"), NumberVal(10000)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric pv",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), StringVal("bad")},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric fv",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), NumberVal(10000), StringVal("bad")},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric type",
+			args:    []Value{NumberVal(0.05), NumberVal(1), NumberVal(12), NumberVal(10000), NumberVal(0), StringVal("bad")},
+			wantErr: true,
+		},
+		{
+			name:    "empty string rate not coercible",
+			args:    []Value{StringVal(""), NumberVal(1), NumberVal(12), NumberVal(10000)},
+			wantErr: true,
+		},
+
+		// --- per boundary errors ---
+		{
+			name:    "per < 1 fractional returns NUM error",
+			args:    numArgs(0.05/12, 0.5, 360, 200000),
+			wantErr: true,
+		},
+		{
+			name:    "negative per returns NUM error",
+			args:    numArgs(0.05/12, -1, 360, 200000),
+			wantErr: true,
+		},
+
+		// --- Interest decreases over time (amortization) ---
+		{
+			name: "amortization: period 2 less interest than period 1",
+			// IPMT(0.08, 2, 5, 25000) — second year interest less than first
+			args: numArgs(0.08, 2, 5, 25000),
+			want: -1659.09,
+		},
+		{
+			name: "amortization: last period of 5yr loan",
+			// IPMT(0.08, 5, 5, 25000) — last year
+			args: numArgs(0.08, 5, 5, 25000),
+			want: -463.81,
+		},
 	}
 
 	for _, tc := range tests {
