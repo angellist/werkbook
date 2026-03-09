@@ -1956,3 +1956,137 @@ func TestYEARFRAC(t *testing.T) {
 		}
 	})
 }
+
+func TestWEEKDAY(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		isErr   bool
+		errVal  ErrorValue
+	}{
+		// === Basic usage with default return_type (1: Sun=1..Sat=7) ===
+		// Feb 14, 2008 (serial 39492) is a Thursday
+		{"thu_default", "WEEKDAY(39492)", 5, false, 0},
+		{"thu_explicit_rt1", "WEEKDAY(39492,1)", 5, false, 0},
+
+		// === All 7 days of the week, return_type 1 (Sun=1..Sat=7) ===
+		// Feb 10-16, 2008: Sun through Sat
+		{"sunday_rt1", "WEEKDAY(39488,1)", 1, false, 0},
+		{"monday_rt1", "WEEKDAY(39489,1)", 2, false, 0},
+		{"tuesday_rt1", "WEEKDAY(39490,1)", 3, false, 0},
+		{"wednesday_rt1", "WEEKDAY(39491,1)", 4, false, 0},
+		{"thursday_rt1", "WEEKDAY(39492,1)", 5, false, 0},
+		{"friday_rt1", "WEEKDAY(39493,1)", 6, false, 0},
+		{"saturday_rt1", "WEEKDAY(39494,1)", 7, false, 0},
+
+		// === return_type 2 (Mon=1..Sun=7) ===
+		{"sunday_rt2", "WEEKDAY(39488,2)", 7, false, 0},
+		{"monday_rt2", "WEEKDAY(39489,2)", 1, false, 0},
+		{"thursday_rt2", "WEEKDAY(39492,2)", 4, false, 0},
+		{"saturday_rt2", "WEEKDAY(39494,2)", 6, false, 0},
+
+		// === return_type 3 (Mon=0..Sun=6) ===
+		{"sunday_rt3", "WEEKDAY(39488,3)", 6, false, 0},
+		{"monday_rt3", "WEEKDAY(39489,3)", 0, false, 0},
+		{"thursday_rt3", "WEEKDAY(39492,3)", 3, false, 0},
+		{"saturday_rt3", "WEEKDAY(39494,3)", 5, false, 0},
+
+		// === return_type 11 (Mon=1..Sun=7, same as rt2) ===
+		{"sunday_rt11", "WEEKDAY(39488,11)", 7, false, 0},
+		{"monday_rt11", "WEEKDAY(39489,11)", 1, false, 0},
+		{"thursday_rt11", "WEEKDAY(39492,11)", 4, false, 0},
+
+		// === return_type 12 (Tue=1..Mon=7) ===
+		{"sunday_rt12", "WEEKDAY(39488,12)", 6, false, 0},
+		{"monday_rt12", "WEEKDAY(39489,12)", 7, false, 0},
+		{"tuesday_rt12", "WEEKDAY(39490,12)", 1, false, 0},
+		{"thursday_rt12", "WEEKDAY(39492,12)", 3, false, 0},
+
+		// === return_type 13 (Wed=1..Tue=7) ===
+		{"sunday_rt13", "WEEKDAY(39488,13)", 5, false, 0},
+		{"tuesday_rt13", "WEEKDAY(39490,13)", 7, false, 0},
+		{"wednesday_rt13", "WEEKDAY(39491,13)", 1, false, 0},
+		{"thursday_rt13", "WEEKDAY(39492,13)", 2, false, 0},
+
+		// === return_type 14 (Thu=1..Wed=7) ===
+		{"sunday_rt14", "WEEKDAY(39488,14)", 4, false, 0},
+		{"wednesday_rt14", "WEEKDAY(39491,14)", 7, false, 0},
+		{"thursday_rt14", "WEEKDAY(39492,14)", 1, false, 0},
+		{"friday_rt14", "WEEKDAY(39493,14)", 2, false, 0},
+
+		// === return_type 15 (Fri=1..Thu=7) ===
+		{"sunday_rt15", "WEEKDAY(39488,15)", 3, false, 0},
+		{"thursday_rt15", "WEEKDAY(39492,15)", 7, false, 0},
+		{"friday_rt15", "WEEKDAY(39493,15)", 1, false, 0},
+		{"saturday_rt15", "WEEKDAY(39494,15)", 2, false, 0},
+
+		// === return_type 16 (Sat=1..Fri=7) ===
+		{"sunday_rt16", "WEEKDAY(39488,16)", 2, false, 0},
+		{"friday_rt16", "WEEKDAY(39493,16)", 7, false, 0},
+		{"saturday_rt16", "WEEKDAY(39494,16)", 1, false, 0},
+
+		// === return_type 17 (Sun=1..Sat=7, same as rt1) ===
+		{"sunday_rt17", "WEEKDAY(39488,17)", 1, false, 0},
+		{"thursday_rt17", "WEEKDAY(39492,17)", 5, false, 0},
+		{"saturday_rt17", "WEEKDAY(39494,17)", 7, false, 0},
+
+		// === DATE() input instead of raw serial ===
+		{"date_func_thu", "WEEKDAY(DATE(2008,2,14),1)", 5, false, 0},
+		{"date_func_sun", "WEEKDAY(DATE(2008,2,10),1)", 1, false, 0},
+
+		// === Large serial number (Dec 31, 9999 = serial 2958465, Friday) ===
+		{"max_serial", "WEEKDAY(2958465,1)", 6, false, 0},
+
+		// === Fractional serial (time portion ignored for weekday) ===
+		// 39492.75 = Feb 14, 2008 at 6pm, still Thursday
+		{"fractional_serial", "WEEKDAY(39492.75,1)", 5, false, 0},
+
+		// === Boolean coercion: TRUE -> serial 1 ===
+		// Serial 1 maps to Jan 1, 1900 which Go correctly identifies as Monday.
+		// Note: Excel returns Sunday (1) for WEEKDAY(1,1) due to the 1900
+		// leap-year bug affecting serials 1-60.
+		{"bool_true", "WEEKDAY(TRUE,1)", 2, false, 0},
+
+		// === Invalid return_type -> #NUM! ===
+		{"invalid_rt_0", "WEEKDAY(39492,0)", 0, true, ErrValNUM},
+		{"invalid_rt_4", "WEEKDAY(39492,4)", 0, true, ErrValNUM},
+		{"invalid_rt_5", "WEEKDAY(39492,5)", 0, true, ErrValNUM},
+		{"invalid_rt_10", "WEEKDAY(39492,10)", 0, true, ErrValNUM},
+		{"invalid_rt_18", "WEEKDAY(39492,18)", 0, true, ErrValNUM},
+		{"invalid_rt_99", "WEEKDAY(39492,99)", 0, true, ErrValNUM},
+		{"invalid_rt_neg", "WEEKDAY(39492,-1)", 0, true, ErrValNUM},
+
+		// === Error propagation ===
+		{"error_text_serial", `WEEKDAY("hello")`, 0, true, ErrValVALUE},
+		{"error_text_rt", `WEEKDAY(39492,"abc")`, 0, true, ErrValVALUE},
+
+		// === Wrong argument count ===
+		{"no_args", "WEEKDAY()", 0, true, ErrValVALUE},
+		{"too_many_args", "WEEKDAY(39492,1,1)", 0, true, ErrValVALUE},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if tc.isErr {
+				if got.Type != ValueError || got.Err != tc.errVal {
+					t.Errorf("%s: got %v, want error %v", tc.formula, got, tc.errVal)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: got type %v (%v), want number", tc.formula, got.Type, got)
+			}
+			if got.Num != tc.want {
+				t.Errorf("%s = %g, want %g", tc.formula, got.Num, tc.want)
+			}
+		})
+	}
+}

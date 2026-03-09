@@ -423,7 +423,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
 | VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 15 |
 | VSTACK | Stacks arrays vertically. | Lookup & Reference | 18 |
-| WEEKDAY | Returns the day of the week for a date. | Date & Time | 1 |
+| WEEKDAY | Returns the day of the week for a date. | Date & Time | 59 |
 | WEEKNUM | Returns the week number of a date. | Date & Time | 39 |
 | WEIBULL.DIST | Returns the Weibull distribution. | Statistical | 33 |
 | WORKDAY | Returns a working day offset from a start date. | Date & Time | 23 |
