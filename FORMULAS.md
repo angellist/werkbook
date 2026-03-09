@@ -87,9 +87,9 @@ Werkbook supports **437** spreadsheet formula functions.
 | COUPNCD | Returns the next coupon date after settlement. | Financial | 2 |
 | COUPNUM | Returns the number of coupons payable between settlement and maturity. | Financial | 2 |
 | COUPPCD | Returns the previous coupon date before settlement. | Financial | 2 |
-| COVAR | Returns the population covariance of two data sets. | Statistical | 5 |
-| COVARIANCE.P | Returns the population covariance of two data sets. | Statistical | 20 |
-| COVARIANCE.S | Returns the sample covariance of two data sets. | Statistical | 5 |
+| COVAR | Returns the population covariance of two data sets. | Statistical | 34 |
+| COVARIANCE.P | Returns the population covariance of two data sets. | Statistical | 21 |
+| COVARIANCE.S | Returns the sample covariance of two data sets. | Statistical | 6 |
 | CSC | Returns the cosecant of an angle. | Math & Trig | 27 |
 | CSCH | Returns the hyperbolic cosecant of a number. | Math & Trig | 28 |
 | CUMIPMT | Returns cumulative interest paid over a span of payment periods. | Financial | 33 |

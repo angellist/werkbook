@@ -23366,7 +23366,9 @@ func TestCOVARIANCEP(t *testing.T) {
 
 func TestCOVAR(t *testing.T) {
 	// COVAR is an alias for COVARIANCE.P -- verify they produce identical results.
-	resolver := &mockResolver{
+
+	// Doc example: Data1={3,2,4,5,6}, Data2={9,7,12,15,17}
+	docResolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(3),
 			{Col: 1, Row: 2}: NumberVal(2),
@@ -23381,29 +23383,420 @@ func TestCOVAR(t *testing.T) {
 		},
 	}
 
+	// Positive covariance: A={1,2,3}, B={2,4,6} (perfectly correlated, y=2x)
+	// meanA=2, meanB=4, cov = [(-1)(-2)+(0)(0)+(1)(2)]/3 = 4/3
+	posCovResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 2, Row: 3}: NumberVal(6),
+		},
+	}
+
+	// Negative covariance: A={1,2,3}, B={6,4,2}
+	// meanA=2, meanB=4, cov = [(-1)(2)+(0)(0)+(1)(-2)]/3 = -4/3
+	negCovResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(6),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 2, Row: 3}: NumberVal(2),
+		},
+	}
+
+	// Zero covariance: A={1,2,3}, B={5,5,5} (constant second array)
+	// meanA=2, meanB=5, cov = 0
+	zeroCovResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(5),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(5),
+		},
+	}
+
+	// Identical arrays: A={2,4,6}, B={2,4,6} -> equals variance
+	// mean=4, cov = [(2-4)^2+(4-4)^2+(6-4)^2]/3 = 8/3
+	identResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: NumberVal(4),
+			{Col: 1, Row: 3}: NumberVal(6),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 2, Row: 3}: NumberVal(6),
+		},
+	}
+
+	// Single element: A1={7}, B1={3} -> n=1, cov=(7-7)(3-3)/1=0
+	singleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(7),
+			{Col: 2, Row: 1}: NumberVal(3),
+		},
+	}
+
+	// Different length arrays: A1:A3, B1:B5 -> #N/A
+	diffLenResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(4),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(6),
+			{Col: 2, Row: 4}: NumberVal(7),
+			{Col: 2, Row: 5}: NumberVal(8),
+		},
+	}
+
+	// Error in first array: A={1,#VALUE!,3}, B={4,5,6}
+	errArray1Resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: ErrorVal(ErrValVALUE),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(4),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(6),
+		},
+	}
+
+	// Error in second array: A={1,2,3}, B={4,#REF!,6}
+	errArray2Resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(4),
+			{Col: 2, Row: 2}: ErrorVal(ErrValREF),
+			{Col: 2, Row: 3}: NumberVal(6),
+		},
+	}
+
+	// Empty range -> #DIV/0!
+	emptyResolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+
+	// All text -> no numeric pairs -> #DIV/0!
+	allTextResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("a"),
+			{Col: 1, Row: 2}: StringVal("b"),
+			{Col: 1, Row: 3}: StringVal("c"),
+			{Col: 2, Row: 1}: StringVal("x"),
+			{Col: 2, Row: 2}: StringVal("y"),
+			{Col: 2, Row: 3}: StringVal("z"),
+		},
+	}
+
+	// Mixed types: A={1,"hello",3}, B={10,20,30}
+	// Only pairs (1,10) and (3,30) are numeric in both
+	// meanA=2, meanB=20, cov = [(-1)(-10)+(1)(10)]/2 = 10
+	mixedResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: StringVal("hello"),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 2, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// Bool in array: A={1,TRUE,3}, B={10,20,30}
+	// TRUE is bool, not numeric; pairs (1,10) and (3,30) only
+	// meanA=2, meanB=20, cov = [(-1)(-10)+(1)(10)]/2 = 10
+	boolResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: BoolVal(true),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 2, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// Negative numbers: A={-3,-1,1,3}, B={-9,-3,3,9}
+	// meanA=0, meanB=0, cov = [27+3+3+27]/4 = 15
+	negNumResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-3),
+			{Col: 1, Row: 2}: NumberVal(-1),
+			{Col: 1, Row: 3}: NumberVal(1),
+			{Col: 1, Row: 4}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(-9),
+			{Col: 2, Row: 2}: NumberVal(-3),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 4}: NumberVal(9),
+		},
+	}
+
+	// Zeros included: A={0,1,2}, B={0,2,4}
+	// meanA=1, meanB=2, cov = [2+0+2]/3 = 4/3
+	zerosResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(1),
+			{Col: 1, Row: 3}: NumberVal(2),
+			{Col: 2, Row: 1}: NumberVal(0),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(4),
+		},
+	}
+
+	// Large dataset: A={1..20}, B={2..40 step 2}
+	// cov(X,2X) = 2*var(X), var(1..20 pop) = (20^2-1)/12 = 33.25
+	// cov = 66.5
+	largeResolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+	for i := 1; i <= 20; i++ {
+		largeResolver.cells[CellAddr{Col: 1, Row: i}] = NumberVal(float64(i))
+		largeResolver.cells[CellAddr{Col: 2, Row: i}] = NumberVal(float64(i * 2))
+	}
+
+	// Decimals: A={0.1,0.2,0.3}, B={0.4,0.5,0.6}
+	// meanA=0.2, meanB=0.5, cov = [(-0.1)(-0.1)+(0)(0)+(0.1)(0.1)]/3 = 0.02/3
+	decimalResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0.1),
+			{Col: 1, Row: 2}: NumberVal(0.2),
+			{Col: 1, Row: 3}: NumberVal(0.3),
+			{Col: 2, Row: 1}: NumberVal(0.4),
+			{Col: 2, Row: 2}: NumberVal(0.5),
+			{Col: 2, Row: 3}: NumberVal(0.6),
+		},
+	}
+
+	// Very large numbers: A={1e6,2e6,3e6}, B={4e6,5e6,6e6}
+	// meanA=2e6, meanB=5e6, cov = [(-1e6)(-1e6)+(0)(0)+(1e6)(1e6)]/3 = 2e12/3
+	largeNumResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1e6),
+			{Col: 1, Row: 2}: NumberVal(2e6),
+			{Col: 1, Row: 3}: NumberVal(3e6),
+			{Col: 2, Row: 1}: NumberVal(4e6),
+			{Col: 2, Row: 2}: NumberVal(5e6),
+			{Col: 2, Row: 3}: NumberVal(6e6),
+		},
+	}
+
+	// All same values in first array: A={5,5,5}, B={1,2,3} -> 0
+	constFirstResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(5),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Two elements: A={10,20}, B={30,50}
+	// meanA=15, meanB=40, cov = [(-5)(-10)+(5)(10)]/2 = 100/2 = 50
+	twoElemResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 2, Row: 1}: NumberVal(30),
+			{Col: 2, Row: 2}: NumberVal(50),
+		},
+	}
+
+	// Bool in second array: A={10,20,30}, B={TRUE,20,30}
+	// TRUE is bool; pairs (20,20) and (30,30) only
+	// meanA=25, meanB=25, cov = [(-5)(-5)+(5)(5)]/2 = 50/2 = 25
+	boolSecondResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(30),
+			{Col: 2, Row: 1}: BoolVal(true),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 2, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// Empty cells pairwise ignored: A={1,"",3}, B={10,"",30}
+	// Empty cells (strings) are skipped pairwise -> pairs (1,10) and (3,30)
+	// meanA=2, meanB=20, cov = [(-1)(-10)+(1)(10)]/2 = 10
+	emptyPairwiseResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: StringVal(""),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: StringVal(""),
+			{Col: 2, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// String in one side only: A={1,"text",3}, B={10,20,30}
+	// Pair (1,"text"->skip, 10,20->skip) -> pairwise: (1,10) and (3,30)
+	// Same as mixed: cov = 10
+	stringOneSideResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: StringVal("text"),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 2, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// Both arrays all zeros: A={0,0,0}, B={0,0,0} -> cov = 0
+	allZerosResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: NumberVal(0),
+			{Col: 2, Row: 1}: NumberVal(0),
+			{Col: 2, Row: 2}: NumberVal(0),
+			{Col: 2, Row: 3}: NumberVal(0),
+		},
+	}
+
+	// Uncorrelated orthogonal pattern: A={1,-1,1,-1}, B={1,1,-1,-1}
+	// meanA=0, meanB=0, cov = [(1)(1)+(-1)(1)+(1)(-1)+(-1)(-1)]/4 = 0
+	orthogonalResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(-1),
+			{Col: 1, Row: 3}: NumberVal(1),
+			{Col: 1, Row: 4}: NumberVal(-1),
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 2, Row: 3}: NumberVal(-1),
+			{Col: 2, Row: 4}: NumberVal(-1),
+		},
+	}
+
+	// All booleans in both arrays -> no numeric pairs -> #DIV/0!
+	allBoolResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: BoolVal(true),
+			{Col: 1, Row: 2}: BoolVal(false),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 2, Row: 1}: BoolVal(false),
+			{Col: 2, Row: 2}: BoolVal(true),
+			{Col: 2, Row: 3}: BoolVal(false),
+		},
+	}
+
+	// Error #NAME? in array 1
+	errNameResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValNAME),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(4),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(6),
+		},
+	}
+
+	// Error #NULL! in array 2
+	errNullResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 1}: NumberVal(4),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: ErrorVal(ErrValNULL),
+		},
+	}
+
 	tol := 1e-9
 
 	tests := []struct {
 		name      string
 		formula   string
+		resolver  *mockResolver
 		wantNum   float64
 		wantError bool
 		wantErr   ErrorValue
 	}{
-		// Doc example via COVAR alias
-		{"covar_doc_example", "COVAR(A1:A5,B1:B5)", 5.2, false, 0},
-		// Reversed args
-		{"covar_reversed", "COVAR(B1:B5,A1:A5)", 5.2, false, 0},
-		// Too few args
-		{"covar_too_few_args", "COVAR(A1:A5)", 0, true, ErrValVALUE},
-		// Too many args
-		{"covar_too_many_args", "COVAR(A1:A5,B1:B5,A1:A5)", 0, true, ErrValVALUE},
+		// Doc example via COVAR alias (Excel doc result = 5.2)
+		{"doc_example", "COVAR(A1:A5,B1:B5)", docResolver, 5.2, false, 0},
+		// Reversed argument order: cov(X,Y) = cov(Y,X)
+		{"reversed_args", "COVAR(B1:B5,A1:A5)", docResolver, 5.2, false, 0},
+		// Positive covariance (perfectly correlated y=2x)
+		{"positive_covariance", "COVAR(A1:A3,B1:B3)", posCovResolver, 4.0 / 3.0, false, 0},
+		// Negative covariance (inversely correlated)
+		{"negative_covariance", "COVAR(A1:A3,B1:B3)", negCovResolver, -4.0 / 3.0, false, 0},
+		// Zero covariance (constant second array)
+		{"zero_covariance", "COVAR(A1:A3,B1:B3)", zeroCovResolver, 0.0, false, 0},
+		// Identical arrays -> equals population variance
+		{"identical_arrays_equals_variance", "COVAR(A1:A3,B1:B3)", identResolver, 8.0 / 3.0, false, 0},
+		// Single element -> 0
+		{"single_element", "COVAR(A1:A1,B1:B1)", singleResolver, 0.0, false, 0},
+		// Two elements
+		{"two_elements", "COVAR(A1:A2,B1:B2)", twoElemResolver, 50.0, false, 0},
+		// Negative numbers
+		{"negative_numbers", "COVAR(A1:A4,B1:B4)", negNumResolver, 15.0, false, 0},
+		// Zeros included
+		{"zeros_included", "COVAR(A1:A3,B1:B3)", zerosResolver, 4.0 / 3.0, false, 0},
+		// All zeros -> 0
+		{"all_zeros", "COVAR(A1:A3,B1:B3)", allZerosResolver, 0.0, false, 0},
+		// Decimal values
+		{"decimals", "COVAR(A1:A3,B1:B3)", decimalResolver, 0.02 / 3.0, false, 0},
+		// Very large numbers
+		{"large_numbers", "COVAR(A1:A3,B1:B3)", largeNumResolver, 2e12 / 3.0, false, 0},
+		// Large dataset (20 points, perfect y=2x)
+		{"large_dataset", "COVAR(A1:A20,B1:B20)", largeResolver, 66.5, false, 0},
+		// Constant first array -> 0
+		{"constant_first_array", "COVAR(A1:A3,B1:B3)", constFirstResolver, 0.0, false, 0},
+		// Orthogonal pattern -> 0
+		{"orthogonal_uncorrelated", "COVAR(A1:A4,B1:B4)", orthogonalResolver, 0.0, false, 0},
+		// Mixed types (text skipped pairwise)
+		{"mixed_types", "COVAR(A1:A3,B1:B3)", mixedResolver, 10.0, false, 0},
+		// Bool in first array (skipped pairwise)
+		{"bool_in_array1", "COVAR(A1:A3,B1:B3)", boolResolver, 10.0, false, 0},
+		// Bool in second array (skipped pairwise)
+		{"bool_in_array2", "COVAR(A1:A3,B1:B3)", boolSecondResolver, 25.0, false, 0},
+		// Empty cells pairwise ignored
+		{"empty_cells_pairwise", "COVAR(A1:A3,B1:B3)", emptyPairwiseResolver, 10.0, false, 0},
+		// String in one side only (pairwise skip)
+		{"string_one_side", "COVAR(A1:A3,B1:B3)", stringOneSideResolver, 10.0, false, 0},
+		// Different length arrays -> #N/A
+		{"different_lengths", "COVAR(A1:A3,B1:B5)", diffLenResolver, 0, true, ErrValNA},
+		// Error in first array -> propagated #VALUE!
+		{"error_in_array1", "COVAR(A1:A3,B1:B3)", errArray1Resolver, 0, true, ErrValVALUE},
+		// Error in second array -> propagated #REF!
+		{"error_in_array2", "COVAR(A1:A3,B1:B3)", errArray2Resolver, 0, true, ErrValREF},
+		// Error #NAME? propagation
+		{"error_name_propagation", "COVAR(A1:A3,B1:B3)", errNameResolver, 0, true, ErrValNAME},
+		// Error #NULL! propagation
+		{"error_null_propagation", "COVAR(A1:A3,B1:B3)", errNullResolver, 0, true, ErrValNULL},
+		// Empty range -> #DIV/0!
+		{"empty_range", "COVAR(A1:A3,B1:B3)", emptyResolver, 0, true, ErrValDIV0},
+		// All text -> no numeric pairs -> #DIV/0!
+		{"all_text", "COVAR(A1:A3,B1:B3)", allTextResolver, 0, true, ErrValDIV0},
+		// All booleans -> no numeric pairs -> #DIV/0!
+		{"all_booleans", "COVAR(A1:A3,B1:B3)", allBoolResolver, 0, true, ErrValDIV0},
+		// Too few arguments -> #VALUE!
+		{"too_few_args", "COVAR(A1:A5)", docResolver, 0, true, ErrValVALUE},
+		// Too many arguments -> #VALUE!
+		{"too_many_args", "COVAR(A1:A5,B1:B5,A1:A5)", docResolver, 0, true, ErrValVALUE},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cf := evalCompile(t, tt.formula)
-			got, err := Eval(cf, resolver, nil)
+			got, err := Eval(cf, tt.resolver, nil)
 			if err != nil {
 				t.Fatalf("Eval error: %v", err)
 			}
@@ -23422,16 +23815,16 @@ func TestCOVAR(t *testing.T) {
 		})
 	}
 
-	// Verify COVAR and COVARIANCE.P produce identical results
-	t.Run("covar_equals_covariancep", func(t *testing.T) {
+	// Verify COVAR and COVARIANCE.P produce identical results across multiple datasets
+	t.Run("covar_equals_covariancep_doc", func(t *testing.T) {
 		cfCovar := evalCompile(t, "COVAR(A1:A5,B1:B5)")
 		cfCovP := evalCompile(t, "COVARIANCE.P(A1:A5,B1:B5)")
 
-		gotCovar, err := Eval(cfCovar, resolver, nil)
+		gotCovar, err := Eval(cfCovar, docResolver, nil)
 		if err != nil {
 			t.Fatalf("Eval COVAR error: %v", err)
 		}
-		gotCovP, err := Eval(cfCovP, resolver, nil)
+		gotCovP, err := Eval(cfCovP, docResolver, nil)
 		if err != nil {
 			t.Fatalf("Eval COVARIANCE.P error: %v", err)
 		}
@@ -23441,6 +23834,52 @@ func TestCOVAR(t *testing.T) {
 		}
 		if gotCovar.Num != gotCovP.Num {
 			t.Errorf("COVAR=%f != COVARIANCE.P=%f", gotCovar.Num, gotCovP.Num)
+		}
+	})
+
+	t.Run("covar_equals_covariancep_negative", func(t *testing.T) {
+		cfCovar := evalCompile(t, "COVAR(A1:A3,B1:B3)")
+		cfCovP := evalCompile(t, "COVARIANCE.P(A1:A3,B1:B3)")
+
+		gotCovar, err := Eval(cfCovar, negCovResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval COVAR error: %v", err)
+		}
+		gotCovP, err := Eval(cfCovP, negCovResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval COVARIANCE.P error: %v", err)
+		}
+
+		if gotCovar.Type != ValueNumber || gotCovP.Type != ValueNumber {
+			t.Fatalf("expected numbers, got COVAR type=%d, COVARIANCE.P type=%d", gotCovar.Type, gotCovP.Type)
+		}
+		if gotCovar.Num != gotCovP.Num {
+			t.Errorf("COVAR=%f != COVARIANCE.P=%f", gotCovar.Num, gotCovP.Num)
+		}
+	})
+
+	// Verify relationship: COVAR = COVARIANCE.S * (n-1)/n
+	t.Run("covar_vs_covariance_s_relationship", func(t *testing.T) {
+		cfCovar := evalCompile(t, "COVAR(A1:A5,B1:B5)")
+		cfCovS := evalCompile(t, "COVARIANCE.S(A1:A5,B1:B5)")
+
+		gotCovar, err := Eval(cfCovar, docResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval COVAR error: %v", err)
+		}
+		gotCovS, err := Eval(cfCovS, docResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval COVARIANCE.S error: %v", err)
+		}
+
+		if gotCovar.Type != ValueNumber || gotCovS.Type != ValueNumber {
+			t.Fatalf("expected numbers, got COVAR type=%d, COVARIANCE.S type=%d", gotCovar.Type, gotCovS.Type)
+		}
+		// COVAR (population) = COVARIANCE.S (sample) * (n-1)/n
+		n := 5.0
+		expected := gotCovS.Num * (n - 1) / n
+		if math.Abs(gotCovar.Num-expected) > tol {
+			t.Errorf("COVAR=%f != COVARIANCE.S*(%g-1)/%g=%f", gotCovar.Num, n, n, expected)
 		}
 	})
 }
