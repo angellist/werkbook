@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **404** Excel formula functions.
+Werkbook supports **405** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -109,6 +109,7 @@ Werkbook supports **404** Excel formula functions.
 | DURATION | Financial | 2 |
 | EDATE | Date & Time | 19 |
 | EFFECT | Financial | 18 |
+| ENCODEURL | Text | 44 |
 | EOMONTH | Date & Time | 18 |
 | ERF | Math & Trig | 22 |
 | ERF.PRECISE | Math & Trig | 20 |
@@ -411,7 +412,7 @@ Werkbook supports **404** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **66** Excel functions are not yet supported.
+The following **65** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -442,7 +443,6 @@ The following **66** Excel functions are not yet supported.
 | DSUM | Database |
 | DVAR | Database |
 | DVARP | Database |
-| ENCODEURL | Web |
 | F.TEST | Statistical |
 | FILTERXML | Web |
 | FINDB | Text |

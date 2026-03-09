@@ -18,6 +18,7 @@ func init() {
 	Register("CONCAT", NoCtx(fnCONCAT))
 	Register("CONCATENATE", NoCtx(fnCONCATENATE))
 	Register("DOLLAR", NoCtx(fnDOLLAR))
+	Register("ENCODEURL", NoCtx(fnENCODEURL))
 	Register("EXACT", NoCtx(fnEXACT))
 	Register("FIND", NoCtx(fnFIND))
 	Register("FIXED", NoCtx(fnFIXED))
@@ -565,6 +566,32 @@ func fnCODE(args []Value) (Value, error) {
 		return NumberVal(95), nil // '_'
 	}
 	return NumberVal(float64(r)), nil
+}
+
+func fnENCODEURL(args []Value) (Value, error) {
+	if len(args) != 1 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	if args[0].Type == ValueArray {
+		return LiftUnary(args[0], func(v Value) Value {
+			r, _ := fnENCODEURL([]Value{v})
+			return r
+		}), nil
+	}
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+	s := ValueToString(args[0])
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~' {
+			buf.WriteByte(c)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", c)
+		}
+	}
+	return StringVal(buf.String()), nil
 }
 
 func fnEXACT(args []Value) (Value, error) {

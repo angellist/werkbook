@@ -4734,3 +4734,169 @@ func TestUNICODE(t *testing.T) {
 		})
 	}
 }
+
+func TestENCODEURL(t *testing.T) {
+	resolver := &mockResolver{}
+
+	strTests := []struct {
+		name    string
+		formula string
+		want    string
+	}{
+		// Documented Excel example
+		{"excel example URL", `ENCODEURL("http://contoso.sharepoint.com/Finance/Profit and Loss Statement.xlsx")`, "http%3A%2F%2Fcontoso.sharepoint.com%2FFinance%2FProfit%20and%20Loss%20Statement.xlsx"},
+		// Empty string
+		{"empty string", `ENCODEURL("")`, ""},
+		// Plain text (no special chars) unchanged
+		{"plain alpha", `ENCODEURL("hello")`, "hello"},
+		{"plain alphanum", `ENCODEURL("abc123")`, "abc123"},
+		// Unreserved chars stay unchanged
+		{"unreserved hyphen", `ENCODEURL("a-b")`, "a-b"},
+		{"unreserved underscore", `ENCODEURL("a_b")`, "a_b"},
+		{"unreserved dot", `ENCODEURL("a.b")`, "a.b"},
+		{"unreserved tilde", `ENCODEURL("a~b")`, "a~b"},
+		{"all unreserved", `ENCODEURL("AZaz09-_.~")`, "AZaz09-_.~"},
+		// Spaces
+		{"space", `ENCODEURL("hello world")`, "hello%20world"},
+		{"multiple spaces", `ENCODEURL("a  b")`, "a%20%20b"},
+		// Special chars: colon, slash, question, equals, ampersand, hash, at, bang, dollar, plus, comma, semicolon
+		{"colon", `ENCODEURL("a:b")`, "a%3Ab"},
+		{"slash", `ENCODEURL("a/b")`, "a%2Fb"},
+		{"question mark", `ENCODEURL("a?b")`, "a%3Fb"},
+		{"equals", `ENCODEURL("a=b")`, "a%3Db"},
+		{"ampersand", `ENCODEURL("a&b")`, "a%26b"},
+		{"hash", `ENCODEURL("a#b")`, "a%23b"},
+		{"at sign", `ENCODEURL("a@b")`, "a%40b"},
+		{"exclamation", `ENCODEURL("a!b")`, "a%21b"},
+		{"dollar sign", `ENCODEURL("a$b")`, "a%24b"},
+		{"plus sign", `ENCODEURL("a+b")`, "a%2Bb"},
+		{"comma", `ENCODEURL("a,b")`, "a%2Cb"},
+		{"semicolon", `ENCODEURL("a;b")`, "a%3Bb"},
+		// Percent sign itself
+		{"percent sign", `ENCODEURL("100%")`, "100%25"},
+		// Number input coerced to string
+		{"number input", `ENCODEURL(42)`, "42"},
+		{"decimal number", `ENCODEURL(3.14)`, "3.14"},
+		// Boolean input coerced
+		{"boolean TRUE", `ENCODEURL(TRUE)`, "TRUE"},
+		{"boolean FALSE", `ENCODEURL(FALSE)`, "FALSE"},
+		// Mixed characters
+		{"mixed url chars", `ENCODEURL("key=val&foo=bar")`, "key%3Dval%26foo%3Dbar"},
+		// URL with query parameters
+		{"url with query", `ENCODEURL("https://example.com/path?q=hello&lang=en")`, "https%3A%2F%2Fexample.com%2Fpath%3Fq%3Dhello%26lang%3Den"},
+		// Unicode/UTF-8 characters (multi-byte)
+		{"unicode e-acute", `ENCODEURL("caf` + "\xc3\xa9" + `")`, "caf%C3%A9"},
+		{"unicode n-tilde", `ENCODEURL("` + "\xc3\xb1" + `")`, "%C3%B1"},
+		// Brackets and braces
+		{"left bracket", `ENCODEURL("[")`, "%5B"},
+		{"right bracket", `ENCODEURL("]")`, "%5D"},
+		{"left brace", `ENCODEURL("{")`, "%7B"},
+		{"right brace", `ENCODEURL("}")`, "%7D"},
+		// Tab and newline
+		{"tab char", `ENCODEURL("a` + "\t" + `b")`, "a%09b"},
+		{"newline char", `ENCODEURL("a` + "\n" + `b")`, "a%0Ab"},
+	}
+
+	for _, tt := range strTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != ValueString || got.Str != tt.want {
+				t.Errorf("Eval(%q) = %v (type %d), want %q", tt.formula, got, got.Type, tt.want)
+			}
+		})
+	}
+
+	// Error: wrong arg count
+	t.Run("no args", func(t *testing.T) {
+		cf := evalCompile(t, `ENCODEURL()`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("too many args", func(t *testing.T) {
+		cf := evalCompile(t, `ENCODEURL("a","b")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE! error", got)
+		}
+	})
+
+	// Error propagation
+	t.Run("error propagation DIV0", func(t *testing.T) {
+		cf := evalCompile(t, `ENCODEURL(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0! error", got)
+		}
+	})
+
+	t.Run("error propagation NA", func(t *testing.T) {
+		cf := evalCompile(t, `ENCODEURL(NA())`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A error", got)
+		}
+	})
+
+	// Array input (LiftUnary)
+	t.Run("array input", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("a b"),
+				{Col: 2, Row: 1}: StringVal("c/d"),
+			},
+		}
+		cf := evalCompile(t, `ENCODEURL(A1:B1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("got type %d, want ValueArray", got.Type)
+		}
+		if len(got.Array) != 1 || len(got.Array[0]) != 2 {
+			t.Fatalf("got array shape %dx%d, want 1x2", len(got.Array), len(got.Array[0]))
+		}
+		if got.Array[0][0].Str != "a%20b" {
+			t.Errorf("array[0][0] = %q, want %q", got.Array[0][0].Str, "a%20b")
+		}
+		if got.Array[0][1].Str != "c%2Fd" {
+			t.Errorf("array[0][1] = %q, want %q", got.Array[0][1].Str, "c%2Fd")
+		}
+	})
+
+	// Cell reference
+	t.Run("cell reference", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello world"),
+			},
+		}
+		cf := evalCompile(t, `ENCODEURL(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "hello%20world" {
+			t.Errorf("got %v, want %q", got, "hello%20world")
+		}
+	})
+}
