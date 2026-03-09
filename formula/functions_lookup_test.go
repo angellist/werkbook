@@ -8178,3 +8178,663 @@ func TestHYPERLINK(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// OFFSET
+// ---------------------------------------------------------------------------
+
+func TestOFFSETBasicSingleCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 1, Row: 2}: NumberVal(30),
+			{Col: 2, Row: 2}: NumberVal(40),
+			{Col: 3, Row: 3}: NumberVal(99),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1) → B2 = 40
+	cf := evalCompile(t, "OFFSET(A1,1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 40 {
+		t.Errorf("OFFSET(A1,1,1): got %v, want 40", got)
+	}
+}
+
+func TestOFFSETZeroOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(42),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0) → A1 = 42
+	cf := evalCompile(t, "OFFSET(A1,0,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 42 {
+		t.Errorf("OFFSET(A1,0,0): got %v, want 42", got)
+	}
+}
+
+func TestOFFSETNegativeOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+			{Col: 3, Row: 3}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(C3,-2,-2) → A1 = 10
+	cf := evalCompile(t, "OFFSET(C3,-2,-2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("OFFSET(C3,-2,-2): got %v, want 10", got)
+	}
+}
+
+func TestOFFSETWithHeightWidth(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 3, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 3, Row: 3}: NumberVal(4),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1,2,2) → B2:C3 range, SUM should be 10
+	cf := evalCompile(t, "SUM(OFFSET(A1,1,1,2,2))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("SUM(OFFSET(A1,1,1,2,2)): got %v, want 10", got)
+	}
+}
+
+func TestOFFSETDefaultHeightWidthFromRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(6),
+			{Col: 1, Row: 4}: NumberVal(7),
+			{Col: 2, Row: 4}: NumberVal(8),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,0) → uses default height=2, width=2 from reference
+	// → A3:B4, SUM = 5+6+7+8 = 26
+	cf := evalCompile(t, "SUM(OFFSET(A1:B2,2,0))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 26 {
+		t.Errorf("SUM(OFFSET(A1:B2,2,0)): got %v, want 26", got)
+	}
+}
+
+func TestOFFSETCustomHeightOverridesDefault(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,3) → A1:A3, SUM = 60
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,3))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 60 {
+		t.Errorf("SUM(OFFSET(A1,0,0,3)): got %v, want 60", got)
+	}
+}
+
+func TestOFFSETCustomWidthOnly(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 3, Row: 1}: NumberVal(30),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,1,3) → A1:C1, SUM = 60
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,1,3))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 60 {
+		t.Errorf("SUM(OFFSET(A1,0,0,1,3)): got %v, want 60", got)
+	}
+}
+
+func TestOFFSETOffEdgeNegativeRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,-1,0) → row 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,-1,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,-1,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETOffEdgeNegativeCol(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,-1) → col 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,-1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,-1): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETHeightZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Height = 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETHeightNegative(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Height = -1 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,-1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,-1): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETWidthZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Width = 0 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,1,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,1,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETWidthNegative(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Width = -2 → #REF!
+	cf := evalCompile(t, "OFFSET(A1,0,0,1,-2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,0,1,-2): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETTooFewArgs(t *testing.T) {
+	resolver := &mockResolver{}
+	ctx := &EvalContext{Resolver: resolver}
+
+	cf := evalCompile(t, "OFFSET(A1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("OFFSET(A1,1): got %v, want #VALUE!", got)
+	}
+}
+
+func TestOFFSETSingleCellResultFromRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 2, Row: 2}: NumberVal(4),
+			{Col: 3, Row: 3}: NumberVal(99),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,2,1,1) → C3 = 99 (single cell from range ref)
+	cf := evalCompile(t, "OFFSET(A1:B2,2,2,1,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 99 {
+		t.Errorf("OFFSET(A1:B2,2,2,1,1): got %v, want 99", got)
+	}
+}
+
+func TestOFFSETUsedInSUM(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4),
+			{Col: 1, Row: 5}: NumberVal(5),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// SUM(OFFSET(A1,0,0,5,1)) → sum of A1:A5 = 15
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,5,1))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 15 {
+		t.Errorf("SUM(OFFSET(A1,0,0,5,1)): got %v, want 15", got)
+	}
+}
+
+func TestOFFSETEmptyCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 which is empty
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueEmpty {
+		t.Errorf("OFFSET(A1,0,1): got type %v, want ValueEmpty", got.Type)
+	}
+}
+
+func TestOFFSETStringCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("hello"),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 = "hello"
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "hello" {
+		t.Errorf("OFFSET(A1,0,1): got %v, want hello", got)
+	}
+}
+
+func TestOFFSETBooleanCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: BoolVal(true),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,1) → B1 = TRUE
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueBool || !got.Bool {
+		t.Errorf("OFFSET(A1,0,1): got %v, want TRUE", got)
+	}
+}
+
+func TestOFFSETLargeOffset(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 100, Row: 200}: NumberVal(999),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,199,99) → CV200 = 999
+	cf := evalCompile(t, "OFFSET(A1,199,99)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 999 {
+		t.Errorf("OFFSET(A1,199,99): got %v, want 999", got)
+	}
+}
+
+func TestOFFSETRowsColsTruncated(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 2}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1.9,1.9) → rows=1, cols=1 → B2 = 20
+	cf := evalCompile(t, "OFFSET(A1,1.9,1.9)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,1.9,1.9): got %v, want 20", got)
+	}
+}
+
+func TestOFFSETHeightWidthTruncated(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 1, Row: 2}: NumberVal(30),
+			{Col: 2, Row: 2}: NumberVal(40),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,0,2.9,2.9) → height=2, width=2 → A1:B2, SUM=100
+	cf := evalCompile(t, "SUM(OFFSET(A1,0,0,2.9,2.9))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 100 {
+		t.Errorf("SUM(OFFSET(A1,0,0,2.9,2.9)): got %v, want 100", got)
+	}
+}
+
+func TestOFFSETExceedsMaxRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Offset to beyond max row
+	cf := evalCompile(t, "OFFSET(A1,1048576,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,1048576,0): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETExceedsMaxCol(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Offset to beyond max col
+	cf := evalCompile(t, "OFFSET(A1,0,16384)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,0,16384): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETRangeOverflowsMaxRow(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// Starting near max row with height that overflows
+	cf := evalCompile(t, "OFFSET(A1,1048575,0,2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET(A1,1048575,0,2): got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETErrorInRowsArg(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("abc"),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// String that can't be converted to number → #VALUE!
+	cf := evalCompile(t, `OFFSET(A1,B1,0)`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("OFFSET(A1,B1,0): got %v, want #VALUE!", got)
+	}
+}
+
+func TestOFFSETNilContext(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+		},
+	}
+
+	cf := evalCompile(t, "OFFSET(A1,0,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("OFFSET with nil ctx: got %v, want #REF!", got)
+	}
+}
+
+func TestOFFSETRangeRefDefaultDimensions(t *testing.T) {
+	// When using a range ref, omitting height/width should inherit
+	// the dimensions of the reference range.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 3, Row: 3}: NumberVal(10),
+			{Col: 4, Row: 3}: NumberVal(20),
+			{Col: 3, Row: 4}: NumberVal(30),
+			{Col: 4, Row: 4}: NumberVal(40),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1:B2,2,2) → C3:D4 (same 2x2 size), SUM = 100
+	cf := evalCompile(t, "SUM(OFFSET(A1:B2,2,2))")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 100 {
+		t.Errorf("SUM(OFFSET(A1:B2,2,2)): got %v, want 100", got)
+	}
+}
+
+func TestOFFSETFromCellFlag(t *testing.T) {
+	// Single cell result should have FromCell=true for proper coercion
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(42),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	cf := evalCompile(t, "OFFSET(A1,0,1)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if !got.FromCell {
+		t.Errorf("OFFSET single cell result should have FromCell=true")
+	}
+}
+
+func TestOFFSETRangeResultHasRangeOrigin(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 3, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 3, Row: 3}: NumberVal(4),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,1,1,2,2) should return array with proper RangeOrigin
+	cf := evalCompile(t, "OFFSET(A1,1,1,2,2)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray {
+		t.Fatalf("expected ValueArray, got %v", got.Type)
+	}
+	if got.RangeOrigin == nil {
+		t.Fatal("RangeOrigin should not be nil for range result")
+	}
+	ro := got.RangeOrigin
+	if ro.FromCol != 2 || ro.FromRow != 2 || ro.ToCol != 3 || ro.ToRow != 3 {
+		t.Errorf("RangeOrigin: got %+v, want B2:C3", ro)
+	}
+}
+
+func TestOFFSETBooleanCoercionForRows(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,TRUE,0) → TRUE coerces to 1, so A2=20
+	cf := evalCompile(t, "OFFSET(A1,TRUE,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,TRUE,0): got %v, want 20", got)
+	}
+}
+
+func TestOFFSETBooleanCoercionForCols(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver}
+
+	// OFFSET(A1,0,TRUE) → TRUE coerces to 1, so B1=20
+	cf := evalCompile(t, "OFFSET(A1,0,TRUE)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("OFFSET(A1,0,TRUE): got %v, want 20", got)
+	}
+}

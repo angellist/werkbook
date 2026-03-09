@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **434** spreadsheet formula functions.
+Werkbook supports **435** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -289,6 +289,7 @@ Werkbook supports **434** spreadsheet formula functions.
 | OCT2DEC | Engineering | 43 |
 | OCT2HEX | Engineering | 36 |
 | ODD | Math & Trig | 40 |
+| OFFSET | Lookup & Reference | 25 |
 | OR | Logical | 50 |
 | PDURATION | Financial | 23 |
 | PEARSON | Statistical | 23 |
@@ -365,7 +366,7 @@ Werkbook supports **434** spreadsheet formula functions.
 | STEYX | Statistical | 25 |
 | SUBSTITUTE | Text | 23 |
 | SUBTOTAL | Math & Trig | 32 |
-| SUM | Statistical | 36 |
+| SUM | Statistical | 43 |
 | SUMIF | Statistical | 37 |
 | SUMIFS | Statistical | 42 |
 | SUMPRODUCT | Statistical | 22 |
@@ -441,7 +442,7 @@ Werkbook supports **434** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **36** functions are not yet supported.
+The following **35** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -471,7 +472,6 @@ The following **36** functions are not yet supported.
 | ODDFYIELD | Financial |
 | ODDLPRICE | Financial |
 | ODDLYIELD | Financial |
-| OFFSET | Lookup & Reference |
 | PHONETIC | Text |
 | REDUCE | Logical |
 | REPLACEB | Text |

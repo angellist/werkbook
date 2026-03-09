@@ -17,6 +17,7 @@ func init() {
 	Register("INDIRECT", fnINDIRECT)
 	Register("LOOKUP", NoCtx(fnLOOKUP))
 	Register("MATCH", NoCtx(fnMATCH))
+	Register("OFFSET", fnOFFSET)
 	Register("VLOOKUP", NoCtx(fnVLOOKUP))
 	Register("TAKE", NoCtx(fnTAKE))
 	Register("DROP", NoCtx(fnDROP))
@@ -2305,4 +2306,143 @@ func fnHyperlink(args []Value) (Value, error) {
 
 	// No friendly_name — return link_location coerced to string.
 	return StringVal(ValueToString(loc)), nil
+}
+
+// fnOFFSET implements OFFSET(reference, rows, cols, [height], [width]).
+// It returns a reference to a range offset from the given reference.
+func fnOFFSET(args []Value, ctx *EvalContext) (Value, error) {
+	if len(args) < 3 || len(args) > 5 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	if ctx == nil || ctx.Resolver == nil {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Parse the reference argument.
+	var (
+		sheet   string
+		fromRow int
+		fromCol int
+		toRow   int
+		toCol   int
+	)
+
+	ref := args[0]
+	switch ref.Type {
+	case ValueError:
+		return ref, nil
+	case ValueRef:
+		// Single cell reference: encoded as col + row*100_000, sheet in Str.
+		encoded := int(ref.Num)
+		fromCol = encoded % 100_000
+		fromRow = encoded / 100_000
+		toCol = fromCol
+		toRow = fromRow
+		sheet = ref.Str
+	case ValueArray:
+		if ref.RangeOrigin == nil {
+			return ErrorVal(ErrValVALUE), nil
+		}
+		fromCol = ref.RangeOrigin.FromCol
+		fromRow = ref.RangeOrigin.FromRow
+		toCol = ref.RangeOrigin.ToCol
+		toRow = ref.RangeOrigin.ToRow
+		sheet = ref.RangeOrigin.Sheet
+	default:
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Parse rows offset.
+	rowsN, errV := CoerceNum(args[1])
+	if errV != nil {
+		return *errV, nil
+	}
+	rowsOff := int(math.Trunc(rowsN))
+
+	// Parse cols offset.
+	colsN, errV := CoerceNum(args[2])
+	if errV != nil {
+		return *errV, nil
+	}
+	colsOff := int(math.Trunc(colsN))
+
+	// Default height and width from reference dimensions.
+	refHeight := toRow - fromRow + 1
+	refWidth := toCol - fromCol + 1
+
+	height := refHeight
+	width := refWidth
+
+	// Parse optional height.
+	if len(args) >= 4 {
+		if args[3].Type == ValueEmpty {
+			// Omitted — keep default.
+		} else {
+			hN, errV := CoerceNum(args[3])
+			if errV != nil {
+				return *errV, nil
+			}
+			height = int(math.Trunc(hN))
+		}
+	}
+
+	// Parse optional width.
+	if len(args) >= 5 {
+		if args[4].Type == ValueEmpty {
+			// Omitted — keep default.
+		} else {
+			wN, errV := CoerceNum(args[4])
+			if errV != nil {
+				return *errV, nil
+			}
+			width = int(math.Trunc(wN))
+		}
+	}
+
+	// Height and width must be positive.
+	if height <= 0 || width <= 0 {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Compute new range origin.
+	newFromRow := fromRow + rowsOff
+	newFromCol := fromCol + colsOff
+	newToRow := newFromRow + height - 1
+	newToCol := newFromCol + width - 1
+
+	// Validate bounds.
+	if newFromRow < 1 || newFromCol < 1 || newToRow > maxRows || newToCol > maxCols {
+		return ErrorVal(ErrValREF), nil
+	}
+
+	// Single cell result — return the cell value directly.
+	if height == 1 && width == 1 {
+		val := ctx.Resolver.GetCellValue(CellAddr{Sheet: sheet, Col: newFromCol, Row: newFromRow})
+		val.FromCell = true
+		return val, nil
+	}
+
+	// Range result — resolve via GetRangeValues.
+	addr := RangeAddr{
+		Sheet:   sheet,
+		FromCol: newFromCol,
+		FromRow: newFromRow,
+		ToCol:   newToCol,
+		ToRow:   newToRow,
+	}
+	rows := ctx.Resolver.GetRangeValues(addr)
+
+	// Pad trailing blank rows for bounded ranges.
+	expectedRows := addr.ToRow - addr.FromRow + 1
+	cols := addr.ToCol - addr.FromCol + 1
+	for len(rows) < expectedRows {
+		emptyRow := make([]Value, cols)
+		for j := range emptyRow {
+			emptyRow[j] = EmptyVal()
+		}
+		rows = append(rows, emptyRow)
+	}
+
+	return Value{Type: ValueArray, Array: rows, RangeOrigin: &addr}, nil
 }

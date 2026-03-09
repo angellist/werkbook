@@ -248,6 +248,31 @@ func (c *compiler) compileNode(node Node) error {
 				}
 			}
 		}
+		// OFFSET needs its first argument as a raw reference (ValueRef
+		// for single cells, ValueArray+RangeOrigin for ranges) so it can
+		// compute the offset address.  Remaining arguments are compiled
+		// normally.
+		if name == "OFFSET" && argc >= 1 {
+			first := n.Args[0]
+			switch ref := first.(type) {
+			case *CellRef:
+				idx := c.addRef(CellAddr{Sheet: ref.Sheet, Col: ref.Col, Row: ref.Row})
+				c.emit(OpLoadCellRef, idx)
+			default:
+				// Range references already produce ValueArray with RangeOrigin.
+				if err := c.compileNode(first); err != nil {
+					return err
+				}
+			}
+			for _, arg := range n.Args[1:] {
+				if err := c.compileNode(arg); err != nil {
+					return err
+				}
+			}
+			operand := uint32(funcID)<<8 | uint32(argc)
+			c.emit(OpCall, operand)
+			break
+		}
 		arrayCtx := IsArrayFunc(name)
 		if arrayCtx {
 			c.emit(OpEnterArrayCtx, 0)
