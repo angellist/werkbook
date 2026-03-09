@@ -9969,3 +9969,288 @@ func TestFVSchedule_ErrorCases(t *testing.T) {
 		assertError(t, "empty string in schedule", v)
 	})
 }
+
+// === AMORDEGRC ===
+
+func TestAMORDEGRC_Comprehensive(t *testing.T) {
+	// Serial numbers for reference dates:
+	// DATE(2008,8,18)  = 39679
+	// DATE(2008,12,30) = 39813
+	// DATE(2010,1,1)   = 40179
+	// DATE(2010,6,30)  = 40359
+	// DATE(2010,12,31) = 40543
+	// DATE(2011,1,1)   = 40544
+	// DATE(2011,12,31) = 40908
+	// DATE(2012,1,1)   = 40909
+	// DATE(2012,6,30)  = 41090
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// --- Doc example ---
+		// AMORDEGRC(2400, 39679, 39813, 300, 1, 0.15, 1) = 776
+		{
+			name: "doc example period 1 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 1),
+			want: 776,
+		},
+		// --- Period 0 (prorated first period) ---
+		{
+			name: "doc example period 0 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.15, 1),
+			want: 330,
+		},
+		// --- Multiple periods (0, 1, 2, 3, ...) ---
+		// Period 2: remaining = 2400 - 330 - 776 = 1294, dep = round(1294 * 0.375) = 485
+		{
+			name: "doc example period 2 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 2, 0.15, 1),
+			want: 485,
+		},
+		// Period 3: remaining = 1294 - 485 = 809, dep = round(809 * 0.375) = 303
+		// But remaining-salvage = 809 - 300 = 509, dep 303 < 509 so normal
+		{
+			name: "doc example period 3 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 3, 0.15, 1),
+			want: 303,
+		},
+		// Period 4: remaining = 809 - 303 = 506, dep = round(506 * 0.375) = 190
+		// remaining-salvage = 506 - 300 = 206, dep 190 < 206 so normal
+		{
+			name: "doc example period 4 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 4, 0.15, 1),
+			want: 190,
+		},
+		// Period 5: remaining = 506 - 190 = 316, dep = round(316 * 0.375) = 119
+		// remaining-salvage = 316 - 300 = 16, dep 119 >= 16
+		// so second-to-last: round(16 * 0.5) = 8
+		{
+			name: "doc example period 5 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 5, 0.15, 1),
+			want: 8,
+		},
+		// Period 6: last period, rest = 316 - 8 - 300 = 8
+		{
+			name: "doc example period 6 basis 1",
+			args: numArgs(2400, 39679, 39813, 300, 6, 0.15, 1),
+			want: 8,
+		},
+		// Period 7: beyond asset life, return 0
+		{
+			name: "doc example period 7 beyond life",
+			args: numArgs(2400, 39679, 39813, 300, 7, 0.15, 1),
+			want: 0,
+		},
+		// --- Different rate: life 3-4 years, coeff=1.5 ---
+		// rate=0.3, life=3.33, coeff=1.5, adjusted_rate=0.45
+		// basis 0: 30/360 day count
+		// DATE(2010,1,1)=40179, DATE(2010,6,30)=40359
+		// days360 NASD: 6*30 - 1 = 179? Let's use basis 3 for simplicity.
+		// basis 3: dsm = 40359-40179 = 180, bYear = 365
+		// yearFrac = 180/365 = 0.493151
+		// dep0 = round(10000 * 0.45 * 0.493151) = round(2219.18) = 2219
+		{
+			name: "rate 0.3 life 3.33 coeff 1.5 period 0 basis 3",
+			args: numArgs(10000, 40179, 40359, 500, 0, 0.3, 3),
+			want: 2219,
+		},
+		// --- Different rate: life 5-6 years, coeff=2 ---
+		// rate=0.2, life=5, coeff=2, adjusted_rate=0.4
+		// basis 3: dsm = 180, bYear = 365
+		// dep0 = round(10000 * 0.4 * 180/365) = round(1972.60) = 1973
+		{
+			name: "rate 0.2 life 5 coeff 2 period 0 basis 3",
+			args: numArgs(10000, 40179, 40359, 500, 0, 0.2, 3),
+			want: 1973,
+		},
+		// --- Rate giving life < 1 (#NUM!) ---
+		{
+			name: "rate 2.0 life 0.5 NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 0, 2.0, 1),
+			wantErr: true,
+		},
+		// --- Rate giving life 1-2 (#NUM!) ---
+		{
+			name: "rate 0.7 life 1.43 NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.7, 1),
+			wantErr: true,
+		},
+		// --- Rate giving life 2-3 (#NUM!) ---
+		{
+			name: "rate 0.4 life 2.5 NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.4, 1),
+			wantErr: true,
+		},
+		// --- Basis 2 not supported (#NUM!) ---
+		{
+			name: "basis 2 not supported NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 2),
+			wantErr: true,
+		},
+		// --- Basis 0 (US NASD 30/360) ---
+		// AMORDEGRC(2400, 39679, 39813, 300, 0, 0.15, 0)
+		// days360 NASD from 8/18 to 12/30: (12-8)*30 + (30-18) = 120+12 = 132
+		// bYear=360, yearFrac = 132/360 = 0.366667
+		// dep0 = round(2400 * 0.375 * 0.366667) = round(330) = 330
+		{
+			name: "basis 0 US NASD 30/360",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.15, 0),
+			want: 330,
+		},
+		// --- Basis 3 (actual/365) ---
+		// dsm = 134, bYear = 365
+		// yearFrac = 134/365 = 0.367123
+		// dep0 = round(2400 * 0.375 * 0.367123) = round(330.41) = 330
+		{
+			name: "basis 3 actual/365",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.15, 3),
+			want: 330,
+		},
+		// --- Basis 4 (European 30/360) ---
+		// 39679=2008-08-19, 39813=2008-12-31. European: ed 31→30.
+		// days360 = (12-8)*30 + (30-19) = 131, bYear=360
+		// yearFrac = 131/360, dep0 = round(2400 * 0.375 * 131/360) = 328
+		{
+			name: "basis 4 European 30/360",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.15, 4),
+			want: 328,
+		},
+		// --- Default basis (omitted, should default to 0) ---
+		{
+			name: "default basis omitted 6 args",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.15),
+			want: 330,
+		},
+		// --- Salvage = 0 ---
+		// AMORDEGRC(2400, 39679, 39813, 0, 0, 0.15, 1)
+		// Same as before but salvage=0
+		// dep0 = 330
+		{
+			name: "salvage zero period 0",
+			args: numArgs(2400, 39679, 39813, 0, 0, 0.15, 1),
+			want: 330,
+		},
+		// --- Negative cost (#NUM!) ---
+		{
+			name: "negative cost NUM error",
+			args: numArgs(-2400, 39679, 39813, 300, 1, 0.15, 1),
+			wantErr: true,
+		},
+		// --- Negative salvage (#NUM!) ---
+		{
+			name: "negative salvage NUM error",
+			args: numArgs(2400, 39679, 39813, -300, 1, 0.15, 1),
+			wantErr: true,
+		},
+		// --- Salvage > cost (#NUM!) ---
+		{
+			name: "salvage exceeds cost NUM error",
+			args: numArgs(2400, 39679, 39813, 3000, 1, 0.15, 1),
+			wantErr: true,
+		},
+		// --- Negative period (#NUM!) ---
+		{
+			name: "negative period NUM error",
+			args: numArgs(2400, 39679, 39813, 300, -1, 0.15, 1),
+			wantErr: true,
+		},
+		// --- Negative rate (#NUM!) ---
+		{
+			name: "negative rate NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 1, -0.15, 1),
+			wantErr: true,
+		},
+		// --- Zero rate (#NUM!) ---
+		{
+			name: "zero rate NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0, 1),
+			wantErr: true,
+		},
+		// --- Period beyond asset life returns 0 ---
+		{
+			name: "period 10 beyond life returns 0",
+			args: numArgs(2400, 39679, 39813, 300, 10, 0.15, 1),
+			want: 0,
+		},
+		// --- Invalid basis 5 (#NUM!) ---
+		{
+			name: "basis 5 invalid NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 5),
+			wantErr: true,
+		},
+		// --- Invalid basis -1 (#NUM!) ---
+		{
+			name: "basis negative invalid NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, -1),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := fnAmordegrc(tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantErr {
+				assertError(t, tt.name, v)
+				return
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("%s: expected number, got type %v (str=%q)", tt.name, v.Type, v.Str)
+			}
+			if v.Num != tt.want {
+				t.Errorf("%s: got %f, want %f", tt.name, v.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestAMORDEGRC_WrongArgCount(t *testing.T) {
+	t.Run("too few args", func(t *testing.T) {
+		v, err := fnAmordegrc(numArgs(2400, 39679, 39813, 300, 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "too few args", v)
+	})
+
+	t.Run("too many args", func(t *testing.T) {
+		v, err := fnAmordegrc(numArgs(2400, 39679, 39813, 300, 1, 0.15, 1, 99))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "too many args", v)
+	})
+}
+
+func TestAMORDEGRC_ErrorPropagation(t *testing.T) {
+	errVal := ErrorVal(ErrValDIV0)
+
+	t.Run("error in cost", func(t *testing.T) {
+		v, err := fnAmordegrc([]Value{errVal, NumberVal(39679), NumberVal(39813), NumberVal(300), NumberVal(1), NumberVal(0.15), NumberVal(1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error cost", v)
+	})
+
+	t.Run("error in rate", func(t *testing.T) {
+		v, err := fnAmordegrc([]Value{NumberVal(2400), NumberVal(39679), NumberVal(39813), NumberVal(300), NumberVal(1), errVal, NumberVal(1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error rate", v)
+	})
+
+	t.Run("error in basis", func(t *testing.T) {
+		v, err := fnAmordegrc([]Value{NumberVal(2400), NumberVal(39679), NumberVal(39813), NumberVal(300), NumberVal(1), NumberVal(0.15), errVal})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error basis", v)
+	})
+}

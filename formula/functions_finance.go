@@ -57,6 +57,7 @@ func init() {
 	Register("PRICE", NoCtx(fnPrice))
 	Register("YIELD", NoCtx(fnYield))
 	Register("FVSCHEDULE", NoCtx(fnFVSchedule))
+	Register("AMORDEGRC", NoCtx(fnAmordegrc))
 }
 
 // flattenValues extracts all numeric values from an arg that may be a scalar or array (range).
@@ -3229,4 +3230,154 @@ func fnFVSchedule(args []Value) (Value, error) {
 		}
 	}
 	return NumberVal(principal), nil
+}
+
+// fnAmordegrc implements AMORDEGRC(cost, date_purchased, first_period, salvage, period, rate, [basis]).
+// Returns the depreciation for each accounting period using the French degressive method.
+func fnAmordegrc(args []Value) (Value, error) {
+	if len(args) < 6 || len(args) > 7 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	cost, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	datePurchasedRaw, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	firstPeriodRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	salvage, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+	periodRaw, e := CoerceNum(args[4])
+	if e != nil {
+		return *e, nil
+	}
+	rate, e := CoerceNum(args[5])
+	if e != nil {
+		return *e, nil
+	}
+
+	basis := 0
+	if len(args) == 7 {
+		b, e := CoerceNum(args[6])
+		if e != nil {
+			return *e, nil
+		}
+		basis = int(b)
+	}
+
+	datePurchased := math.Trunc(datePurchasedRaw)
+	firstPeriod := math.Trunc(firstPeriodRaw)
+	period := int(math.Trunc(periodRaw))
+
+	// Validate inputs.
+	if cost <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if salvage < 0 || salvage > cost {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if period < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if rate <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	// Basis 2 is not supported for AMORDEGRC.
+	if basis != 0 && basis != 1 && basis != 3 && basis != 4 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Compute life = 1/rate and determine the coefficient.
+	life := 1.0 / rate
+	var coeff float64
+	switch {
+	case life >= 3 && life <= 4:
+		coeff = 1.5
+	case life > 4 && life < 5:
+		// Gap between 4 and 5 — Excel returns #NUM!
+		return ErrorVal(ErrValNUM), nil
+	case life >= 5 && life <= 6:
+		coeff = 2
+	case life > 6:
+		coeff = 2.5
+	default:
+		// Life < 3 — Excel returns #NUM!
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	adjustedRate := rate * coeff
+
+	// Compute year fraction for the prorated first period.
+	dsm, bYear := dayCountBasis(datePurchased, firstPeriod, basis)
+	if bYear == 0 {
+		return ErrorVal(ErrValDIV0), nil
+	}
+	yearFrac := dsm / bYear
+
+	// Compute the number of full depreciation periods.
+	// nper is the total number of periods the asset depreciates.
+	depreciableAmount := cost - salvage
+
+	// Period 0: prorated depreciation.
+	dep0 := math.Round(cost * adjustedRate * yearFrac)
+
+	// Build the depreciation schedule iteratively.
+	accumulated := 0.0
+	for p := 0; ; p++ {
+		if accumulated >= depreciableAmount {
+			if p == period {
+				return NumberVal(0), nil
+			}
+			// This period and all beyond return 0.
+			if p > period {
+				return NumberVal(0), nil
+			}
+			// Shouldn't happen, but safeguard.
+			continue
+		}
+
+		remaining := cost - accumulated
+		var dep float64
+
+		if p == 0 {
+			dep = dep0
+		} else {
+			dep = math.Round(remaining * adjustedRate)
+		}
+
+		// Check if remaining value after this depreciation would go below salvage.
+		// Handle the last periods: when remaining - dep <= salvage,
+		// we need to apply the 50%/100% rule.
+		// Specifically: the second-to-last period takes 50% of remaining depreciable amount,
+		// and the last period takes the rest.
+		remainingDepreciable := remaining - salvage
+		if dep >= remainingDepreciable {
+			// This is the second-to-last or last period.
+			halfRemaining := math.Round(remainingDepreciable * 0.5)
+			if p == period {
+				return NumberVal(halfRemaining), nil
+			}
+			accumulated += halfRemaining
+			// Next period takes the rest.
+			if p+1 == period {
+				rest := remaining - halfRemaining - salvage
+				return NumberVal(math.Round(rest)), nil
+			}
+			// Beyond that, everything is 0.
+			return NumberVal(0), nil
+		}
+
+		if p == period {
+			return NumberVal(dep), nil
+		}
+		accumulated += dep
+	}
 }

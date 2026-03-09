@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **432** spreadsheet formula functions.
+Werkbook supports **433** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -13,6 +13,7 @@ Werkbook supports **432** spreadsheet formula functions.
 | ACOTH | Math & Trig | 32 |
 | ADDRESS | Lookup & Reference | 44 |
 | AGGREGATE | Statistical | 49 |
+| AMORDEGRC | Financial | 3 |
 | ANCHORARRAY | Lookup & Reference | 6 |
 | AND | Logical | 29 |
 | ARABIC | Math & Trig | 38 |
@@ -439,11 +440,10 @@ Werkbook supports **432** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **38** functions are not yet supported.
+The following **37** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
-| AMORDEGRC | Financial |
 | AMORLINC | Financial |
 | AREAS | Lookup & Reference |
 | ASC | Text |
