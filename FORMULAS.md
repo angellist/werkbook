@@ -440,7 +440,7 @@ Werkbook supports **435** spreadsheet formula functions.
 | YIELDMAT | Financial | 3 |
 | Z.TEST | Statistical | 22 |
 
-# Will Not Support
+# No Planned Support
 
 These functions depend on the spreadsheet application's runtime environment, have side
 effects, or require locale-specific behavior that cannot be reproduced in a server-side library.

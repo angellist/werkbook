@@ -414,16 +414,29 @@ func isSupported(name string, supported map[string]funcInfo) bool {
 	return ok
 }
 
-// computeUnsupported reads the existing FORMULAS.md unsupported list and removes
-// any that are now supported.
+// computeUnsupported reads the existing FORMULAS.md unsupported list, removes
+// any that are now supported, and ensures all willNotSupport entries are included.
 func computeUnsupported(supported map[string]funcInfo) []funcInfo {
+	seen := map[string]bool{}
+	var unsupported []funcInfo
+
+	// Always include willNotSupport entries (they are the source of truth)
+	for name := range willNotSupport {
+		if _, ok := supported[name]; ok {
+			continue
+		}
+		seen[name] = true
+		// Category for willNotSupport entries — look up from file or use fallback
+		unsupported = append(unsupported, funcInfo{Name: name, Category: categoryForUnsupported(name)})
+	}
+
+	// Read remaining unsupported from existing FORMULAS.md
 	f, err := os.Open("FORMULAS.md")
 	if err != nil {
-		return nil
+		return unsupported
 	}
 	defer f.Close()
 
-	var unsupported []funcInfo
 	inUnsupported := false
 	reRow := regexp.MustCompile(`^\|\s*([A-Z][A-Z0-9.]*)\s*\|\s*([^|]+?)\s*\|`)
 
@@ -431,13 +444,12 @@ func computeUnsupported(supported map[string]funcInfo) []funcInfo {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "# Unsupported") ||
-			strings.HasPrefix(line, "# Will Not Support") ||
+			strings.HasPrefix(line, "# No Planned Support") ||
 			strings.HasPrefix(line, "# Not Yet Implemented") {
 			inUnsupported = true
 			continue
 		}
 		if strings.HasPrefix(line, "# ") && inUnsupported {
-			// Another top-level heading after unsupported sections — stop
 			break
 		}
 		if !inUnsupported {
@@ -450,11 +462,41 @@ func computeUnsupported(supported map[string]funcInfo) []funcInfo {
 		name := m[1]
 		cat := strings.TrimSpace(m[2])
 		if _, ok := supported[name]; ok {
-			continue // now supported, skip
+			continue
 		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
 		unsupported = append(unsupported, funcInfo{Name: name, Category: cat})
 	}
 	return unsupported
+}
+
+// categoryForUnsupported returns the category for a known unsupported function.
+var unsupportedCategories = map[string]string{
+	"WEBSERVICE": "Web",
+	"FILTERXML":  "Web",
+	"INFO":       "Information",
+	"CELL":       "Information",
+	"PHONETIC":   "Text",
+	"ASC":        "Text",
+	"DBCS":       "Text",
+	"BAHTTEXT":   "Text",
+	"FINDB":      "Text",
+	"LEFTB":      "Text",
+	"LENB":       "Text",
+	"MIDB":       "Text",
+	"REPLACEB":   "Text",
+	"RIGHTB":     "Text",
+	"SEARCHB":    "Text",
+}
+
+func categoryForUnsupported(name string) string {
+	if cat, ok := unsupportedCategories[name]; ok {
+		return cat
+	}
+	return "Unknown"
 }
 
 func generateMarkdown(supported map[string]funcInfo, unsupported []funcInfo) string {
@@ -495,7 +537,7 @@ func generateMarkdown(supported map[string]funcInfo, unsupported []funcInfo) str
 		sort.Slice(wontSupport, func(i, j int) bool {
 			return wontSupport[i].Name < wontSupport[j].Name
 		})
-		b.WriteString("\n# Will Not Support\n\n")
+		b.WriteString("\n# No Planned Support\n\n")
 		b.WriteString("These functions depend on the spreadsheet application's runtime environment, have side\n")
 		b.WriteString("effects, or require locale-specific behavior that cannot be reproduced in a server-side library.\n\n")
 		b.WriteString("| Function | Category | Reason |\n")
