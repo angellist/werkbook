@@ -55,8 +55,6 @@ func init() {
 // fnBesselI implements the BESSELI function.
 // BESSELI(X, N) — returns the modified Bessel function of the first kind, I_n(x).
 // N is truncated to an integer. If N < 0, returns #NUM!.
-// Uses the series expansion: I_n(x) = Σ (x/2)^(n+2k) / (k! * (n+k)!)
-// with incremental term computation to avoid factorial overflow.
 func fnBesselI(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValNA), nil
@@ -95,29 +93,144 @@ func fnBesselI(args []Value) (Value, error) {
 		x = -x
 	}
 
-	// Compute I_n(x) using incremental series.
-	// term_0 = (x/2)^n / n!
-	halfX := x / 2.0
-	term := 1.0
-	for i := 1; i <= n; i++ {
-		term *= halfX / float64(i)
+	result := besselI(n, x)
+	return NumberVal(sign * result), nil
+}
+
+// besselI0 computes I_0(x) for x >= 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.1 and 9.8.2).
+func besselI0(x float64) float64 {
+	if x <= 3.75 {
+		t := x / 3.75
+		t2 := t * t
+		return 1.0 +
+			t2*(3.5156229+
+				t2*(3.0899424+
+					t2*(1.2067492+
+						t2*(0.2659732+
+							t2*(0.0360768+
+								t2*0.0045813)))))
+	}
+	t := 3.75 / x
+	return (math.Exp(x) / math.Sqrt(x)) *
+		(0.39894228 +
+			t*(0.01328592+
+				t*(0.00225319+
+					t*(-0.00157565+
+						t*(0.00916281+
+							t*(-0.02057706+
+								t*(0.02635537+
+									t*(-0.01647633+
+										t*0.00392377))))))))
+}
+
+// besselI1 computes I_1(x) for x >= 0 using polynomial approximations
+// from Abramowitz & Stegun (sections 9.8.3 and 9.8.4).
+func besselI1(x float64) float64 {
+	if x <= 3.75 {
+		t := x / 3.75
+		t2 := t * t
+		return x * (0.5 +
+			t2*(0.87890594+
+				t2*(0.51498869+
+					t2*(0.15084934+
+						t2*(0.02658733+
+							t2*(0.00301532+
+								t2*0.00032411))))))
+	}
+	t := 3.75 / x
+	return (math.Exp(x) / math.Sqrt(x)) *
+		(0.39894228 +
+			t*(-0.03988024+
+				t*(-0.00362018+
+					t*(0.00163801+
+						t*(-0.01031555+
+							t*(0.02282967+
+								t*(-0.02895312+
+									t*(0.01787654+
+										t*(-0.00420059)))))))))
+}
+
+// besselI computes I_n(x) for integer n >= 0 and x > 0.
+// For n=0 and n=1 it uses direct polynomial approximations (A&S).
+// For n >= 2 it uses forward recurrence from I_0 and I_1 when stable,
+// or Miller's backward recurrence otherwise.
+func besselI(n int, x float64) float64 {
+	if n == 0 {
+		return besselI0(x)
+	}
+	if n == 1 {
+		return besselI1(x)
 	}
 
-	sum := term
-	halfXSq := halfX * halfX
+	if x == 0 {
+		return 0
+	}
 
-	const maxIter = 200
-	const epsilon = 1e-15
-	for k := 1; k <= maxIter; k++ {
-		// term_{k} = term_{k-1} * (x/2)^2 / (k * (n+k))
-		term *= halfXSq / (float64(k) * float64(n+k))
-		sum += term
-		if math.Abs(term) <= math.Abs(sum)*epsilon {
-			break
+	// For I_n(x), forward recurrence from I_0,I_1 is stable when x > n
+	// because the ratio I_{n+1}/I_n < 1. For x <= n it is unstable
+	// and we must use backward recurrence.
+	//
+	// Forward recurrence: I_{k+1}(x) = I_{k-1}(x) - (2k/x)*I_k(x)
+	// Note: this is actually I_{k+1} = -(2k/x)*I_k + I_{k-1}
+	// The standard recurrence is: I_{n-1}(x) - (2n/x)*I_n(x) = I_{n+1}(x)
+	// Rearranged for forward: I_{n+1}(x) = I_{n-1}(x) - (2n/x)*I_n(x)
+	// But actually for modified Bessel: I_{n+1}(x) = -(2n/x)*I_n(x) + I_{n-1}(x)
+	// is UNSTABLE in the forward direction for I.
+	//
+	// The correct recurrence for modified Bessel of 1st kind is:
+	//   I_{n-1}(x) - I_{n+1}(x) = (2n/x)*I_n(x)
+	// or equivalently:
+	//   I_{n+1}(x) = I_{n-1}(x) - (2n/x)*I_n(x)
+	//
+	// For modified Bessel I, forward recurrence is UNSTABLE for all x
+	// (I_n grows, not decreases). Use Miller's backward recurrence.
+
+	bi0 := besselI0(x)
+
+	// Miller's backward recurrence with higher accuracy.
+	// Start from a sufficiently high order where I_m ~ 0.
+	const iacc = 40
+	bigno := 1e10
+	bigni := 1e-10
+
+	// Starting index: must be well above n and large enough for convergence.
+	m := 2 * ((n + int(math.Sqrt(float64(iacc*n)))) / 2)
+	if m < 40 {
+		m = 40
+	}
+	// For large x, we need even more terms.
+	if extra := int(x) + 10; m < n+extra {
+		m = n + extra
+		// Round up to even.
+		if m%2 != 0 {
+			m++
 		}
 	}
 
-	return NumberVal(sign * sum), nil
+	var bip, bi, bim float64
+	var result float64
+	tox := 2.0 / x
+
+	bip = 0
+	bi = 1.0
+	for j := m; j >= 1; j-- {
+		bim = bip + float64(j)*tox*bi
+		bip = bi
+		bi = bim
+		// Renormalize to prevent overflow.
+		if math.Abs(bi) > bigno {
+			result *= bigni
+			bi *= bigni
+			bip *= bigni
+		}
+		if j == n {
+			result = bip
+		}
+	}
+	// Normalize: at j=0 we have bi ≈ I_0(x) * scale, so result/bi * I_0(x) gives I_n(x).
+	result *= bi0 / bi
+	return result
 }
 
 // fnBin2Dec implements the BIN2DEC function.

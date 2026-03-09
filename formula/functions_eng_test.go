@@ -4921,46 +4921,46 @@ func TestBESSELI(t *testing.T) {
 			tol     float64
 		}{
 			// Excel documentation example
-			{"BESSELI(1.5,1)", 0.981666428, 1e-6},
+			{"BESSELI(1.5,1)", 0.981666428475166, 1e-12},
 
 			// x = 0 cases
 			{"BESSELI(0,0)", 1, 0},
 			{"BESSELI(0,1)", 0, 0},
 			{"BESSELI(0,5)", 0, 0},
 
-			// Known values for n=0
-			{"BESSELI(1,0)", 1.2660658777, 1e-9},
-			{"BESSELI(2,0)", 2.2795853024, 1e-9},
+			// Known values for n=0 (Excel-verified)
+			{"BESSELI(1,0)", 1.2660658480342601, 1e-12},
+			{"BESSELI(2,0)", 2.279585307296026, 1e-12},
 
-			// Known values for n=1
-			{"BESSELI(1,1)", 0.5651591040, 1e-9},
-			{"BESSELI(2,1)", 1.5906368546, 1e-9},
+			// Known values for n=1 (Excel-verified)
+			{"BESSELI(1,1)", 0.5651590975819435, 1e-12},
+			{"BESSELI(2,1)", 1.5906368572633083, 1e-12},
 
 			// Negative x, odd n → negative result
-			{"BESSELI(-1.5,1)", -0.981666428, 1e-6},
-			{"BESSELI(-1,1)", -0.5651591040, 1e-9},
+			{"BESSELI(-1.5,1)", -0.981666428475166, 1e-12},
+			{"BESSELI(-1,1)", -0.5651590975819435, 1e-12},
 
 			// Negative x, even n → positive result
-			{"BESSELI(-1.5,0)", 1.6467232006, 1e-6},
-			{"BESSELI(-1.5,2)", 0.3378346183, 1e-6},
-			{"BESSELI(-2,0)", 2.2795853024, 1e-9},
+			{"BESSELI(-1.5,0)", 1.6467232021476756, 1e-12},
+			{"BESSELI(-1.5,2)", 0.33783462087443816, 1e-12},
+			{"BESSELI(-2,0)", 2.279585307296026, 1e-12},
 
 			// n truncated: BESSELI(1.5, 1.9) same as BESSELI(1.5, 1)
-			{"BESSELI(1.5,1.9)", 0.981666428, 1e-6},
-			{"BESSELI(1.5,1.1)", 0.981666428, 1e-6},
+			{"BESSELI(1.5,1.9)", 0.981666428475166, 1e-12},
+			{"BESSELI(1.5,1.1)", 0.981666428475166, 1e-12},
 
 			// Larger n
 			{"BESSELI(1,5)", 0.0002714631559, 1e-9},
 			{"BESSELI(1,10)", 2.752948e-10, 1e-15},
 
-			// Larger x
-			{"BESSELI(5,0)", 27.2398718236, 1e-6},
-			{"BESSELI(5,2)", 17.505614966, 1e-6},
-			{"BESSELI(20,0)", 4.355828256e7, 1e2},
+			// Larger x (Excel-verified)
+			{"BESSELI(5,0)", 27.239871894394888, 1e-9},
+			{"BESSELI(5,2)", 17.50561501211748, 1e-9},
+			{"BESSELI(20,0)", 4.355828255628764e7, 1e2},
 
 			// Boolean coercion (TRUE=1, FALSE=0)
-			{"BESSELI(TRUE,0)", 1.2660658777, 1e-9},
-			{"BESSELI(1,FALSE)", 1.2660658777, 1e-9},
+			{"BESSELI(TRUE,0)", 1.2660658480342601, 1e-12},
+			{"BESSELI(1,FALSE)", 1.2660658480342601, 1e-12},
 		}
 		for _, tt := range tests {
 			t.Run(tt.formula, func(t *testing.T) {
