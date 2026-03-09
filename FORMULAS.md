@@ -324,9 +324,9 @@ Werkbook supports **437** spreadsheet formula functions.
 | RAND | Returns a random number between 0 and 1. | Math & Trig | 13 |
 | RANDARRAY | Returns an array of random numbers. | Math & Trig | 50 |
 | RANDBETWEEN | Returns a random integer between two bounds. | Math & Trig | 26 |
-| RANK | Returns the rank of a number in a list. | Statistical | 32 |
+| RANK | Returns the rank of a number in a list. | Statistical | 34 |
 | RANK.AVG | Returns the average rank of a number in a list with ties. | Statistical | 21 |
-| RANK.EQ | Returns the rank of a number in a list with ties sharing the same rank. | Statistical | 7 |
+| RANK.EQ | Returns the rank of a number in a list with ties sharing the same rank. | Statistical | 46 |
 | RATE | Returns the interest rate per period for an annuity. | Financial | 6 |
 | RECEIVED | Returns the amount received at maturity for a fully invested security. | Financial | 3 |
 | REPLACE | Replaces characters within text at a given position. | Text | 38 |

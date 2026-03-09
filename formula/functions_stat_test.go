@@ -11460,6 +11460,9 @@ func TestRANK(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRANKEQ(t *testing.T) {
+	// Dataset: {7, 3, 5, 3, 9}
+	// Descending sorted: 9(1), 7(2), 5(3), 3(4), 3(4)
+	// Ascending sorted:  3(1), 3(1), 5(3), 7(4), 9(5)
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
 			{Col: 1, Row: 1}: NumberVal(7),
@@ -11470,29 +11473,199 @@ func TestRANKEQ(t *testing.T) {
 		},
 	}
 
+	// All same values: {5, 5, 5}
+	allSameResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 1}: NumberVal(5),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(5),
+		},
+	}
+
+	// Single element: {10}
+	singleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 3, Row: 1}: NumberVal(10),
+		},
+	}
+
+	// Negative values: {-3, -1, -3, 2, 0}
+	// Descending sorted: 2(1), 0(2), -1(3), -3(4), -3(4)
+	// Ascending sorted:  -3(1), -3(1), -1(3), 0(4), 2(5)
+	negResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 4, Row: 1}: NumberVal(-3),
+			{Col: 4, Row: 2}: NumberVal(-1),
+			{Col: 4, Row: 3}: NumberVal(-3),
+			{Col: 4, Row: 4}: NumberVal(2),
+			{Col: 4, Row: 5}: NumberVal(0),
+		},
+	}
+
+	// Decimals: {1.5, 2.5, 3.5, 2.5}
+	// Descending: 3.5(1), 2.5(2), 2.5(2), 1.5(4)
+	decResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 5, Row: 1}: NumberVal(1.5),
+			{Col: 5, Row: 2}: NumberVal(2.5),
+			{Col: 5, Row: 3}: NumberVal(3.5),
+			{Col: 5, Row: 4}: NumberVal(2.5),
+		},
+	}
+
+	// Error cell: one cell has an error
+	errResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 6, Row: 1}: NumberVal(1),
+			{Col: 6, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 6, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Doc example from Excel: {7, 3.5, 3.5, 1, 2}
+	// Descending: 7(1), 3.5(2), 3.5(2), 2(4), 1(5)
+	// Ascending:  1(1), 2(2), 3.5(3), 3.5(3), 7(5)
+	docResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 7, Row: 1}: NumberVal(7),
+			{Col: 7, Row: 2}: NumberVal(3.5),
+			{Col: 7, Row: 3}: NumberVal(3.5),
+			{Col: 7, Row: 4}: NumberVal(1),
+			{Col: 7, Row: 5}: NumberVal(2),
+		},
+	}
+
+	// Mixed types: numbers, strings, booleans, empty cells
+	// Only numeric values {10, 20, 30} should be counted
+	mixedResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 8, Row: 1}: NumberVal(10),
+			{Col: 8, Row: 2}: StringVal("hello"),
+			{Col: 8, Row: 3}: NumberVal(20),
+			{Col: 8, Row: 4}: BoolVal(true),
+			{Col: 8, Row: 5}: NumberVal(30),
+		},
+	}
+
+	// Large list: 1..20
+	largeCells := map[CellAddr]Value{}
+	for i := 1; i <= 20; i++ {
+		largeCells[CellAddr{Col: 9, Row: i}] = NumberVal(float64(i))
+	}
+	largeResolver := &mockResolver{cells: largeCells}
+
+	// Mixed positive/negative: {-5, -2, 0, 3, 7}
+	// Descending: 7(1), 3(2), 0(3), -2(4), -5(5)
+	// Ascending:  -5(1), -2(2), 0(3), 3(4), 7(5)
+	mixedPosNegResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 10, Row: 1}: NumberVal(-5),
+			{Col: 10, Row: 2}: NumberVal(-2),
+			{Col: 10, Row: 3}: NumberVal(0),
+			{Col: 10, Row: 4}: NumberVal(3),
+			{Col: 10, Row: 5}: NumberVal(7),
+		},
+	}
+
 	tests := []struct {
-		name    string
-		formula string
-		want    float64
-		wantErr ErrorValue
+		name     string
+		formula  string
+		resolver CellResolver
+		want     float64
+		isErr    bool
+		wantErr  ErrorValue
 	}{
-		{name: "desc_top", formula: "RANK.EQ(9,A1:A5)", want: 1},
-		{name: "desc_mid", formula: "RANK.EQ(7,A1:A5)", want: 2},
-		{name: "desc_tie", formula: "RANK.EQ(3,A1:A5)", want: 4},
-		{name: "asc_bottom", formula: "RANK.EQ(3,A1:A5,1)", want: 1},
-		{name: "asc_top", formula: "RANK.EQ(9,A1:A5,1)", want: 5},
-		{name: "not_found", formula: "RANK.EQ(99,A1:A5)", wantErr: ErrValNA},
-		{name: "too_few_args", formula: "RANK.EQ(9)", wantErr: ErrValVALUE},
+		// Basic descending rank (default, order omitted): largest = rank 1
+		{name: "desc_top", formula: "RANK.EQ(9,A1:A5)", resolver: resolver, want: 1},
+		{name: "desc_second", formula: "RANK.EQ(7,A1:A5)", resolver: resolver, want: 2},
+		{name: "desc_mid", formula: "RANK.EQ(5,A1:A5)", resolver: resolver, want: 3},
+
+		// Basic ascending rank (order=1): smallest = rank 1
+		{name: "asc_bottom", formula: "RANK.EQ(3,A1:A5,1)", resolver: resolver, want: 1},
+		{name: "asc_mid", formula: "RANK.EQ(5,A1:A5,1)", resolver: resolver, want: 3},
+		{name: "asc_second", formula: "RANK.EQ(7,A1:A5,1)", resolver: resolver, want: 4},
+		{name: "asc_top", formula: "RANK.EQ(9,A1:A5,1)", resolver: resolver, want: 5},
+
+		// Explicit order=0 (descending, same as default)
+		{name: "order_zero_desc", formula: "RANK.EQ(9,A1:A5,0)", resolver: resolver, want: 1},
+		{name: "order_zero_tie", formula: "RANK.EQ(3,A1:A5,0)", resolver: resolver, want: 4},
+
+		// Ties: duplicate values share the same rank
+		{name: "desc_tie", formula: "RANK.EQ(3,A1:A5)", resolver: resolver, want: 4},
+
+		// Single element list: always rank 1
+		{name: "single_found", formula: "RANK.EQ(10,C1:C1)", resolver: singleResolver, want: 1},
+		{name: "single_not_found", formula: "RANK.EQ(5,C1:C1)", resolver: singleResolver, isErr: true, wantErr: ErrValNA},
+
+		// All same values: all rank 1 (both ascending and descending)
+		{name: "all_same_desc", formula: "RANK.EQ(5,B1:B3)", resolver: allSameResolver, want: 1},
+		{name: "all_same_asc", formula: "RANK.EQ(5,B1:B3,1)", resolver: allSameResolver, want: 1},
+
+		// Negative numbers in list
+		{name: "neg_top_desc", formula: "RANK.EQ(2,D1:D5)", resolver: negResolver, want: 1},
+		{name: "neg_zero_desc", formula: "RANK.EQ(0,D1:D5)", resolver: negResolver, want: 2},
+		{name: "neg_minus1_desc", formula: "RANK.EQ(-1,D1:D5)", resolver: negResolver, want: 3},
+		{name: "neg_tie_desc", formula: "RANK.EQ(-3,D1:D5)", resolver: negResolver, want: 4},
+		{name: "neg_tie_asc", formula: "RANK.EQ(-3,D1:D5,1)", resolver: negResolver, want: 1},
+		{name: "neg_top_asc", formula: "RANK.EQ(2,D1:D5,1)", resolver: negResolver, want: 5},
+
+		// Decimals in list
+		{name: "dec_top_desc", formula: "RANK.EQ(3.5,E1:E4)", resolver: decResolver, want: 1},
+		{name: "dec_tie_desc", formula: "RANK.EQ(2.5,E1:E4)", resolver: decResolver, want: 2},
+		{name: "dec_bottom_desc", formula: "RANK.EQ(1.5,E1:E4)", resolver: decResolver, want: 4},
+
+		// Mixed positive/negative
+		{name: "mixed_pos_neg_desc_top", formula: "RANK.EQ(7,J1:J5)", resolver: mixedPosNegResolver, want: 1},
+		{name: "mixed_pos_neg_desc_mid", formula: "RANK.EQ(0,J1:J5)", resolver: mixedPosNegResolver, want: 3},
+		{name: "mixed_pos_neg_desc_bot", formula: "RANK.EQ(-5,J1:J5)", resolver: mixedPosNegResolver, want: 5},
+		{name: "mixed_pos_neg_asc_top", formula: "RANK.EQ(-5,J1:J5,1)", resolver: mixedPosNegResolver, want: 1},
+		{name: "mixed_pos_neg_asc_bot", formula: "RANK.EQ(7,J1:J5,1)", resolver: mixedPosNegResolver, want: 5},
+
+		// Number not in list -> #N/A
+		{name: "not_found", formula: "RANK.EQ(99,A1:A5)", resolver: resolver, isErr: true, wantErr: ErrValNA},
+		{name: "not_found_zero", formula: "RANK.EQ(0,A1:A5)", resolver: resolver, isErr: true, wantErr: ErrValNA},
+
+		// Error handling: wrong arg count
+		{name: "too_few_args", formula: "RANK.EQ(9)", resolver: resolver, isErr: true, wantErr: ErrValVALUE},
+		{name: "too_many_args", formula: "RANK.EQ(9,A1:A5,1,1)", resolver: resolver, isErr: true, wantErr: ErrValVALUE},
+
+		// Error propagation from arguments
+		{name: "error_in_ref", formula: "RANK.EQ(1,F1:F3)", resolver: errResolver, isErr: true, wantErr: ErrValDIV0},
+
+		// String values in range (ignored by collectNumeric)
+		{name: "mixed_types_top", formula: "RANK.EQ(30,H1:H5)", resolver: mixedResolver, want: 1},
+		{name: "mixed_types_mid", formula: "RANK.EQ(20,H1:H5)", resolver: mixedResolver, want: 2},
+		{name: "mixed_types_bot", formula: "RANK.EQ(10,H1:H5)", resolver: mixedResolver, want: 3},
+
+		// order parameter: non-zero values treated as ascending
+		{name: "order_neg1_asc", formula: "RANK.EQ(9,A1:A5,-1)", resolver: resolver, want: 5},
+		{name: "order_42_asc", formula: "RANK.EQ(3,A1:A5,42)", resolver: resolver, want: 1},
+
+		// Large list ranking
+		{name: "large_first_desc", formula: "RANK.EQ(20,I1:I20)", resolver: largeResolver, want: 1},
+		{name: "large_last_desc", formula: "RANK.EQ(1,I1:I20)", resolver: largeResolver, want: 20},
+		{name: "large_mid_desc", formula: "RANK.EQ(10,I1:I20)", resolver: largeResolver, want: 11},
+		{name: "large_first_asc", formula: "RANK.EQ(1,I1:I20,1)", resolver: largeResolver, want: 1},
+		{name: "large_last_asc", formula: "RANK.EQ(20,I1:I20,1)", resolver: largeResolver, want: 20},
+
+		// Documentation examples from Excel
+		{name: "doc_asc_tie", formula: "RANK.EQ(G2,G1:G5,1)", resolver: docResolver, want: 3},
+		{name: "doc_top_asc", formula: "RANK.EQ(G1,G1:G5,1)", resolver: docResolver, want: 5},
+		{name: "doc_desc_bottom", formula: "RANK.EQ(G4,G1:G5)", resolver: docResolver, want: 5},
+
+		// RANK alias equivalence: RANK and RANK.EQ should give identical results
+		{name: "rank_alias_desc", formula: "RANK(9,A1:A5)", resolver: resolver, want: 1},
+		{name: "rank_alias_asc", formula: "RANK(3,A1:A5,1)", resolver: resolver, want: 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cf := evalCompile(t, tt.formula)
-			got, err := Eval(cf, resolver, nil)
+			got, err := Eval(cf, tt.resolver, nil)
 			if err != nil {
 				t.Fatalf("Eval error: %v", err)
 			}
-			if tt.wantErr != 0 {
+			if tt.isErr {
 				if got.Type != ValueError || got.Err != tt.wantErr {
 					t.Errorf("got %v, want error %v", got, tt.wantErr)
 				}
