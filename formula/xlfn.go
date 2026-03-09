@@ -115,6 +115,7 @@ var xlfnPrefix = map[string]string{
 	"T.DIST.RT":       "_xlfn.",
 	"T.INV":           "_xlfn.",
 	"T.INV.2T":        "_xlfn.",
+	"T.TEST":          "_xlfn.",
 	"SWITCH":          "_xlfn.",
 	"TAKE":            "_xlfn.",
 	"TEXTJOIN":        "_xlfn.",

@@ -5213,16 +5213,6 @@ func fnTTest(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Collect numeric values from both arrays.
-	nums1, ev := collectNumeric(args[:1])
-	if ev != nil {
-		return *ev, nil
-	}
-	nums2, ev := collectNumeric(args[1:2])
-	if ev != nil {
-		return *ev, nil
-	}
-
 	// Extract tails and type, coerce to numeric.
 	tailsRaw, e := CoerceNum(args[2])
 	if e != nil {
@@ -5245,17 +5235,37 @@ func fnTTest(args []Value) (Value, error) {
 		return ErrorVal(ErrValNUM), nil
 	}
 
-	n1 := len(nums1)
-	n2 := len(nums2)
-
 	var tStat, df float64
 
 	switch ttype {
 	case 1: // Paired t-test.
-		if n1 != n2 {
+		// For paired tests, we must iterate both arrays in lockstep and
+		// only include pairs where BOTH values are numeric.
+		flat1 := flattenValues(args[0])
+		flat2 := flattenValues(args[1])
+		// Check for errors in either array.
+		for i := range flat1 {
+			if flat1[i].Type == ValueError {
+				return flat1[i], nil
+			}
+		}
+		for i := range flat2 {
+			if flat2[i].Type == ValueError {
+				return flat2[i], nil
+			}
+		}
+		if len(flat1) != len(flat2) {
 			return ErrorVal(ErrValNA), nil
 		}
-		n := n1
+		// Collect paired numeric values.
+		var nums1, nums2 []float64
+		for i := range flat1 {
+			if flat1[i].Type == ValueNumber && flat2[i].Type == ValueNumber {
+				nums1 = append(nums1, flat1[i].Num)
+				nums2 = append(nums2, flat2[i].Num)
+			}
+		}
+		n := len(nums1)
 		if n < 2 {
 			return ErrorVal(ErrValDIV0), nil
 		}
@@ -5278,42 +5288,54 @@ func fnTTest(args []Value) (Value, error) {
 		tStat = meanD / (sdD / math.Sqrt(float64(n)))
 		df = float64(n - 1)
 
-	case 2: // Two-sample equal variance (homoscedastic).
-		if n1 < 2 || n2 < 2 {
-			return ErrorVal(ErrValDIV0), nil
+	case 2, 3: // Two-sample tests: collect numeric values independently.
+		nums1, ev := collectNumeric(args[:1])
+		if ev != nil {
+			return *ev, nil
 		}
-		mean1 := mean(nums1)
-		mean2 := mean(nums2)
-		ssq1 := sumSqDev(nums1, mean1)
-		ssq2 := sumSqDev(nums2, mean2)
-		// Pooled variance.
-		sp2 := (ssq1 + ssq2) / float64(n1+n2-2)
-		denom := math.Sqrt(sp2 * (1.0/float64(n1) + 1.0/float64(n2)))
-		if denom == 0 {
-			return ErrorVal(ErrValDIV0), nil
+		nums2, ev := collectNumeric(args[1:2])
+		if ev != nil {
+			return *ev, nil
 		}
-		tStat = (mean1 - mean2) / denom
-		df = float64(n1 + n2 - 2)
+		n1 := len(nums1)
+		n2 := len(nums2)
 
-	case 3: // Two-sample unequal variance (Welch's t-test).
-		if n1 < 2 || n2 < 2 {
-			return ErrorVal(ErrValDIV0), nil
+		if ttype == 2 { // Equal variance (homoscedastic).
+			if n1 < 2 || n2 < 2 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			mean1 := mean(nums1)
+			mean2 := mean(nums2)
+			ssq1 := sumSqDev(nums1, mean1)
+			ssq2 := sumSqDev(nums2, mean2)
+			// Pooled variance.
+			sp2 := (ssq1 + ssq2) / float64(n1+n2-2)
+			denom := math.Sqrt(sp2 * (1.0/float64(n1) + 1.0/float64(n2)))
+			if denom == 0 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			tStat = (mean1 - mean2) / denom
+			df = float64(n1 + n2 - 2)
+		} else { // Unequal variance (Welch's t-test).
+			if n1 < 2 || n2 < 2 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			mean1 := mean(nums1)
+			mean2 := mean(nums2)
+			var1 := sumSqDev(nums1, mean1) / float64(n1-1)
+			var2 := sumSqDev(nums2, mean2) / float64(n2-1)
+			se := math.Sqrt(var1/float64(n1) + var2/float64(n2))
+			if se == 0 {
+				return ErrorVal(ErrValDIV0), nil
+			}
+			tStat = (mean1 - mean2) / se
+			// Welch-Satterthwaite degrees of freedom.
+			vn1 := var1 / float64(n1)
+			vn2 := var2 / float64(n2)
+			num := (vn1 + vn2) * (vn1 + vn2)
+			den := vn1*vn1/float64(n1-1) + vn2*vn2/float64(n2-1)
+			df = num / den
 		}
-		mean1 := mean(nums1)
-		mean2 := mean(nums2)
-		var1 := sumSqDev(nums1, mean1) / float64(n1-1)
-		var2 := sumSqDev(nums2, mean2) / float64(n2-1)
-		se := math.Sqrt(var1/float64(n1) + var2/float64(n2))
-		if se == 0 {
-			return ErrorVal(ErrValDIV0), nil
-		}
-		tStat = (mean1 - mean2) / se
-		// Welch-Satterthwaite degrees of freedom.
-		vn1 := var1 / float64(n1)
-		vn2 := var2 / float64(n2)
-		num := (vn1 + vn2) * (vn1 + vn2)
-		den := vn1*vn1/float64(n1-1) + vn2*vn2/float64(n2-1)
-		df = num / den
 	}
 
 	// Compute p-value from the t-distribution.
@@ -5330,6 +5352,7 @@ func fnTTest(args []Value) (Value, error) {
 
 	return NumberVal(p), nil
 }
+
 
 // mean computes the arithmetic mean of a slice of floats.
 func mean(vals []float64) float64 {
