@@ -228,7 +228,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | ISNONTEXT | Returns TRUE when a value is not text. | Information | 26 |
 | ISNUMBER | Returns TRUE when a value is numeric. | Information | 23 |
 | ISO.CEILING | Rounds a number up using ISO.CEILING rules. | Math & Trig | 48 |
-| ISODD | Returns TRUE when a number is odd. | Information | 4 |
+| ISODD | Returns TRUE when a number is odd. | Information | 33 |
 | ISOWEEKNUM | Returns the ISO week number for a date. | Date & Time | 26 |
 | ISPMT | Returns the interest paid during a period for straight-line amortization. | Financial | 17 |
 | ISREF | Returns TRUE when a value is a reference. | Information | 24 |
