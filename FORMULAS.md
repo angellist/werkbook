@@ -363,7 +363,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | STDEV.P | Returns the population standard deviation. | Statistical | 32 |
 | STDEV.S | Returns the sample standard deviation. | Statistical | 45 |
 | STDEVA | Returns the sample standard deviation including logical values and text coercions. | Statistical | 28 |
-| STDEVP | Returns the population standard deviation. | Statistical | 9 |
+| STDEVP | Returns the population standard deviation. | Statistical | 10 |
 | STDEVPA | Returns the population standard deviation including logical values and text coercions. | Statistical | 29 |
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 23 |
@@ -415,10 +415,10 @@ Werkbook supports **437** spreadsheet formula functions.
 | VALUE | Converts text that looks like a number into a numeric value. | Text | 31 |
 | VALUETOTEXT | Converts a value to a text representation. | Text | 26 |
 | VAR | Returns the sample variance. | Statistical | 24 |
-| VAR.P | Returns the population variance. | Statistical | 23 |
+| VAR.P | Returns the population variance. | Statistical | 24 |
 | VAR.S | Returns the sample variance. | Statistical | 4 |
 | VARA | Returns the sample variance including logical values and text coercions. | Statistical | 22 |
-| VARP | Returns the population variance. | Statistical | 4 |
+| VARP | Returns the population variance. | Statistical | 29 |
 | VARPA | Returns the population variance including logical values and text coercions. | Statistical | 22 |
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
 | VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 15 |
