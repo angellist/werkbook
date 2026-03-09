@@ -162,7 +162,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | FORMULATEXT | Returns the formula text from a referenced cell. | Information | 39 |
 | FREQUENCY | Returns a frequency distribution for numeric bins. | Statistical | 25 |
 | FV | Returns the future value of an investment or annuity. | Financial | 4 |
-| FVSCHEDULE | Returns a future value after applying a schedule of interest rates. | Financial | 1 |
+| FVSCHEDULE | Returns a future value after applying a schedule of interest rates. | Financial | 4 |
 | GAMMA | Returns the gamma function value. | Math & Trig | 31 |
 | GAMMA.DIST | Returns the gamma distribution. | Statistical | 41 |
 | GAMMA.INV | Returns the inverse of the gamma cumulative distribution. | Statistical | 34 |

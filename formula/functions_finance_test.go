@@ -11631,6 +11631,93 @@ func TestFVSchedule_Comprehensive(t *testing.T) {
 			args: []Value{NumberVal(100), mkArr(NumberVal(0.01), NumberVal(0.02), NumberVal(0.03), NumberVal(0.04), NumberVal(0.05))},
 			want: 100 * 1.01 * 1.02 * 1.03 * 1.04 * 1.05,
 		},
+		// Investment example: 10k with varying annual rates
+		{
+			name: "investment 10000 with 5%,6%,7%",
+			args: []Value{NumberVal(10000), mkArr(NumberVal(0.05), NumberVal(0.06), NumberVal(0.07))},
+			want: 10000 * 1.05 * 1.06 * 1.07,
+		},
+		// Single rate 8%
+		{
+			name: "single rate 8% on 1000",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.08))},
+			want: 1080.0,
+		},
+		// 5 years with increasing rates
+		{
+			name: "5 years increasing rates 5-9%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0.06), NumberVal(0.07), NumberVal(0.08), NumberVal(0.09))},
+			want: 1000 * 1.05 * 1.06 * 1.07 * 1.08 * 1.09,
+		},
+		// All same rate — equivalent to compound interest
+		{
+			name: "all same rate 5% three periods",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0.05), NumberVal(0.05))},
+			want: 1000 * 1.05 * 1.05 * 1.05,
+		},
+		// Mixed positive and negative with specific values
+		{
+			name: "mixed rates 10%,-5%,8%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.10), NumberVal(-0.05), NumberVal(0.08))},
+			want: 1000 * 1.10 * 0.95 * 1.08,
+		},
+		// Zero rate in middle
+		{
+			name: "zero rate in middle: 5%,0%,10%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.05), NumberVal(0), NumberVal(0.10))},
+			want: 1000 * 1.05 * 1.0 * 1.10,
+		},
+		// All negative rates
+		{
+			name: "all negative rates -10% three periods",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(-0.1), NumberVal(-0.1), NumberVal(-0.1))},
+			want: 1000 * 0.9 * 0.9 * 0.9,
+		},
+		// Rate of -1 on 1000
+		{
+			name: "rate -1 on 1000 gives zero",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(-1.0))},
+			want: 0.0,
+		},
+		// Negative principal with multiple rates
+		{
+			name: "negative principal -1000 with 5%,10%",
+			args: []Value{NumberVal(-1000), mkArr(NumberVal(0.05), NumberVal(0.10))},
+			want: -1000 * 1.05 * 1.10,
+		},
+		// Very small rates
+		{
+			name: "very small rates 0.01%,0.02%",
+			args: []Value{NumberVal(1000), mkArr(NumberVal(0.0001), NumberVal(0.0002))},
+			want: 1000 * 1.0001 * 1.0002,
+		},
+		// Very large rates — doubling and tripling
+		{
+			name: "very large rates: 100%,200%",
+			args: []Value{NumberVal(100), mkArr(NumberVal(1.0), NumberVal(2.0))},
+			want: 100 * 2.0 * 3.0,
+		},
+		// Long schedule: 10 periods of 1%
+		{
+			name: "long schedule 10 periods of 1%",
+			args: []Value{NumberVal(1000), mkArr(
+				NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01),
+				NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01), NumberVal(0.01),
+			)},
+			want: 1000 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01 * 1.01,
+		},
+		// String coercion for principal
+		{
+			name: "string principal coerced to number",
+			args: []Value{StringVal("1000"), mkArr(NumberVal(0.05), NumberVal(0.10))},
+			want: 1000 * 1.05 * 1.10,
+		},
+		// Principal = 1 with single high rate
+		{
+			name: "unit principal with 50% rate",
+			args: []Value{NumberVal(1), mkArr(NumberVal(0.5))},
+			want: 1.5,
+		},
 	}
 
 	for _, tt := range tests {
@@ -11716,6 +11803,72 @@ func TestFVSchedule_ErrorCases(t *testing.T) {
 		}
 		assertError(t, "empty string in schedule", v)
 	})
+}
+
+func TestFVSchedule_RangeReference(t *testing.T) {
+	// Test FVSCHEDULE with cell range reference instead of array constant.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0.09),
+			{Col: 1, Row: 2}: NumberVal(0.11),
+			{Col: 1, Row: 3}: NumberVal(0.10),
+		},
+	}
+
+	cf := evalCompile(t, "FVSCHEDULE(1, A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want := 1.0 * 1.09 * 1.11 * 1.10
+	if got.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got.Type)
+	}
+	if math.Abs(got.Num-want) > 1e-6 {
+		t.Errorf("FVSCHEDULE(1,A1:A3) = %f, want %f", got.Num, want)
+	}
+
+	// Range with a blank cell in the middle
+	resolver2 := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 1}: NumberVal(0.05),
+			// B2 is blank (empty)
+			{Col: 2, Row: 3}: NumberVal(0.10),
+		},
+	}
+	cf2 := evalCompile(t, "FVSCHEDULE(1000, B1:B3)")
+	got2, err := Eval(cf2, resolver2, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want2 := 1000.0 * 1.05 * 1.0 * 1.10
+	if got2.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got2.Type)
+	}
+	if math.Abs(got2.Num-want2) > 1e-6 {
+		t.Errorf("FVSCHEDULE(1000,B1:B3) = %f, want %f", got2.Num, want2)
+	}
+
+	// Range with a row vector
+	resolver3 := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 5}: NumberVal(0.03),
+			{Col: 2, Row: 5}: NumberVal(0.04),
+			{Col: 3, Row: 5}: NumberVal(0.05),
+		},
+	}
+	cf3 := evalCompile(t, "FVSCHEDULE(5000, A5:C5)")
+	got3, err := Eval(cf3, resolver3, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want3 := 5000.0 * 1.03 * 1.04 * 1.05
+	if got3.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", got3.Type)
+	}
+	if math.Abs(got3.Num-want3) > 1e-6 {
+		t.Errorf("FVSCHEDULE(5000,A5:C5) = %f, want %f", got3.Num, want3)
+	}
 }
 
 // === AMORDEGRC ===
