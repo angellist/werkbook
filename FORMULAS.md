@@ -183,7 +183,7 @@ Werkbook supports **435** spreadsheet formula functions.
 | HYPERLINK | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Statistical | 37 |
 | IF | Logical | 23 |
-| IFERROR | Logical | 50 |
+| IFERROR | Logical | 51 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | IMABS | Engineering | 38 |
@@ -366,7 +366,7 @@ Werkbook supports **435** spreadsheet formula functions.
 | STEYX | Statistical | 25 |
 | SUBSTITUTE | Text | 23 |
 | SUBTOTAL | Math & Trig | 32 |
-| SUM | Statistical | 43 |
+| SUM | Statistical | 44 |
 | SUMIF | Statistical | 37 |
 | SUMIFS | Statistical | 42 |
 | SUMPRODUCT | Statistical | 22 |

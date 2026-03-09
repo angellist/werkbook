@@ -326,6 +326,10 @@ func (p *Parser) parseFunc() (Node, error) {
 		return desugarLambdaInvocation(args, callArgs)
 	}
 
+	if isLetFuncName(name) {
+		return desugarLET(args)
+	}
+
 	return call, nil
 }
 
@@ -394,6 +398,37 @@ func desugarLambdaInvocation(lambdaArgs, callArgs []Node) (Node, error) {
 	}
 
 	return substituteLambdaNames(body, subst), nil
+}
+
+func isLetFuncName(name string) bool {
+	upper := strings.ToUpper(name)
+	return upper == "LET" || upper == "_XLFN.LET"
+}
+
+func desugarLET(args []Node) (Node, error) {
+	if len(args) < 3 || len(args)%2 == 0 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	// Process name/value pairs sequentially.
+	for i := 0; i < len(args)-1; i += 2 {
+		nameNode := args[i]
+		valueNode := args[i+1]
+
+		name, ok := lambdaParamName(nameNode)
+		if !ok {
+			return &ErrorLit{Code: ErrVALUE}, nil
+		}
+
+		// Substitute this name with its value in all subsequent args.
+		subst := map[string]Node{name: valueNode}
+		for j := i + 2; j < len(args); j++ {
+			args[j] = substituteLambdaNames(args[j], subst)
+		}
+	}
+
+	// Return the final (fully substituted) calculation.
+	return args[len(args)-1], nil
 }
 
 func lambdaParamName(n Node) (string, bool) {
