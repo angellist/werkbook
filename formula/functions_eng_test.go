@@ -5324,3 +5324,147 @@ func TestBESSELK(t *testing.T) {
 		}
 	})
 }
+
+func TestBESSELY(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("returns number", func(t *testing.T) {
+		tests := []struct {
+			formula string
+			want    float64
+			tol     float64
+		}{
+			// Excel documentation example
+			{"BESSELY(2.5,1)", 0.145918138, 1e-8},
+
+			// Known values for n=0
+			{"BESSELY(1,0)", 0.0882569642, 1e-9},
+			{"BESSELY(2,0)", 0.5103756726, 1e-9},
+			{"BESSELY(0.5,0)", -0.4445187335, 1e-9},
+
+			// Known values for n=1
+			{"BESSELY(1,1)", -0.7812128213, 1e-9},
+			{"BESSELY(2,1)", -0.1070324315, 1e-9},
+
+			// Larger x for n=0
+			{"BESSELY(5,0)", -0.3085176252, 1e-9},
+			{"BESSELY(10,0)", 0.0556711673, 1e-9},
+
+			// Larger x for n=2
+			{"BESSELY(5,2)", 0.3676628826, 1e-9},
+
+			// Higher order n
+			{"BESSELY(10,3)", -0.2513626571838373, 1e-12},
+			{"BESSELY(20,5)", -0.10003576788953243, 1e-12},
+
+			// n truncated: BESSELY(2.5, 1.9) same as BESSELY(2.5, 1)
+			{"BESSELY(2.5,1.9)", 0.145918138, 1e-8},
+			{"BESSELY(2.5,1.1)", 0.145918138, 1e-8},
+
+			// Very small x (near divergence)
+			{"BESSELY(0.01,0)", -3.005455698, 1e-6},
+
+			// Large order n
+			{"BESSELY(1,5)", -260.4058666, 1e-3},
+			{"BESSELY(5,5)", -0.4536948225, 1e-8},
+
+			// Boolean coercion (TRUE=1, FALSE=0)
+			{"BESSELY(TRUE,0)", 0.0882569642, 1e-9},
+			{"BESSELY(TRUE,FALSE)", 0.0882569642, 1e-9},
+
+			// Additional values
+			{"BESSELY(3,0)", 0.3768500100, 1e-9},
+			{"BESSELY(3,1)", 0.3246744248, 1e-9},
+			{"BESSELY(0.1,0)", -1.5342386513, 1e-8},
+		}
+		for _, tt := range tests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", tt.formula, err)
+				}
+				if got.Type != ValueNumber {
+					t.Fatalf("Eval(%q) = %v (type %d), want number", tt.formula, got, got.Type)
+				}
+				diff := math.Abs(got.Num - tt.want)
+				if tt.tol == 0 {
+					if got.Num != tt.want {
+						t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Num, tt.want)
+					}
+				} else if diff > tt.tol {
+					t.Errorf("Eval(%q) = %v, want %v (diff=%e, tol=%e)", tt.formula, got.Num, tt.want, diff, tt.tol)
+				}
+			})
+		}
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		errTests := []struct {
+			formula string
+			wantErr ErrorValue
+		}{
+			// x <= 0 → #NUM!
+			{"BESSELY(0,0)", ErrValNUM},
+			{"BESSELY(0,1)", ErrValNUM},
+			{"BESSELY(-1,0)", ErrValNUM},
+			{"BESSELY(-0.5,1)", ErrValNUM},
+			{"BESSELY(-5,2)", ErrValNUM},
+
+			// n < 0 → #NUM!
+			{"BESSELY(1,-1)", ErrValNUM},
+			{"BESSELY(1,-5)", ErrValNUM},
+
+			// Non-numeric x → #VALUE!
+			{`BESSELY("abc",1)`, ErrValVALUE},
+
+			// Non-numeric n → #VALUE!
+			{`BESSELY(1,"abc")`, ErrValVALUE},
+
+			// Both non-numeric → #VALUE!
+			{`BESSELY("a","b")`, ErrValVALUE},
+		}
+		for _, tt := range errTests {
+			t.Run(tt.formula, func(t *testing.T) {
+				cf := evalCompile(t, tt.formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): unexpected error %v", tt.formula, err)
+				}
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("Eval(%q) = %v, want error %v", tt.formula, got, tt.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("wrong arg count", func(t *testing.T) {
+		for _, formula := range []string{"BESSELY()", "BESSELY(1)", "BESSELY(1,2,3)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+
+	t.Run("error propagation", func(t *testing.T) {
+		for _, formula := range []string{"BESSELY(1/0,1)", "BESSELY(1,1/0)"} {
+			t.Run(formula, func(t *testing.T) {
+				cf := evalCompile(t, formula)
+				got, err := Eval(cf, resolver, nil)
+				if err != nil {
+					t.Fatalf("Eval(%q): %v", formula, err)
+				}
+				if got.Type != ValueError {
+					t.Errorf("Eval(%q) = %v, want error", formula, got)
+				}
+			})
+		}
+	})
+}

@@ -11,6 +11,7 @@ func init() {
 	Register("BESSELI", NoCtx(fnBesselI))
 	Register("BESSELJ", NoCtx(fnBesselJ))
 	Register("BESSELK", NoCtx(fnBesselK))
+	Register("BESSELY", NoCtx(fnBesselY))
 	Register("BIN2DEC", NoCtx(fnBin2Dec))
 	Register("BIN2HEX", NoCtx(fnBin2Hex))
 	Register("BIN2OCT", NoCtx(fnBin2Oct))
@@ -369,6 +370,43 @@ func besselK(n int, x float64) float64 {
 		k1 = k2
 	}
 	return k1
+}
+
+// fnBesselY implements the BESSELY function.
+// BESSELY(X, N) — returns the Bessel function of the second kind, Y_n(x).
+// N is truncated to an integer. If N < 0, returns #NUM!. If X <= 0, returns #NUM!.
+func fnBesselY(args []Value) (Value, error) {
+	if len(args) != 2 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	x, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+
+	nf, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate n to integer.
+	n := int(math.Trunc(nf))
+	if n < 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	// Y_n(x) is undefined for x <= 0.
+	if x <= 0 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	result := math.Yn(n, x)
+	if math.IsInf(result, 0) || math.IsNaN(result) {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	return NumberVal(result), nil
 }
 
 // fnBin2Dec implements the BIN2DEC function.
