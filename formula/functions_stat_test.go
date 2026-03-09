@@ -19774,6 +19774,7 @@ func TestGAUSS(t *testing.T) {
 		want    float64
 		isErr   bool
 	}{
+		// Basic values at key sigma points
 		{"basic", "GAUSS(2)", 0.477250, false},
 		{"zero", "GAUSS(0)", 0, false},
 		{"one", "GAUSS(1)", 0.341345, false},
@@ -19783,6 +19784,43 @@ func TestGAUSS(t *testing.T) {
 		{"half", "GAUSS(0.5)", 0.191462, false},
 		{"large", "GAUSS(6)", 0.5, false},
 		{"err_text", `GAUSS("abc")`, 0, true},
+
+		// Small z values
+		{"small_0.1", "GAUSS(0.1)", 0.039828, false},
+		{"small_0.25", "GAUSS(0.25)", 0.098706, false},
+
+		// Negative symmetry: GAUSS(-z) = -GAUSS(z)
+		{"neg_three", "GAUSS(-3)", -0.498650, false},
+		{"neg_half", "GAUSS(-0.5)", -0.191462, false},
+		{"neg_0.1", "GAUSS(-0.1)", -0.039828, false},
+
+		// Large z values approaching 0.5
+		{"four", "GAUSS(4)", 0.499968, false},
+		{"five", "GAUSS(5)", 0.500000, false},
+		{"very_large", "GAUSS(10)", 0.5, false},
+
+		// Very negative values approaching -0.5
+		{"neg_six", "GAUSS(-6)", -0.5, false},
+		{"neg_four", "GAUSS(-4)", -0.499968, false},
+
+		// Fractional z values with known statistical table values
+		{"z_1.5", "GAUSS(1.5)", 0.433193, false},
+		{"z_1.96", "GAUSS(1.96)", 0.475002, false},
+		{"z_2.5", "GAUSS(2.5)", 0.493790, false},
+		{"z_2.58", "GAUSS(2.58)", 0.495060, false},
+
+		// Coercion: numeric string
+		{"string_coerce", `GAUSS("2")`, 0.477250, false},
+
+		// Coercion: boolean TRUE = 1, FALSE = 0
+		{"bool_true", "GAUSS(TRUE)", 0.341345, false},
+		{"bool_false", "GAUSS(FALSE)", 0, false},
+
+		// Error: no arguments
+		{"no_args", "GAUSS()", 0, true},
+
+		// Error: too many arguments
+		{"too_many_args", "GAUSS(1,2)", 0, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
