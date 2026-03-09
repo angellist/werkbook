@@ -378,7 +378,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | SUMXMY2 | Returns the sum of squares of differences of paired arrays. | Math & Trig | 31 |
 | SWITCH | Matches an expression against a list of values and returns the corresponding result. | Logical | 28 |
 | SYD | Returns sum-of-years'-digits depreciation for a period. | Financial | 27 |
-| T | Returns text when a value is text, otherwise an empty string. | Text | 17 |
+| T | Returns text when a value is text, otherwise an empty string. | Text | 19 |
 | T.DIST | Returns the Student's t-distribution. | Statistical | 41 |
 | T.DIST.2T | Returns the two-tailed Student's t-distribution. | Statistical | 19 |
 | T.DIST.RT | Returns the right-tailed Student's t-distribution. | Statistical | 18 |

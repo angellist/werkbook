@@ -4900,3 +4900,22 @@ func TestENCODEURL(t *testing.T) {
 		}
 	})
 }
+
+func TestT_ErrorCellRef(t *testing.T) {
+	// Regression test: T() with a cell reference to an error value must
+	// return the error, not a string representation of the error.
+	// This exercises the resolver path (cell ref → GetCellValue → fnT).
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValDIV0),
+		},
+	}
+	cf := evalCompile(t, `T(A1)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("T(A1) where A1=#DIV/0! = %v, want error #DIV/0!", got)
+	}
+}

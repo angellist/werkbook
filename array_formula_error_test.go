@@ -7,15 +7,18 @@ import (
 	"github.com/jpoz/werkbook/ooxml"
 )
 
-func TestFormulaValueToValueKeepsLegacyArrayFormulaErrorsAsStrings(t *testing.T) {
-	got := formulaValueToValue(formula.ErrorVal(formula.ErrValNAME), true, true)
-	if got.Type != TypeString || got.String != "#NAME?" {
-		t.Fatalf("formulaValueToValue(preserve string #NAME?) = %#v, want string #NAME?", got)
+func TestFormulaValueToValueErrorsAreAlwaysErrors(t *testing.T) {
+	// Formula errors must always be represented as TypeError, regardless of
+	// whether the cell's cached value was a string. This ensures functions
+	// like T() that check for ValueError correctly propagate errors.
+	got := formulaValueToValue(formula.ErrorVal(formula.ErrValNAME), true)
+	if got.Type != TypeError || got.String != "#NAME?" {
+		t.Fatalf("formulaValueToValue(#NAME?, array=true) = %#v, want error #NAME?", got)
 	}
 
-	got = formulaValueToValue(formula.ErrorVal(formula.ErrValNAME), true, false)
+	got = formulaValueToValue(formula.ErrorVal(formula.ErrValNAME), false)
 	if got.Type != TypeError || got.String != "#NAME?" {
-		t.Fatalf("formulaValueToValue(error #NAME?) = %#v, want error #NAME?", got)
+		t.Fatalf("formulaValueToValue(#NAME?, array=false) = %#v, want error #NAME?", got)
 	}
 }
 
