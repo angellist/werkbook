@@ -2045,10 +2045,9 @@ func TestWEEKDAY(t *testing.T) {
 		{"fractional_serial", "WEEKDAY(39492.75,1)", 5, false, 0},
 
 		// === Boolean coercion: TRUE -> serial 1 ===
-		// Serial 1 maps to Jan 1, 1900 which Go correctly identifies as Monday.
-		// Note: Excel returns Sunday (1) for WEEKDAY(1,1) due to the 1900
-		// leap-year bug affecting serials 1-60.
-		{"bool_true", "WEEKDAY(TRUE,1)", 2, false, 0},
+		// Serial 1 maps to Jan 1, 1900 = Sunday in Excel's convention.
+		// (Historically Monday, but Excel's 1900 leap-year bug shifts it.)
+		{"bool_true", "WEEKDAY(TRUE,1)", 1, false, 0},
 
 		// === Invalid return_type -> #NUM! ===
 		{"invalid_rt_0", "WEEKDAY(39492,0)", 0, true, ErrValNUM},

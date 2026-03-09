@@ -583,7 +583,7 @@ func fnWEEKDAYWithDateSystem(args []Value, date1904 bool) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	serial, e := CoerceNum(args[0])
+	serial, e := coerceDateNum(args[0])
 	if e != nil {
 		return *e, nil
 	}
@@ -596,8 +596,17 @@ func fnWEEKDAYWithDateSystem(args []Value, date1904 bool) (Value, error) {
 		}
 	}
 
-	t := serialToTimeForDateSystem(serial, date1904)
-	wd := int(t.Weekday())
+	// Compute weekday directly from serial number to match Excel's
+	// convention. For the 1900 date system, serial 1 = Jan 1, 1900 =
+	// Sunday in Excel (even though historically it was Monday). Using
+	// (serial+6)%7 gives 0=Sun,1=Mon,...,6=Sat matching Go's Weekday.
+	var wd int
+	if date1904 {
+		t := SerialToTime1904(serial)
+		wd = int(t.Weekday())
+	} else {
+		wd = (int(serial) + 6) % 7
+	}
 
 	rt := int(returnType)
 	var result int
