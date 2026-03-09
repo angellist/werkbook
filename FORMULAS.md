@@ -97,7 +97,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | DATE | Builds a date from year, month, and day numbers. | Date & Time | 50 |
 | DATEDIF | Returns the difference between two dates in requested units. | Date & Time | 18 |
 | DATEVALUE | Converts date text to a serial date number. | Date & Time | 39 |
-| DAVERAGE | Returns the average of matching records in a database range. | Db | 1 |
+| DAVERAGE | Returns the average of matching records in a database range. | Db | 3 |
 | DAY | Returns the day of the month from a date. | Date & Time | 6 |
 | DAYS | Returns the number of days between two dates. | Date & Time | 17 |
 | DAYS360 | Returns the number of days between two dates using a 360-day year. | Date & Time | 57 |

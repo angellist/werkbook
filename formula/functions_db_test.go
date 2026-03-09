@@ -1022,9 +1022,412 @@ func TestDAVERAGE(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  86.4, // (96+76.8)/2
 		},
+		// --- additional comprehensive tests ---
+		{
+			name: "no criteria rows matches all records",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				// no condition rows → match all
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  502.8 / 6.0, // (105+96+105+75+76.8+45)/6
+		},
+		{
+			name: "field index 1 averages first column (text ignored → DIV/0)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "1", // first column = Tree (text), DAVERAGE skips text
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		{
+			name: "field index out of range returns VALUE error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "99",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name: "field index 0 returns VALUE error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "0",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name: "field index negative returns VALUE error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "-1",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name: "numeric comparison < on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  (76.8 + 45) / 2.0, // h=9 (76.8), h=8 (45)
+		},
+		{
+			name: "numeric comparison >= on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=14")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  (105 + 75) / 2.0, // h=18 (105), h=14 (75)
+		},
+		{
+			name: "numeric comparison <= on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  (96 + 76.8 + 45) / 3.0, // h=12 (96), h=9 (76.8), h=8 (45)
+		},
+		{
+			name: "numeric comparison <> on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<>13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  397.8 / 5.0, // all except Cherry (105): 105+96+75+76.8+45=397.8
+		},
+		{
+			name: "exact numeric match =14 on Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("=14")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // only Apple h=14 → single value average = 75
+		},
+		{
+			name: "combined AND/OR - (Apple AND Height>10) OR Cherry",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Cherry"), StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  285.0 / 3.0, // Apple h>10: 105+75, Cherry: 105 → (285)/3=95
+		},
+		{
+			name: "wildcard ? single char match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")}, // matches Pear
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  86.4, // (96+76.8)/2
+		},
+		{
+			name: "wildcard * contains pattern",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("*e*")}, // all trees contain 'e'
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  502.8 / 6.0,
+		},
+		{
+			name: "case-insensitive text criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // same as Apple: (105+75+45)/3
+		},
+		{
+			name: "criteria not-equal text - not Apple",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("<>Apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  277.8 / 3.0, // Pear(96+76.8) + Cherry(105) = 277.8 / 3
+		},
+		{
+			name: "cross-column criteria - filter by Age, average Yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Age")},
+				{StringVal(">14")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  24.0 / 2.0, // Age>14: age20 yield14, age15 yield10 → 12
+		},
+		{
+			name: "cross-column criteria - filter by Profit, average Height",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Profit")},
+				{StringVal(">100")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  (18 + 13) / 2.0, // Profit>100: Apple(h=18,p=105), Cherry(h=13,p=105) → 15.5
+		},
+		{
+			name: "three column AND criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10"), StringVal("<20")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  75, // only Apple h=14 age=15
+		},
+		{
+			name: "negative numbers in averaged field",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(-10)},
+				{StringVal("B"), NumberVal(-20)},
+				{StringVal("C"), NumberVal(5)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  -25.0 / 3.0, // (-10 + -20 + 5)/3
+		},
+		{
+			name: "decimal values in averaged field",
+			db: [][]Value{
+				{StringVal("Item"), StringVal("Price")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.75)},
+				{StringVal("C"), NumberVal(3.25)},
+			},
+			crit: [][]Value{
+				{StringVal("Item")},
+				{StringVal("")},
+			},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  7.5 / 3.0, // (1.5+2.75+3.25)/3 = 2.5
+		},
+		{
+			name: "average of identical values equals that value",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(42)},
+				{StringVal("B"), NumberVal(42)},
+				{StringVal("C"), NumberVal(42)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  42,
+		},
+		{
+			name: "average of zeros",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(0)},
+				{StringVal("B"), NumberVal(0)},
+				{StringVal("C"), NumberVal(0)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		{
+			name: "boolean criteria match TRUE",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Active"), StringVal("Value")},
+				{StringVal("A"), BoolVal(true), NumberVal(10)},
+				{StringVal("B"), BoolVal(false), NumberVal(20)},
+				{StringVal("C"), BoolVal(true), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Active")},
+				{BoolVal(true)},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  20, // (10+30)/2
+		},
+		{
+			name: "criteria header not in database causes no match → DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), NumberVal(20)},
+			},
+			crit: [][]Value{
+				{StringVal("NonExistentColumn")},
+				{StringVal("A")},
+			},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0, // no matches → zero numeric values → DIV/0
+		},
+		{
+			name: "numeric criteria value exact match",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score"), StringVal("Value")},
+				{StringVal("A"), NumberVal(100), NumberVal(10)},
+				{StringVal("B"), NumberVal(200), NumberVal(20)},
+				{StringVal("C"), NumberVal(100), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Score")},
+				{NumberVal(100)},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  20, // (10+30)/2
+		},
+		{
+			name: "exact match with = prefix excludes partial matches",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("Apple"), NumberVal(10)},
+				{StringVal("Apple Pie"), NumberVal(20)},
+				{StringVal("apple"), NumberVal(30)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("=Apple")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  20, // "Apple" and "apple" (case-insensitive) → (10+30)/2=20
+		},
+		{
+			name: "multiple OR rows with specific heights",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("=18")},
+				{StringVal("=8")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  (105 + 45) / 2.0, // h=18 profit 105, h=8 profit 45 → 75
+		},
+		{
+			name: "field name not found returns VALUE error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    `"Missing"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name: "complex OR three rows - Apple OR Pear OR Cherry",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Pear")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  502.8 / 6.0, // all 6 records match
+		},
+		{
+			name: "average with field header case mismatch",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("VALUE")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), NumberVal(20)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("")},
+			},
+			field:    `"value"`, // lowercase vs uppercase header
+			wantType: ValueNumber,
+			wantNum:  15, // (10+20)/2
+		},
 	}
 
 	runDBTests(t, "DAVERAGE", tests)
+}
+
+func TestDAVERAGE_ErrorPropagation(t *testing.T) {
+	// If the database contains an error in the averaged field, propagate it.
+	db := [][]Value{
+		{StringVal("Name"), StringVal("Value")},
+		{StringVal("A"), NumberVal(10)},
+		{StringVal("B"), ErrorVal(ErrValDIV0)},
+		{StringVal("C"), NumberVal(20)},
+	}
+	crit := [][]Value{
+		{StringVal("Name")},
+		{StringVal("")}, // match all
+	}
+
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+	formula := `DAVERAGE(A1:B4,"Value",G1:G2)`
+	cf := evalCompile(t, formula)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("DAVERAGE with error cell = %+v, want #DIV/0!", got)
+	}
 }
 
 func TestDAVERAGE_WrongArgCount(t *testing.T) {
