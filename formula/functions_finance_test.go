@@ -10024,19 +10024,17 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 			args: numArgs(2400, 39679, 39813, 300, 4, 0.15, 1),
 			want: 190,
 		},
-		// Period 5: remaining = 506 - 190 = 316, dep = round(316 * 0.375) = 119
-		// remaining-salvage = 316 - 300 = 16, dep 119 >= 16
-		// so second-to-last: round(16 * 0.5) = 8
+		// Period 5 (second-to-last): remaining = 316, round(316 * 0.5) = 158
 		{
 			name: "doc example period 5 basis 1",
 			args: numArgs(2400, 39679, 39813, 300, 5, 0.15, 1),
-			want: 8,
+			want: 158,
 		},
-		// Period 6: last period, rest = 316 - 8 - 300 = 8
+		// Period 6 (last): remaining 316-158 = 158, but 158 < salvage 300 → 0
 		{
 			name: "doc example period 6 basis 1",
 			args: numArgs(2400, 39679, 39813, 300, 6, 0.15, 1),
-			want: 8,
+			want: 0,
 		},
 		// Period 7: beyond asset life, return 0
 		{
@@ -10078,11 +10076,18 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 			args: numArgs(2400, 39679, 39813, 300, 0, 0.7, 1),
 			wantErr: true,
 		},
-		// --- Rate giving life 2-3 (#NUM!) ---
+		// --- Rate giving life = 2 exactly (#NUM!) ---
 		{
-			name: "rate 0.4 life 2.5 NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 0, 0.4, 1),
+			name: "rate 0.5 life 2.0 NUM error",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.5, 1),
 			wantErr: true,
+		},
+		// --- Rate giving life 2.5 (accepted, coeff=1.5) ---
+		// dep0 = round(2400 * 0.4 * 1.5 * 134/366) = round(527.21) = 527
+		{
+			name: "rate 0.4 life 2.5 coeff 1.5",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.4, 1),
+			want: 527,
 		},
 		// --- Basis 2 not supported (#NUM!) ---
 		{

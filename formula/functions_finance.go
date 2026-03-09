@@ -3278,7 +3278,7 @@ func fnAmordegrc(args []Value) (Value, error) {
 	period := int(math.Trunc(periodRaw))
 
 	// Validate inputs.
-	if cost <= 0 {
+	if cost < 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
 	if salvage < 0 || salvage > cost {
@@ -3296,21 +3296,26 @@ func fnAmordegrc(args []Value) (Value, error) {
 	}
 
 	// Compute life = 1/rate and determine the coefficient.
+	// Empirical testing against Excel shows these coefficient brackets:
+	//   life <= 2:  #NUM! error
+	//   life <= 4:  1.5
+	//   life <= 6:  2.0
+	//   life > 6:   2.5
+	// Note: the Microsoft documentation claims additional error ranges
+	// (0-1, 1-2, 2-3, 4-5) but actual Excel behavior only errors for
+	// life <= 2.  The 4-5 "gap" does not exist in practice.
 	life := 1.0 / rate
+	if life <= 2 {
+		return ErrorVal(ErrValNUM), nil
+	}
 	var coeff float64
 	switch {
-	case life >= 3 && life <= 4:
+	case life <= 4:
 		coeff = 1.5
-	case life > 4 && life < 5:
-		// Gap between 4 and 5 — Excel returns #NUM!
-		return ErrorVal(ErrValNUM), nil
-	case life >= 5 && life <= 6:
+	case life <= 6:
 		coeff = 2
-	case life > 6:
-		coeff = 2.5
 	default:
-		// Life < 3 — Excel returns #NUM!
-		return ErrorVal(ErrValNUM), nil
+		coeff = 2.5
 	}
 
 	adjustedRate := rate * coeff
@@ -3322,62 +3327,55 @@ func fnAmordegrc(args []Value) (Value, error) {
 	}
 	yearFrac := dsm / bYear
 
-	// Compute the number of full depreciation periods.
-	// nper is the total number of periods the asset depreciates.
-	depreciableAmount := cost - salvage
+	// Total number of depreciation periods = ceil(life).
+	// Periods are numbered 0 .. nper-1.
+	// The last two periods use the 50%/rest rule:
+	//   period nper-2 (second-to-last): round(remaining_cost * 0.5)
+	//   period nper-1 (last): remaining_cost - half
+	// If the "rest" in the last period would be less than salvage, it is 0.
+	nper := int(math.Ceil(life))
 
 	// Period 0: prorated depreciation.
 	dep0 := math.Round(cost * adjustedRate * yearFrac)
 
-	// Build the depreciation schedule iteratively.
-	accumulated := 0.0
-	for p := 0; ; p++ {
-		if accumulated >= depreciableAmount {
-			if p == period {
-				return NumberVal(0), nil
-			}
-			// This period and all beyond return 0.
-			if p > period {
-				return NumberVal(0), nil
-			}
-			// Shouldn't happen, but safeguard.
-			continue
-		}
-
-		remaining := cost - accumulated
-		var dep float64
-
-		if p == 0 {
-			dep = dep0
-		} else {
-			dep = math.Round(remaining * adjustedRate)
-		}
-
-		// Check if remaining value after this depreciation would go below salvage.
-		// Handle the last periods: when remaining - dep <= salvage,
-		// we need to apply the 50%/100% rule.
-		// Specifically: the second-to-last period takes 50% of remaining depreciable amount,
-		// and the last period takes the rest.
-		remainingDepreciable := remaining - salvage
-		if dep >= remainingDepreciable {
-			// This is the second-to-last or last period.
-			halfRemaining := math.Round(remainingDepreciable * 0.5)
-			if p == period {
-				return NumberVal(halfRemaining), nil
-			}
-			accumulated += halfRemaining
-			// Next period takes the rest.
-			if p+1 == period {
-				rest := remaining - halfRemaining - salvage
-				return NumberVal(math.Round(rest)), nil
-			}
-			// Beyond that, everything is 0.
-			return NumberVal(0), nil
-		}
-
-		if p == period {
-			return NumberVal(dep), nil
-		}
-		accumulated += dep
+	if period == 0 {
+		return NumberVal(dep0), nil
 	}
+	if period >= nper {
+		return NumberVal(0), nil
+	}
+
+	// Build the depreciation schedule up to the requested period.
+	fCost := cost - dep0 // remaining cost after period 0
+
+	for p := 1; p <= period; p++ {
+		switch {
+		case p == nper-2:
+			// Second-to-last period: 50% of remaining cost.
+			half := math.Round(fCost * 0.5)
+			if p == period {
+				return NumberVal(half), nil
+			}
+			fCost -= half
+
+		case p == nper-1:
+			// Last period: the rest of remaining cost.
+			// If the rest is less than salvage, return 0.
+			if fCost <= salvage {
+				return NumberVal(0), nil
+			}
+			return NumberVal(fCost), nil
+
+		default:
+			// Normal period: degressive depreciation.
+			dep := math.Round(adjustedRate * fCost)
+			if p == period {
+				return NumberVal(dep), nil
+			}
+			fCost -= dep
+		}
+	}
+
+	// Should not be reached, but safeguard.
+	return NumberVal(0), nil
 }
