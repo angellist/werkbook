@@ -371,7 +371,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | SUM | Returns the sum of supplied numbers. | Statistical | 55 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 39 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 42 |
-| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 22 |
+| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 38 |
 | SUMSQ | Returns the sum of squares of the supplied values. | Statistical | 30 |
 | SUMX2MY2 | Returns the sum of the difference of squares of paired arrays. | Math & Trig | 31 |
 | SUMX2PY2 | Returns the sum of the sum of squares of paired arrays. | Math & Trig | 31 |
