@@ -27349,11 +27349,11 @@ func TestLOGEST(t *testing.T) {
 		}
 	})
 
-	t.Run("perfect_fit_F_stat_very_large", func(t *testing.T) {
-		// Perfect exponential fit with df>0: ssResid≈0 (floating point),
-		// ssReg>0 => F is extremely large (essentially infinite).
-		// Note: Unlike LINEST with integer data, ln() introduces tiny
-		// floating-point residuals, so ssResid is not exactly 0.
+	t.Run("perfect_fit_F_stat", func(t *testing.T) {
+		// Perfect exponential fit: ln(2^x) = x*ln(2). Depending on
+		// platform floating-point behavior, ssResid may be exactly 0
+		// (yielding #NUM! like LINEST) or a tiny epsilon (yielding a
+		// very large F-stat). Both are acceptable.
 		v, err := fnLOGEST([]Value{
 			rowArray(2, 4, 8, 16, 32),
 			rowArray(1, 2, 3, 4, 5),
@@ -27363,9 +27363,11 @@ func TestLOGEST(t *testing.T) {
 		if err != nil {
 			t.Fatalf("error: %v", err)
 		}
-		// F should be extremely large (near infinite)
-		if v.Array[3][0].Type != ValueNumber || v.Array[3][0].Num < 1e20 {
-			t.Errorf("F: expected very large number, got %v", v.Array[3][0])
+		f := v.Array[3][0]
+		isNumErr := f.Type == ValueError && f.Err == ErrValNUM
+		isLargeNum := f.Type == ValueNumber && f.Num > 1e20
+		if !isNumErr && !isLargeNum {
+			t.Errorf("F: expected #NUM! or very large number, got %v", f)
 		}
 	})
 
