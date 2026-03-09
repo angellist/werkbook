@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **425** spreadsheet formula functions.
+Werkbook supports **426** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -204,7 +204,7 @@ Werkbook supports **425** spreadsheet formula functions.
 | IMSUB | Engineering | 34 |
 | IMSUM | Engineering | 37 |
 | IMTAN | Engineering | 28 |
-| INDEX | Lookup & Reference | 15 |
+| INDEX | Lookup & Reference | 17 |
 | INDIRECT | Lookup & Reference | 17 |
 | INT | Math & Trig | 24 |
 | INTERCEPT | Statistical | 16 |
@@ -231,6 +231,7 @@ Werkbook supports **425** spreadsheet formula functions.
 | LCM | Math & Trig | 39 |
 | LEFT | Text | 42 |
 | LEN | Text | 29 |
+| LINEST | Statistical | 2 |
 | LN | Math & Trig | 32 |
 | LOG | Math & Trig | 35 |
 | LOG10 | Math & Trig | 31 |
@@ -432,7 +433,7 @@ Werkbook supports **425** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **45** functions are not yet supported.
+The following **44** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -462,7 +463,6 @@ The following **45** functions are not yet supported.
 | LEFTB | Text |
 | LENB | Text |
 | LET | Logical |
-| LINEST | Statistical |
 | LOGEST | Statistical |
 | MAKEARRAY | Logical |
 | MAP | Logical |

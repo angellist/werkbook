@@ -26124,3 +26124,661 @@ func flattenArray(v Value) []float64 {
 	}
 	return out
 }
+
+// ---------------------------------------------------------------------------
+// LINEST
+// ---------------------------------------------------------------------------
+
+func TestLINEST(t *testing.T) {
+	const tol = 1e-9
+
+	// Helper to build a 1-row array value from floats.
+	rowArray := func(vals ...float64) Value {
+		row := make([]Value, len(vals))
+		for i, v := range vals {
+			row[i] = NumberVal(v)
+		}
+		return Value{Type: ValueArray, Array: [][]Value{row}}
+	}
+
+	t.Run("excel_example_slope_intercept", func(t *testing.T) {
+		// known_y={1,9,5,7}, known_x={0,4,2,3} => slope=2, intercept=1
+		v, err := fnLINEST([]Value{
+			rowArray(1, 9, 5, 7),
+			rowArray(0, 4, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+		slope := v.Array[0][0].Num
+		intercept := v.Array[0][1].Num
+		if math.Abs(slope-2) > tol {
+			t.Errorf("slope: got %f, want 2", slope)
+		}
+		if math.Abs(intercept-1) > tol {
+			t.Errorf("intercept: got %f, want 1", intercept)
+		}
+	})
+
+	t.Run("stats_false_returns_1x2", func(t *testing.T) {
+		// Explicit stats=FALSE
+		v, err := fnLINEST([]Value{
+			rowArray(1, 9, 5, 7),
+			rowArray(0, 4, 2, 3),
+			BoolVal(true),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+	})
+
+	t.Run("stats_true_returns_5x2", func(t *testing.T) {
+		// stats=TRUE should return 5 rows x 2 cols
+		v, err := fnLINEST([]Value{
+			rowArray(1, 9, 5, 7),
+			rowArray(0, 4, 2, 3),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		for i, row := range v.Array {
+			if len(row) != 2 {
+				t.Fatalf("row %d: expected 2 cols, got %d", i, len(row))
+			}
+		}
+		// Row 1: slope=2, intercept=1
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("perfect_linear_data_stats", func(t *testing.T) {
+		// y = 3x + 2 for x=1..5: y={5,8,11,14,17}
+		// Perfect fit: r²=1, ss_resid=0, se_y=0
+		v, err := fnLINEST([]Value{
+			rowArray(5, 8, 11, 14, 17),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		// slope=3, intercept=2
+		if math.Abs(v.Array[0][0].Num-3) > tol {
+			t.Errorf("slope: got %f, want 3", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-2) > tol {
+			t.Errorf("intercept: got %f, want 2", v.Array[0][1].Num)
+		}
+		// r² = 1
+		if v.Array[2][0].Type != ValueNumber || math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %v, want 1", v.Array[2][0])
+		}
+		// se_y = 0
+		if v.Array[2][1].Type != ValueNumber || math.Abs(v.Array[2][1].Num) > tol {
+			t.Errorf("se_y: got %v, want 0", v.Array[2][1])
+		}
+		// ss_resid = 0
+		if math.Abs(v.Array[4][1].Num) > tol {
+			t.Errorf("ss_resid: got %f, want 0", v.Array[4][1].Num)
+		}
+		// F and se_slope should be #N/A when ss_resid=0 (perfect fit)
+		if v.Array[3][0].Type != ValueError {
+			t.Errorf("F: expected #N/A for perfect fit, got %v", v.Array[3][0])
+		}
+	})
+
+	t.Run("omitted_known_x_defaults_to_1_n", func(t *testing.T) {
+		// y={3,5,7} with default x={1,2,3}: slope=2, intercept=1
+		v, err := fnLINEST([]Value{
+			rowArray(3, 5, 7),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		slope := v.Array[0][0].Num
+		intercept := v.Array[0][1].Num
+		if math.Abs(slope-2) > tol {
+			t.Errorf("slope: got %f, want 2", slope)
+		}
+		if math.Abs(intercept-1) > tol {
+			t.Errorf("intercept: got %f, want 1", intercept)
+		}
+	})
+
+	t.Run("const_false_basic", func(t *testing.T) {
+		// const=FALSE: y = slope*x (intercept forced to 0)
+		// y={2,4,6}, x={1,2,3}: slope = (2+8+18)/(1+4+9) = 28/14 = 2
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 6),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		slope := v.Array[0][0].Num
+		intercept := v.Array[0][1].Num
+		if math.Abs(slope-2) > tol {
+			t.Errorf("slope: got %f, want 2", slope)
+		}
+		if math.Abs(intercept) > tol {
+			t.Errorf("intercept: got %f, want 0", intercept)
+		}
+	})
+
+	t.Run("const_false_with_stats", func(t *testing.T) {
+		// const=FALSE with stats=TRUE
+		// y={2,4,6}, x={1,2,3}: slope=2, intercept=0
+		// ss_total = 4+16+36 = 56 (uncentered)
+		// ss_resid = 0 (perfect fit through origin)
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 6),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		// slope=2, intercept=0
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+		// se_intercept should be #N/A for const=FALSE
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+		// df = n-1 = 2
+		if math.Abs(v.Array[3][1].Num-2) > tol {
+			t.Errorf("df: got %f, want 2", v.Array[3][1].Num)
+		}
+		// ss_total = 56
+		ssTotal := v.Array[4][0].Num + v.Array[4][1].Num // ssReg + ssResid = ssTotal
+		if math.Abs(ssTotal-56) > tol {
+			t.Errorf("ss_total (ssReg+ssResid): got %f, want 56", ssTotal)
+		}
+	})
+
+	t.Run("two_data_points_exact_fit", func(t *testing.T) {
+		// y={10,20}, x={1,2}: slope=10, intercept=0
+		// df = 2-2 = 0 => se, F are #N/A
+		v, err := fnLINEST([]Value{
+			rowArray(10, 20),
+			rowArray(1, 2),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		// slope=10, intercept=0
+		if math.Abs(v.Array[0][0].Num-10) > tol {
+			t.Errorf("slope: got %f, want 10", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+		// df=0
+		if math.Abs(v.Array[3][1].Num) > tol {
+			t.Errorf("df: got %f, want 0", v.Array[3][1].Num)
+		}
+		// r²=1 (perfect fit with 0 residual)
+		if v.Array[2][0].Type != ValueNumber || math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %v, want 1", v.Array[2][0])
+		}
+		// se_y should be #N/A (df=0)
+		if v.Array[2][1].Type != ValueError {
+			t.Errorf("se_y: expected #N/A, got %v", v.Array[2][1])
+		}
+	})
+
+	t.Run("all_y_same_slope_zero", func(t *testing.T) {
+		// y={5,5,5,5}, x={1,2,3,4}: slope=0, intercept=5
+		v, err := fnLINEST([]Value{
+			rowArray(5, 5, 5, 5),
+			rowArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-5) > tol {
+			t.Errorf("intercept: got %f, want 5", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("all_y_same_stats", func(t *testing.T) {
+		// y={5,5,5,5}, x={1,2,3,4}: ss_total=0, ss_resid=0
+		v, err := fnLINEST([]Value{
+			rowArray(5, 5, 5, 5),
+			rowArray(1, 2, 3, 4),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		// r² should be 1 (ss_total=0 and ss_resid=0 => trivially perfect)
+		if v.Array[2][0].Type != ValueNumber || math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %v, want 1", v.Array[2][0])
+		}
+	})
+
+	t.Run("noisy_data", func(t *testing.T) {
+		// y={2,4,5,4,5}, x={1,2,3,4,5}
+		// Manually: slope = cov/ssqX
+		// meanX=3, meanY=4
+		// cov = (1-3)(2-4)+(2-3)(4-4)+(3-3)(5-4)+(4-3)(4-4)+(5-3)(5-4) = 4+0+0+0+2 = 6
+		// ssqX = 4+1+0+1+4 = 10
+		// slope = 0.6, intercept = 4 - 0.6*3 = 2.2
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 5, 4, 5),
+			rowArray(1, 2, 3, 4, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-0.6) > tol {
+			t.Errorf("slope: got %f, want 0.6", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-2.2) > tol {
+			t.Errorf("intercept: got %f, want 2.2", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("noisy_data_with_stats", func(t *testing.T) {
+		// y={2,4,5,4,5}, x={1,2,3,4,5}
+		// slope=0.6, intercept=2.2
+		// predicted = {2.8,3.4,4.0,4.6,5.2}
+		// ss_total = (2-4)^2+(4-4)^2+(5-4)^2+(4-4)^2+(5-4)^2 = 4+0+1+0+1 = 6
+		// ss_resid = (2-2.8)^2+(4-3.4)^2+(5-4)^2+(4-4.6)^2+(5-5.2)^2
+		//          = 0.64+0.36+1+0.36+0.04 = 2.4
+		// ss_reg = 6 - 2.4 = 3.6
+		// df = 3
+		// r² = 3.6/6 = 0.6
+		// se_y = sqrt(2.4/3) = sqrt(0.8) ≈ 0.894427
+		// se_slope = 0.894427/sqrt(10) ≈ 0.282843
+		// F = (3.6/1)/(2.4/3) = 3.6/0.8 = 4.5
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 5, 4, 5),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		// r² = 0.6
+		if math.Abs(v.Array[2][0].Num-0.6) > tol {
+			t.Errorf("r²: got %f, want 0.6", v.Array[2][0].Num)
+		}
+		// se_y ≈ 0.894427191
+		if math.Abs(v.Array[2][1].Num-math.Sqrt(0.8)) > tol {
+			t.Errorf("se_y: got %f, want %f", v.Array[2][1].Num, math.Sqrt(0.8))
+		}
+		// F = 4.5
+		if v.Array[3][0].Type != ValueNumber || math.Abs(v.Array[3][0].Num-4.5) > tol {
+			t.Errorf("F: got %v, want 4.5", v.Array[3][0])
+		}
+		// df = 3
+		if math.Abs(v.Array[3][1].Num-3) > tol {
+			t.Errorf("df: got %f, want 3", v.Array[3][1].Num)
+		}
+		// ss_reg = 3.6
+		if math.Abs(v.Array[4][0].Num-3.6) > tol {
+			t.Errorf("ss_reg: got %f, want 3.6", v.Array[4][0].Num)
+		}
+		// ss_resid = 2.4
+		if math.Abs(v.Array[4][1].Num-2.4) > tol {
+			t.Errorf("ss_resid: got %f, want 2.4", v.Array[4][1].Num)
+		}
+	})
+
+	t.Run("single_data_point_stats", func(t *testing.T) {
+		// n=1, df = -1 < 0: everything should be #N/A except slope/intercept/df
+		v, err := fnLINEST([]Value{
+			rowArray(5),
+			rowArray(3),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		// slope=0, intercept=5 (all x same => ssqX=0 => slope=0, intercept=meanY)
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-5) > tol {
+			t.Errorf("intercept: got %f, want 5", v.Array[0][1].Num)
+		}
+		// se_slope = #N/A
+		if v.Array[1][0].Type != ValueError {
+			t.Errorf("se_slope: expected error, got %v", v.Array[1][0])
+		}
+		// df = -1
+		if math.Abs(v.Array[3][1].Num-(-1)) > tol {
+			t.Errorf("df: got %f, want -1", v.Array[3][1].Num)
+		}
+	})
+
+	t.Run("wrong_arg_count_zero", func(t *testing.T) {
+		v, err := fnLINEST([]Value{})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got %v", v)
+		}
+	})
+
+	t.Run("wrong_arg_count_five", func(t *testing.T) {
+		v, err := fnLINEST([]Value{
+			rowArray(1), rowArray(1), BoolVal(true), BoolVal(true), NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got %v", v)
+		}
+	})
+
+	t.Run("mismatched_array_sizes", func(t *testing.T) {
+		v, err := fnLINEST([]Value{
+			rowArray(1, 2, 3),
+			rowArray(1, 2),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", v)
+		}
+	})
+
+	t.Run("error_propagation_in_y", func(t *testing.T) {
+		errArr := Value{Type: ValueArray, Array: [][]Value{{NumberVal(1), ErrorVal(ErrValNA), NumberVal(3)}}}
+		v, err := fnLINEST([]Value{errArr})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValNA {
+			t.Errorf("expected #N/A, got %v", v)
+		}
+	})
+
+	t.Run("error_propagation_in_x", func(t *testing.T) {
+		errArr := Value{Type: ValueArray, Array: [][]Value{{NumberVal(1), ErrorVal(ErrValDIV0), NumberVal(3)}}}
+		v, err := fnLINEST([]Value{
+			rowArray(1, 2, 3),
+			errArr,
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValDIV0 {
+			t.Errorf("expected #DIV/0!, got %v", v)
+		}
+	})
+
+	t.Run("negative_x_and_y_values", func(t *testing.T) {
+		// y={-2,-4,-6}, x={-1,-2,-3}: slope=2, intercept=0
+		v, err := fnLINEST([]Value{
+			rowArray(-2, -4, -6),
+			rowArray(-1, -2, -3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num) > tol {
+			t.Errorf("intercept: got %f, want 0", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("negative_slope", func(t *testing.T) {
+		// y={10,7,4,1}, x={1,2,3,4}: slope=-3, intercept=13
+		v, err := fnLINEST([]Value{
+			rowArray(10, 7, 4, 1),
+			rowArray(1, 2, 3, 4),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-(-3)) > tol {
+			t.Errorf("slope: got %f, want -3", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-13) > tol {
+			t.Errorf("intercept: got %f, want 13", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("scalar_y_and_x", func(t *testing.T) {
+		// Single scalar values: n=1
+		v, err := fnLINEST([]Value{
+			NumberVal(5),
+			NumberVal(3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		// slope=0, intercept=5
+		if math.Abs(v.Array[0][0].Num) > tol {
+			t.Errorf("slope: got %f, want 0", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-5) > tol {
+			t.Errorf("intercept: got %f, want 5", v.Array[0][1].Num)
+		}
+	})
+
+	t.Run("array_literal_via_eval", func(t *testing.T) {
+		// LINEST({1,9,5,7},{0,4,2,3})
+		cf := evalCompile(t, "LINEST({1,9,5,7},{0,4,2,3})")
+		got, err := Eval(cf, &mockResolver{cells: map[CellAddr]Value{}}, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		if math.Abs(got.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", got.Array[0][0].Num)
+		}
+		if math.Abs(got.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", got.Array[0][1].Num)
+		}
+	})
+
+	t.Run("index_into_linest_slope", func(t *testing.T) {
+		// INDEX(LINEST({1,9,5,7},{0,4,2,3}),1,1) => slope=2
+		cf := evalCompile(t, "INDEX(LINEST({1,9,5,7},{0,4,2,3}),1,1)")
+		got, err := Eval(cf, &mockResolver{cells: map[CellAddr]Value{}}, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", got.Type)
+		}
+		if math.Abs(got.Num-2) > tol {
+			t.Errorf("got %f, want 2", got.Num)
+		}
+	})
+
+	t.Run("index_into_linest_intercept", func(t *testing.T) {
+		// INDEX(LINEST({1,9,5,7},{0,4,2,3}),1,2) => intercept=1
+		cf := evalCompile(t, "INDEX(LINEST({1,9,5,7},{0,4,2,3}),1,2)")
+		got, err := Eval(cf, &mockResolver{cells: map[CellAddr]Value{}}, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Fatalf("expected number, got type=%d", got.Type)
+		}
+		if math.Abs(got.Num-1) > tol {
+			t.Errorf("got %f, want 1", got.Num)
+		}
+	})
+
+	t.Run("se_slope_and_se_intercept", func(t *testing.T) {
+		// y={2,4,5,4,5}, x={1,2,3,4,5}
+		// slope=0.6, intercept=2.2
+		// se_y = sqrt(0.8) ≈ 0.894427191
+		// se_slope = se_y / sqrt(10) ≈ 0.282843
+		// se_intercept = se_y * sqrt(55/(5*10)) = se_y * sqrt(1.1) ≈ 0.938083
+		v, err := fnLINEST([]Value{
+			rowArray(2, 4, 5, 4, 5),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		seY := math.Sqrt(0.8)
+		wantSeSlope := seY / math.Sqrt(10)
+		// sumXX = 1+4+9+16+25 = 55; ssqX = 10; n=5
+		wantSeIntercept := seY * math.Sqrt(55.0/(5*10))
+
+		if v.Array[1][0].Type != ValueNumber || math.Abs(v.Array[1][0].Num-wantSeSlope) > tol {
+			t.Errorf("se_slope: got %v, want %f", v.Array[1][0], wantSeSlope)
+		}
+		if v.Array[1][1].Type != ValueNumber || math.Abs(v.Array[1][1].Num-wantSeIntercept) > tol {
+			t.Errorf("se_intercept: got %v, want %f", v.Array[1][1], wantSeIntercept)
+		}
+	})
+
+	t.Run("const_false_all_x_zero_div0", func(t *testing.T) {
+		// const=FALSE with all x=0: sum(x²)=0 => #DIV/0!
+		v, err := fnLINEST([]Value{
+			rowArray(1, 2, 3),
+			rowArray(0, 0, 0),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueError || v.Err != ErrValDIV0 {
+			t.Errorf("expected #DIV/0!, got %v", v)
+		}
+	})
+
+	t.Run("large_dataset", func(t *testing.T) {
+		// y = 2x + 3 for x=1..100 (perfect fit)
+		yVals := make([]Value, 100)
+		xVals := make([]Value, 100)
+		for i := 0; i < 100; i++ {
+			x := float64(i + 1)
+			xVals[i] = NumberVal(x)
+			yVals[i] = NumberVal(2*x + 3)
+		}
+		v, err := fnLINEST([]Value{
+			{Type: ValueArray, Array: [][]Value{yVals}},
+			{Type: ValueArray, Array: [][]Value{xVals}},
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-3) > tol {
+			t.Errorf("intercept: got %f, want 3", v.Array[0][1].Num)
+		}
+		if v.Array[2][0].Type != ValueNumber || math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %v, want 1", v.Array[2][0])
+		}
+	})
+
+	t.Run("cell_range_via_resolver", func(t *testing.T) {
+		// Test using cell references through a resolver
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(9),
+				{Col: 1, Row: 3}: NumberVal(5),
+				{Col: 1, Row: 4}: NumberVal(7),
+				{Col: 2, Row: 1}: NumberVal(0),
+				{Col: 2, Row: 2}: NumberVal(4),
+				{Col: 2, Row: 3}: NumberVal(2),
+				{Col: 2, Row: 4}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, "LINEST(A1:A4,B1:B4)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval error: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", got.Type)
+		}
+		if math.Abs(got.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", got.Array[0][0].Num)
+		}
+		if math.Abs(got.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", got.Array[0][1].Num)
+		}
+	})
+
+	t.Run("empty_known_x_uses_default", func(t *testing.T) {
+		// Pass empty value for known_x, should default to {1,...,n}
+		// y={3,5,7} with default x={1,2,3}: slope=2, intercept=1
+		v, err := fnLINEST([]Value{
+			rowArray(3, 5, 7),
+			EmptyVal(),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if math.Abs(v.Array[0][0].Num-2) > tol {
+			t.Errorf("slope: got %f, want 2", v.Array[0][0].Num)
+		}
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("intercept: got %f, want 1", v.Array[0][1].Num)
+		}
+	})
+}

@@ -127,6 +127,7 @@ func init() {
 	Register("Z.TEST", NoCtx(fnZTEST))
 	Register("AGGREGATE", NoCtx(fnAggregate))
 	Register("TREND", NoCtx(fnTREND))
+	Register("LINEST", NoCtx(fnLINEST))
 }
 
 func fnSUM(args []Value) (Value, error) {
@@ -5914,4 +5915,249 @@ func fnTREND(args []Value) (Value, error) {
 		result[r] = row
 	}
 	return Value{Type: ValueArray, Array: result}, nil
+}
+
+// fnLINEST implements LINEST(known_y's, [known_x's], [const], [stats]).
+// It calculates statistics for a line using the least squares method and
+// returns an array describing the line.
+func fnLINEST(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// ---- Helper: extract a flat slice of float64 from a Value (array or scalar). ----
+	flattenNums := func(v Value) ([]float64, *Value) {
+		if v.Type == ValueArray {
+			var nums []float64
+			for _, row := range v.Array {
+				for _, cell := range row {
+					if cell.Type == ValueError {
+						return nil, &cell
+					}
+					n, e := CoerceNum(cell)
+					if e != nil {
+						return nil, e
+					}
+					nums = append(nums, n)
+				}
+			}
+			return nums, nil
+		}
+		if v.Type == ValueError {
+			return nil, &v
+		}
+		n, e := CoerceNum(v)
+		if e != nil {
+			return nil, e
+		}
+		return []float64{n}, nil
+	}
+
+	// ---- 1. known_y's ----
+	knownY, ev := flattenNums(args[0])
+	if ev != nil {
+		return *ev, nil
+	}
+	n := len(knownY)
+	if n == 0 {
+		return ErrorVal(ErrValNA), nil
+	}
+
+	// ---- 2. known_x's ----
+	var knownX []float64
+	if len(args) >= 2 && args[1].Type != ValueEmpty {
+		knownX, ev = flattenNums(args[1])
+		if ev != nil {
+			return *ev, nil
+		}
+		if len(knownX) != n {
+			return ErrorVal(ErrValREF), nil
+		}
+	} else {
+		knownX = make([]float64, n)
+		for i := range knownX {
+			knownX[i] = float64(i + 1)
+		}
+	}
+
+	// ---- 3. const ----
+	useConst := true
+	if len(args) >= 3 && args[2].Type != ValueEmpty {
+		cv, e := CoerceNum(args[2])
+		if e != nil {
+			return *e, nil
+		}
+		useConst = cv != 0
+	}
+
+	// ---- 4. stats ----
+	wantStats := false
+	if len(args) >= 4 && args[3].Type != ValueEmpty {
+		sv, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		wantStats = sv != 0
+	}
+
+	// ---- 5. Compute regression ----
+	nf := float64(n)
+	var slope, intercept float64
+	var ssResid, ssTotal, ssReg float64
+	var df float64
+	var sumXX float64 // Σ(xi²)   — used for se_intercept
+	var ssqX float64  // Σ(xi-x̄)² — used for se_slope (const=TRUE) or Σ(xi²) (const=FALSE)
+
+	if useConst {
+		// Compute means.
+		sumX, sumY := 0.0, 0.0
+		for i := 0; i < n; i++ {
+			sumX += knownX[i]
+			sumY += knownY[i]
+		}
+		meanX := sumX / nf
+		meanY := sumY / nf
+
+		// Compute slope and intercept.
+		cov := 0.0
+		ssqX = 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			dx := knownX[i] - meanX
+			cov += dx * (knownY[i] - meanY)
+			ssqX += dx * dx
+			sumXX += knownX[i] * knownX[i]
+		}
+
+		if ssqX == 0 {
+			slope = 0
+			intercept = meanY
+		} else {
+			slope = cov / ssqX
+			intercept = meanY - slope*meanX
+		}
+
+		// ss_total = Σ(yi - ȳ)²
+		for i := 0; i < n; i++ {
+			dy := knownY[i] - meanY
+			ssTotal += dy * dy
+		}
+		// ss_resid = Σ(yi - predicted)²
+		for i := 0; i < n; i++ {
+			pred := slope*knownX[i] + intercept
+			r := knownY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 2 // n - k - 1, k=1
+	} else {
+		// const=FALSE: force intercept=0.
+		// slope = Σ(xi*yi) / Σ(xi²)
+		sumXY := 0.0
+		sumXX = 0.0
+		for i := 0; i < n; i++ {
+			sumXY += knownX[i] * knownY[i]
+			sumXX += knownX[i] * knownX[i]
+		}
+		if sumXX == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		slope = sumXY / sumXX
+		intercept = 0
+		ssqX = sumXX // For const=FALSE, se_slope uses Σxi² directly.
+
+		// ss_total = Σ(yi²) (not centered)
+		for i := 0; i < n; i++ {
+			ssTotal += knownY[i] * knownY[i]
+		}
+		// ss_resid = Σ(yi - slope*xi)²
+		for i := 0; i < n; i++ {
+			pred := slope * knownX[i]
+			r := knownY[i] - pred
+			ssResid += r * r
+		}
+		ssReg = ssTotal - ssResid
+		df = nf - 1 // n - k, k=1
+	}
+
+	// ---- 6. Build result ----
+	if !wantStats {
+		// Return 1×2 array: {slope, intercept}
+		row := []Value{NumberVal(slope), NumberVal(intercept)}
+		return Value{Type: ValueArray, Array: [][]Value{row}}, nil
+	}
+
+	// stats=TRUE: build 5×2 array
+	var r2, seY, seSlope, seIntercept Value
+	var fStat Value
+
+	if df <= 0 {
+		// Not enough degrees of freedom.
+		seY = ErrorVal(ErrValNA)
+		seSlope = ErrorVal(ErrValNA)
+		seIntercept = ErrorVal(ErrValNA)
+		fStat = ErrorVal(ErrValNA)
+		if ssResid == 0 {
+			r2 = NumberVal(1) // perfect fit trivially
+		} else {
+			r2 = ErrorVal(ErrValNA)
+		}
+	} else {
+		// r²
+		if ssTotal == 0 {
+			if ssResid == 0 {
+				r2 = NumberVal(1)
+			} else {
+				r2 = NumberVal(0)
+			}
+		} else {
+			r2 = NumberVal(ssReg / ssTotal)
+		}
+
+		// se_y = sqrt(ss_resid / df)
+		seYVal := math.Sqrt(ssResid / df)
+		seY = NumberVal(seYVal)
+
+		// se_slope
+		if ssqX == 0 {
+			seSlope = ErrorVal(ErrValNA)
+		} else {
+			seSlope = NumberVal(seYVal / math.Sqrt(ssqX))
+		}
+
+		// se_intercept
+		if useConst {
+			if ssqX == 0 {
+				seIntercept = ErrorVal(ErrValNA)
+			} else {
+				seIntercept = NumberVal(seYVal * math.Sqrt(sumXX/(nf*ssqX)))
+			}
+		} else {
+			seIntercept = ErrorVal(ErrValNA)
+		}
+
+		// F-statistic = (ss_reg / k) / (ss_resid / df)
+		if ssResid == 0 {
+			if ssReg == 0 {
+				fStat = ErrorVal(ErrValNA)
+			} else {
+				fStat = ErrorVal(ErrValNA) // infinite F
+			}
+		} else {
+			fStat = NumberVal((ssReg / 1) / (ssResid / df))
+		}
+	}
+
+	// Row 1: {slope, intercept}
+	row1 := []Value{NumberVal(slope), NumberVal(intercept)}
+	// Row 2: {se_slope, se_intercept}
+	row2 := []Value{seSlope, seIntercept}
+	// Row 3: {r², se_y}
+	row3 := []Value{r2, seY}
+	// Row 4: {F, df}
+	row4 := []Value{fStat, NumberVal(df)}
+	// Row 5: {ss_reg, ss_resid}
+	row5 := []Value{NumberVal(ssReg), NumberVal(ssResid)}
+
+	return Value{Type: ValueArray, Array: [][]Value{row1, row2, row3, row4, row5}}, nil
 }
