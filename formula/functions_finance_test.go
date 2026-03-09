@@ -10076,6 +10076,33 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 			args: numArgs(2400, 39679, 39813, 300, 7, 0.15, 1),
 			want: 0,
 		},
+		// --- Rate 0.10 (life=10, coeff=2.5) regression: period 3 rounding ---
+		// cost=50000, datePurchased=40000, firstPeriod=40365, salvage=5000, rate=0.10, basis=1
+		// adjustedRate=0.25, yearFrac=1.0
+		// dep0 = round(50000*0.25*1.0) = 12500
+		// dep1 = round(37500*0.25) = 9375
+		// dep2 = round(28125*0.25) = round(7031.25) = 7031
+		// dep3 = round(21094*0.25) = round(5273.5) = 5273 (half toward zero, not 5274)
+		{
+			name: "rate 0.10 coeff 2.5 period 0",
+			args: numArgs(50000, 40000, 40365, 5000, 0, 0.10, 1),
+			want: 12500,
+		},
+		{
+			name: "rate 0.10 coeff 2.5 period 1",
+			args: numArgs(50000, 40000, 40365, 5000, 1, 0.10, 1),
+			want: 9375,
+		},
+		{
+			name: "rate 0.10 coeff 2.5 period 2",
+			args: numArgs(50000, 40000, 40365, 5000, 2, 0.10, 1),
+			want: 7031,
+		},
+		{
+			name: "rate 0.10 coeff 2.5 period 3 half toward zero",
+			args: numArgs(50000, 40000, 40365, 5000, 3, 0.10, 1),
+			want: 5273,
+		},
 		// --- Different rate: life 3-4 years, coeff=1.5 ---
 		// rate=0.3, life=3.33, coeff=1.5, adjusted_rate=0.45
 		// basis 0: 30/360 day count

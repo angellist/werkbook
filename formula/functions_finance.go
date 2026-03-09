@@ -3233,6 +3233,22 @@ func fnFVSchedule(args []Value) (Value, error) {
 	return NumberVal(principal), nil
 }
 
+// amordegrcRound rounds a value to the nearest integer, breaking exact ties
+// toward zero.  Excel's AMORDEGRC uses this convention for depreciation loop
+// iterations (periods 1+), where an intermediate product that lands exactly on
+// 0.5 is rounded toward zero rather than away from zero.  For non-half values
+// it behaves identically to math.Round.
+//
+// Example: amordegrcRound(5273.5) = 5273 (not 5274).
+func amordegrcRound(x float64) float64 {
+	truncated := math.Trunc(x)
+	frac := math.Abs(x - truncated)
+	if math.Abs(frac-0.5) < 1e-10 {
+		return truncated
+	}
+	return math.Round(x)
+}
+
 // fnAmordegrc implements AMORDEGRC(cost, date_purchased, first_period, salvage, period, rate, [basis]).
 // Returns the depreciation for each accounting period using the French degressive method.
 func fnAmordegrc(args []Value) (Value, error) {
@@ -3337,6 +3353,8 @@ func fnAmordegrc(args []Value) (Value, error) {
 	nper := int(math.Ceil(life))
 
 	// Period 0: prorated depreciation.
+	// Period 0 uses standard rounding (half away from zero) to match
+	// Excel's behavior for the initial prorated period.
 	dep0 := math.Round(cost * adjustedRate * yearFrac)
 
 	if period == 0 {
@@ -3353,7 +3371,7 @@ func fnAmordegrc(args []Value) (Value, error) {
 		switch {
 		case p == nper-2:
 			// Second-to-last period: 50% of remaining cost.
-			half := math.Round(fCost * 0.5)
+			half := amordegrcRound(fCost * 0.5)
 			if p == period {
 				return NumberVal(half), nil
 			}
@@ -3369,7 +3387,7 @@ func fnAmordegrc(args []Value) (Value, error) {
 
 		default:
 			// Normal period: degressive depreciation.
-			dep := math.Round(adjustedRate * fCost)
+			dep := amordegrcRound(adjustedRate * fCost)
 			if p == period {
 				return NumberVal(dep), nil
 			}
