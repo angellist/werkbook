@@ -15013,6 +15013,196 @@ func TestBINOM_DIST_argcount(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// BINOM.DIST.RANGE
+// ---------------------------------------------------------------------------
+
+func TestBINOM_DIST_RANGE(t *testing.T) {
+	const tol = 1e-9
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// Documented examples
+		{"doc_example_1", "BINOM.DIST.RANGE(60,0.75,48)", 0.084, false, 0},
+		{"doc_example_2", "BINOM.DIST.RANGE(60,0.75,45,50)", 0.524, false, 0},
+
+		// 3-arg form — single point probability (same as PMF)
+		{"single_point", "BINOM.DIST.RANGE(10,0.5,5)", 0.24609375, false, 0},
+
+		// 4-arg form with range
+		{"range_basic", "BINOM.DIST.RANGE(10,0.5,4,6)", 0.65625, false, 0},
+
+		// s = s2 — equivalent to 3-arg form
+		{"s_eq_s2", "BINOM.DIST.RANGE(10,0.5,5,5)", 0.24609375, false, 0},
+
+		// n=0, p=0.5, s=0 — degenerate: 1 trial of zero, zero successes
+		{"n0_s0", "BINOM.DIST.RANGE(0,0.5,0)", 1, false, 0},
+
+		// p=0, s=0 — probability of 0 successes when p=0 is 1
+		{"p0_s0", "BINOM.DIST.RANGE(10,0,0)", 1, false, 0},
+
+		// p=0, s=5 — impossible if p=0
+		{"p0_s5", "BINOM.DIST.RANGE(10,0,5)", 0, false, 0},
+
+		// p=1, s=n — certain all succeed
+		{"p1_sn", "BINOM.DIST.RANGE(10,1,10)", 1, false, 0},
+
+		// p=1, s<n — impossible
+		{"p1_s5", "BINOM.DIST.RANGE(10,1,5)", 0, false, 0},
+
+		// s=0 — probability of zero successes
+		{"s0", "BINOM.DIST.RANGE(10,0.5,0)", 0.0009765625, false, 0},
+
+		// s=n — probability of all successes
+		{"sn", "BINOM.DIST.RANGE(10,0.5,10)", 0.0009765625, false, 0},
+
+		// Full range s=0..n should sum to ~1.0
+		{"full_range", "BINOM.DIST.RANGE(10,0.5,0,10)", 1.0, false, 0},
+		{"full_range_p03", "BINOM.DIST.RANGE(20,0.3,0,20)", 1.0, false, 0},
+
+		// Small n
+		{"n1_p05_s0", "BINOM.DIST.RANGE(1,0.5,0)", 0.5, false, 0},
+		{"n1_p05_s1", "BINOM.DIST.RANGE(1,0.5,1)", 0.5, false, 0},
+		{"n2_p05_s1", "BINOM.DIST.RANGE(2,0.5,1)", 0.5, false, 0},
+		{"n5_p05_2_3", "BINOM.DIST.RANGE(5,0.5,2,3)", 0.625, false, 0},
+
+		// Fair coin, p=0.5
+		{"fair_coin", "BINOM.DIST.RANGE(10,0.5,3,7)", 0.890625, false, 0},
+
+		// Truncation: 10.9 -> 10, 4.7 -> 4, 6.3 -> 6
+		{"truncation", "BINOM.DIST.RANGE(10.9,0.5,4.7,6.3)", 0.65625, false, 0},
+
+		// Boolean coercion: TRUE=1, FALSE=0
+		{"bool_true", "BINOM.DIST.RANGE(1,0.5,TRUE)", 0.5, false, 0},
+		{"bool_false", "BINOM.DIST.RANGE(1,0.5,FALSE)", 0.5, false, 0},
+
+		// String numeric coercion
+		{"str_coerce", `BINOM.DIST.RANGE("10","0.5","5")`, 0.24609375, false, 0},
+
+		// Error: n < 0
+		{"err_neg_n", "BINOM.DIST.RANGE(-1,0.5,0)", 0, true, ErrValNUM},
+
+		// Error: p < 0
+		{"err_p_neg", "BINOM.DIST.RANGE(10,-0.1,5)", 0, true, ErrValNUM},
+
+		// Error: p > 1
+		{"err_p_gt1", "BINOM.DIST.RANGE(10,1.1,5)", 0, true, ErrValNUM},
+
+		// Error: s < 0
+		{"err_s_neg", "BINOM.DIST.RANGE(10,0.5,-1)", 0, true, ErrValNUM},
+
+		// Error: s > n
+		{"err_s_gt_n", "BINOM.DIST.RANGE(10,0.5,11)", 0, true, ErrValNUM},
+
+		// Error: s2 < s
+		{"err_s2_lt_s", "BINOM.DIST.RANGE(10,0.5,6,4)", 0, true, ErrValNUM},
+
+		// Error: s2 > n
+		{"err_s2_gt_n", "BINOM.DIST.RANGE(10,0.5,5,11)", 0, true, ErrValNUM},
+
+		// Error: non-numeric first arg
+		{"err_non_numeric_1", `BINOM.DIST.RANGE("abc",0.5,5)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric second arg
+		{"err_non_numeric_2", `BINOM.DIST.RANGE(10,"abc",5)`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric third arg
+		{"err_non_numeric_3", `BINOM.DIST.RANGE(10,0.5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error: non-numeric fourth arg
+		{"err_non_numeric_4", `BINOM.DIST.RANGE(10,0.5,5,"abc")`, 0, true, ErrValVALUE},
+
+		// Error propagation
+		{"err_propagate", `BINOM.DIST.RANGE(1/0,0.5,0)`, 0, true, ErrValDIV0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError || got.Err != tt.wantErr {
+					t.Errorf("want error %v, got type=%d err=%v num=%g", tt.wantErr, got.Type, got.Err, got.Num)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("want number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if tt.wantNum == 0 {
+				if got.Num != 0 {
+					t.Errorf("got %.12f, want 0", got.Num)
+				}
+			} else if math.Abs(got.Num-tt.wantNum)/math.Abs(tt.wantNum) > 1e-3 {
+				t.Errorf("got %.12f, want %.12f (rel tol 1e-3)", got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestBINOM_DIST_RANGE_argcount(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Too few args — 0 args
+	cf := evalCompile(t, "BINOM.DIST.RANGE()")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST.RANGE() should error, got type=%d", got.Type)
+	}
+
+	// Too few args — 1 arg
+	cf = evalCompile(t, "BINOM.DIST.RANGE(10)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST.RANGE(10) should error, got type=%d", got.Type)
+	}
+
+	// Too few args — 2 args
+	cf = evalCompile(t, "BINOM.DIST.RANGE(10,0.5)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST.RANGE(10,0.5) should error, got type=%d", got.Type)
+	}
+
+	// Too many args — 5 args
+	cf = evalCompile(t, "BINOM.DIST.RANGE(10,0.5,3,7,1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError {
+		t.Errorf("BINOM.DIST.RANGE(10,0.5,3,7,1) should error, got type=%d", got.Type)
+	}
+
+	// IFERROR should catch the #VALUE! from wrong arg count
+	cf = evalCompile(t, `IFERROR(BINOM.DIST.RANGE(10,0.5),"err")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueString || got.Str != "err" {
+		t.Errorf(`IFERROR(BINOM.DIST.RANGE(10,0.5),"err") = %v, want string "err"`, got)
+	}
+}
+
 func TestPOISSON_DIST(t *testing.T) {
 	const tol = 1e-6
 	resolver := &mockResolver{}

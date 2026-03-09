@@ -90,6 +90,7 @@ func init() {
 	Register("NORM.S.DIST", NoCtx(fnNormSDist))
 	Register("NORM.S.INV", NoCtx(fnNormSInv))
 	Register("BINOM.DIST", NoCtx(fnBinomDist))
+	Register("BINOM.DIST.RANGE", NoCtx(fnBinomDistRange))
 	Register("BINOM.INV", NoCtx(fnBinomInv))
 	Register("POISSON.DIST", NoCtx(fnPoissonDist))
 	Register("EXPON.DIST", NoCtx(fnExponDist))
@@ -3006,6 +3007,50 @@ func binomPMF(n, k int, p float64) float64 {
 	logBinom := logC - logK - logNK
 	logProb := logBinom + float64(k)*math.Log(p) + float64(n-k)*math.Log(1-p)
 	return math.Exp(logProb)
+}
+
+// ---------------------------------------------------------------------------
+// BINOM.DIST.RANGE — Binomial distribution range probability
+// ---------------------------------------------------------------------------
+
+// fnBinomDistRange implements BINOM.DIST.RANGE(trials, probability_s, number_s, [number_s2]).
+// Returns the probability of a trial result using a binomial distribution.
+// When number_s2 is omitted it equals number_s (single-point probability).
+func fnBinomDistRange(args []Value) (Value, error) {
+	if len(args) < 3 || len(args) > 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+	nf, e := CoerceNum(args[0])
+	if e != nil {
+		return *e, nil
+	}
+	p, e := CoerceNum(args[1])
+	if e != nil {
+		return *e, nil
+	}
+	sf, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	n := int(nf)
+	s := int(sf)
+	s2 := s
+	if len(args) == 4 {
+		s2f, e := CoerceNum(args[3])
+		if e != nil {
+			return *e, nil
+		}
+		s2 = int(s2f)
+	}
+	// Validate constraints.
+	if n < 0 || p < 0 || p > 1 || s < 0 || s > n || s2 < s || s2 > n {
+		return ErrorVal(ErrValNUM), nil
+	}
+	sum := 0.0
+	for k := s; k <= s2; k++ {
+		sum += binomPMF(n, k, p)
+	}
+	return NumberVal(sum), nil
 }
 
 // ---------------------------------------------------------------------------

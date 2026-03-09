@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **405** Excel formula functions.
+Werkbook supports **406** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -34,6 +34,7 @@ Werkbook supports **405** Excel formula functions.
 | BIN2HEX | Engineering | 49 |
 | BIN2OCT | Engineering | 45 |
 | BINOM.DIST | Statistical | 30 |
+| BINOM.DIST.RANGE | Statistical | 39 |
 | BINOM.INV | Statistical | 33 |
 | BITAND | Math & Trig | 28 |
 | BITLSHIFT | Math & Trig | 27 |
@@ -160,7 +161,7 @@ Werkbook supports **405** Excel formula functions.
 | HSTACK | Lookup & Reference | 18 |
 | HYPGEOM.DIST | Statistical | 37 |
 | IF | Logical | 23 |
-| IFERROR | Logical | 48 |
+| IFERROR | Logical | 49 |
 | IFNA | Information | 5 |
 | IFS | Logical | 32 |
 | IMABS | Engineering | 38 |
@@ -412,7 +413,7 @@ Werkbook supports **405** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **65** Excel functions are not yet supported.
+The following **64** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -425,7 +426,6 @@ The following **65** Excel functions are not yet supported.
 | BESSELJ | Engineering |
 | BESSELK | Engineering |
 | BESSELY | Engineering |
-| BINOM.DIST.RANGE | Statistical |
 | BYCOL | Logical |
 | BYROW | Logical |
 | CELL | Information |
