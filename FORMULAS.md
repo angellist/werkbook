@@ -226,7 +226,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | ISLOGICAL | Returns TRUE when a value is logical. | Information | 27 |
 | ISNA | Returns TRUE when a value is #N/A. | Information | 30 |
 | ISNONTEXT | Returns TRUE when a value is not text. | Information | 26 |
-| ISNUMBER | Returns TRUE when a value is numeric. | Information | 24 |
+| ISNUMBER | Returns TRUE when a value is numeric. | Information | 25 |
 | ISO.CEILING | Rounds a number up using ISO.CEILING rules. | Math & Trig | 48 |
 | ISODD | Returns TRUE when a number is odd. | Information | 33 |
 | ISOWEEKNUM | Returns the ISO week number for a date. | Date & Time | 26 |
@@ -323,7 +323,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | RADIANS | Converts degrees to radians. | Math & Trig | 30 |
 | RAND | Returns a random number between 0 and 1. | Math & Trig | 13 |
 | RANDARRAY | Returns an array of random numbers. | Math & Trig | 50 |
-| RANDBETWEEN | Returns a random integer between two bounds. | Math & Trig | 1 |
+| RANDBETWEEN | Returns a random integer between two bounds. | Math & Trig | 26 |
 | RANK | Returns the rank of a number in a list. | Statistical | 32 |
 | RANK.AVG | Returns the average rank of a number in a list with ties. | Statistical | 21 |
 | RANK.EQ | Returns the rank of a number in a list with ties sharing the same rank. | Statistical | 7 |
@@ -407,7 +407,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | TRIMMEAN | Returns the mean after trimming values from both tails of a data set. | Statistical | 23 |
 | TRUE | Returns the logical value TRUE. | Logical | 10 |
 | TRUNC | Truncates a number to an integer or fixed precision. | Math & Trig | 34 |
-| TYPE | Returns a numeric code describing a value's type. | Information | 24 |
+| TYPE | Returns a numeric code describing a value's type. | Information | 25 |
 | UNICHAR | Returns the Unicode character for a code point. | Text | 37 |
 | UNICODE | Returns the Unicode code point for the first character in text. | Text | 36 |
 | UNIQUE | Returns distinct rows or columns from an array. | Lookup & Reference | 29 |

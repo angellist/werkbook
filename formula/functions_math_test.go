@@ -1783,6 +1783,348 @@ func TestRAND(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// RANDBETWEEN comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestRANDBETWEEN(t *testing.T) {
+	resolver := &mockResolver{}
+
+	t.Run("basic_returns_number", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber {
+			t.Errorf("RANDBETWEEN(1,10) type = %v, want ValueNumber", got.Type)
+		}
+	})
+
+	t.Run("lower_bound_inclusive", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,10)>=1")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RANDBETWEEN(1,10)>=1 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("upper_bound_inclusive", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,10)<=10")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueBool || !got.Bool {
+				t.Fatalf("RANDBETWEEN(1,10)<=10 = %v, want TRUE (iteration %d)", got, i)
+			}
+		}
+	})
+
+	t.Run("same_bounds_returns_that_value", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != 1 {
+				t.Fatalf("RANDBETWEEN(1,1) = %g, want 1 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("same_bounds_zero", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(0,0)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != 0 {
+				t.Fatalf("RANDBETWEEN(0,0) = %g, want 0 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_range", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-10,-1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -10 || got.Num > -1 {
+				t.Fatalf("RANDBETWEEN(-10,-1) = %g, want [-10,-1] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_to_positive_range", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-5,5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -5 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(-5,5) = %g, want [-5,5] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("binary_range_0_or_1", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(0,1)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || (got.Num != 0 && got.Num != 1) {
+				t.Fatalf("RANDBETWEEN(0,1) = %g, want 0 or 1 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("returns_integer_no_fractional_part", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,100)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != math.Floor(got.Num) {
+				t.Fatalf("RANDBETWEEN(1,100) = %g, want integer (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("TYPE_equals_1", func(t *testing.T) {
+		cf := evalCompile(t, "TYPE(RANDBETWEEN(1,10))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("TYPE(RANDBETWEEN(1,10)) = %v, want 1 (number)", got)
+		}
+	})
+
+	t.Run("ISNUMBER_true", func(t *testing.T) {
+		cf := evalCompile(t, "ISNUMBER(RANDBETWEEN(1,10))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueBool || !got.Bool {
+			t.Errorf("ISNUMBER(RANDBETWEEN(1,10)) = %v, want TRUE", got)
+		}
+	})
+
+	t.Run("error_bottom_greater_than_top", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(10,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("RANDBETWEEN(10,1) = %v, want #NUM! error", got)
+		}
+	})
+
+	t.Run("error_zero_args", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN()")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("RANDBETWEEN() = %v, want error", got)
+		}
+	})
+
+	t.Run("error_one_arg", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RANDBETWEEN(1) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("error_three_args", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,5,10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("RANDBETWEEN(1,5,10) = %v, want #VALUE! error", got)
+		}
+	})
+
+	t.Run("error_propagation_first_arg_VALUE", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN(VALUE("x"),10)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf(`RANDBETWEEN(VALUE("x"),10) = %v, want error`, got)
+		}
+	})
+
+	t.Run("error_propagation_second_arg_NA", func(t *testing.T) {
+		cf := evalCompile(t, "RANDBETWEEN(1,NA())")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("RANDBETWEEN(1,NA()) = %v, want #N/A error", got)
+		}
+	})
+
+	t.Run("decimal_bounds_ceil_floor", func(t *testing.T) {
+		// RANDBETWEEN(1.5, 5.5) → Ceil(1.5)=2, Floor(5.5)=5 → result in [2,5]
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1.5,5.5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 2 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(1.5,5.5) = %g, want [2,5] (iteration %d)", got.Num, i)
+			}
+			if got.Num != math.Floor(got.Num) {
+				t.Fatalf("RANDBETWEEN(1.5,5.5) = %g, want integer (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("large_range", func(t *testing.T) {
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(1,1000000)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 1000000 {
+				t.Fatalf("RANDBETWEEN(1,1000000) = %g, want [1,1000000] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_to_zero", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-100,0)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < -100 || got.Num > 0 {
+				t.Fatalf("RANDBETWEEN(-100,0) = %g, want [-100,0] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("boolean_coercion_TRUE_as_1", func(t *testing.T) {
+		// TRUE coerces to 1, so RANDBETWEEN(TRUE,5) → RANDBETWEEN(1,5)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(TRUE,5)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 5 {
+				t.Fatalf("RANDBETWEEN(TRUE,5) = %g, want [1,5] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("string_coercion_numeric_strings", func(t *testing.T) {
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, `RANDBETWEEN("1","10")`)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 1 || got.Num > 10 {
+				t.Fatalf(`RANDBETWEEN("1","10") = %g, want [1,10] (iteration %d)`, got.Num, i)
+			}
+		}
+	})
+
+	t.Run("error_non_numeric_string", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN("abc",10)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`RANDBETWEEN("abc",10) = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("error_non_numeric_string_second_arg", func(t *testing.T) {
+		cf := evalCompile(t, `RANDBETWEEN(1,"xyz")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf(`RANDBETWEEN(1,"xyz") = %v, want #VALUE! error`, got)
+		}
+	})
+
+	t.Run("decimal_bounds_that_cross_after_ceil_floor", func(t *testing.T) {
+		// RANDBETWEEN(1.9, 1.1) → Ceil(1.9)=2, Floor(1.1)=1 → lo>hi → #NUM!
+		cf := evalCompile(t, "RANDBETWEEN(1.9,1.1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNUM {
+			t.Errorf("RANDBETWEEN(1.9,1.1) = %v, want #NUM! error", got)
+		}
+	})
+
+	t.Run("boolean_FALSE_as_0", func(t *testing.T) {
+		// FALSE coerces to 0, so RANDBETWEEN(FALSE,3) → RANDBETWEEN(0,3)
+		for i := 0; i < 50; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(FALSE,3)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 || got.Num > 3 {
+				t.Fatalf("RANDBETWEEN(FALSE,3) = %g, want [0,3] (iteration %d)", got.Num, i)
+			}
+		}
+	})
+
+	t.Run("negative_same_bounds", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			cf := evalCompile(t, "RANDBETWEEN(-7,-7)")
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != -7 {
+				t.Fatalf("RANDBETWEEN(-7,-7) = %g, want -7 (iteration %d)", got.Num, i)
+			}
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // SEQUENCE tests
 // ---------------------------------------------------------------------------
 
