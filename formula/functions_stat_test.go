@@ -32331,4 +32331,501 @@ func TestLOGEST(t *testing.T) {
 			t.Errorf("b: got %f, want 8", b)
 		}
 	})
+
+	t.Run("all_x_same_const_true", func(t *testing.T) {
+		// When all x values are identical, ssqX = 0, slope = 0.
+		// m = exp(0) = 1, b = exp(mean(ln(y)))
+		// y = {4, 4, 4}, x = {5, 5, 5}
+		v, err := fnLOGEST([]Value{
+			rowArray(4, 4, 4),
+			rowArray(5, 5, 5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-4) > tol {
+			t.Errorf("b: got %f, want 4", b)
+		}
+	})
+
+	t.Run("all_x_same_different_y", func(t *testing.T) {
+		// All x same but different y: slope=0, b = geometric mean of y
+		// y = {2, 8}, x = {3, 3}: mean(ln(y)) = (ln2+ln8)/2 = (ln2+3ln2)/2 = 2ln2
+		// b = exp(2ln2) = 4
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 8),
+			rowArray(3, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-4) > tol {
+			t.Errorf("b: got %f, want 4", b)
+		}
+	})
+
+	t.Run("const_number_zero_means_false", func(t *testing.T) {
+		// const=0 should be treated as FALSE (b forced to 1)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		b := v.Array[0][1].Num
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1 (const=0 should force b=1)", b)
+		}
+	})
+
+	t.Run("const_number_nonzero_means_true", func(t *testing.T) {
+		// const=2 (nonzero) should be treated as TRUE
+		v, err := fnLOGEST([]Value{
+			rowArray(15, 75, 375),
+			rowArray(1, 2, 3),
+			NumberVal(2),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-5) > tol {
+			t.Errorf("m: got %f, want 5", m)
+		}
+		if math.Abs(b-3) > tol {
+			t.Errorf("b: got %f, want 3", b)
+		}
+	})
+
+	t.Run("stats_number_zero_means_false", func(t *testing.T) {
+		// stats=0 should return 1x2 (same as stats=FALSE)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			NumberVal(0),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+	})
+
+	t.Run("stats_number_nonzero_means_true", func(t *testing.T) {
+		// stats=5 (nonzero) should return 5x2 (same as stats=TRUE)
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			NumberVal(5),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+	})
+
+	t.Run("y_only_const_false", func(t *testing.T) {
+		// y only, const=FALSE: x defaults to {1,2,3,...}, b forced to 1
+		// y = {2, 4, 8}: ln(y) = {ln2, 2ln2, 3ln2}
+		// slope = Σ(xi*lnYi)/Σ(xi²) = (1*ln2+2*2ln2+3*3ln2)/(1+4+9) = (ln2+4ln2+9ln2)/14 = 14ln2/14 = ln2
+		// m = exp(ln2) = 2, b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			{Type: ValueEmpty},
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("very_small_y_values", func(t *testing.T) {
+		// Very small positive y values: y = 1e-10 * 2^x for x=1,2,3
+		// y = {2e-10, 4e-10, 8e-10}
+		v, err := fnLOGEST([]Value{
+			rowArray(2e-10, 4e-10, 8e-10),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1e-10) > 1e-19 {
+			t.Errorf("b: got %e, want 1e-10", b)
+		}
+	})
+
+	t.Run("very_large_y_values", func(t *testing.T) {
+		// Very large y values: y = 1e100 * 10^x for x=1,2,3
+		// y = {1e101, 1e102, 1e103}
+		v, err := fnLOGEST([]Value{
+			rowArray(1e101, 1e102, 1e103),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-10) > tol {
+			t.Errorf("m: got %f, want 10", m)
+		}
+		if math.Abs(b-1e100)/1e100 > tol {
+			t.Errorf("b: got %e, want 1e100", b)
+		}
+	})
+
+	t.Run("const_false_stats_true_noisy", func(t *testing.T) {
+		// const=FALSE with stats=TRUE on noisy data
+		v, err := fnLOGEST([]Value{
+			rowArray(2.1, 4.3, 7.8, 17, 31),
+			rowArray(1, 2, 3, 4, 5),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(v.Array))
+		}
+		// b must be 1 (forced)
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("b: got %f, want 1", v.Array[0][1].Num)
+		}
+		// se_intercept must be #N/A
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+		// df = n-1 = 4 (const=FALSE uses n-k degrees of freedom)
+		if math.Abs(v.Array[3][1].Num-4) > tol {
+			t.Errorf("df: got %f, want 4", v.Array[3][1].Num)
+		}
+		// se_slope should be > 0 for noisy data
+		if v.Array[1][0].Type != ValueNumber || v.Array[1][0].Num <= 0 {
+			t.Errorf("se_slope: expected > 0, got %v", v.Array[1][0])
+		}
+	})
+
+	t.Run("index_stats_se_slope", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,1) => se_slope > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,1)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_slope: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("index_stats_se_intercept", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,2) => se_intercept > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),2,2)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_intercept: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("index_stats_se_y", func(t *testing.T) {
+		// INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),3,2) => se_y > 0
+		cf := evalCompile(t, "INDEX(LOGEST({2.1,3.8,8.5,15,35},{1,2,3,4,5},TRUE,TRUE),3,2)")
+		resolver := &mockResolver{}
+		v, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueNumber || v.Num <= 0 {
+			t.Errorf("se_y: got %v, want > 0", v)
+		}
+	})
+
+	t.Run("const_empty_treated_as_true", func(t *testing.T) {
+		// Empty const arg should be treated as TRUE (default)
+		v, err := fnLOGEST([]Value{
+			rowArray(15, 75, 375),
+			rowArray(1, 2, 3),
+			{Type: ValueEmpty},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-5) > tol {
+			t.Errorf("m: got %f, want 5", m)
+		}
+		if math.Abs(b-3) > tol {
+			t.Errorf("b: got %f, want 3", b)
+		}
+	})
+
+	t.Run("stats_empty_treated_as_false", func(t *testing.T) {
+		// Empty stats arg should be treated as FALSE
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			{Type: ValueEmpty},
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+	})
+
+	t.Run("x_values_starting_at_zero", func(t *testing.T) {
+		// x starting at 0: y = 5 * 2^x for x={0,1,2,3} => y={5,10,20,40}
+		v, err := fnLOGEST([]Value{
+			rowArray(5, 10, 20, 40),
+			rowArray(0, 1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-5) > tol {
+			t.Errorf("b: got %f, want 5", b)
+		}
+	})
+
+	t.Run("non_sequential_x_values", func(t *testing.T) {
+		// Non-sequential x values: x={10,20,30}, y = 3^x scaled
+		// y = 3^(x/10) => y = {3, 9, 27} for x={10,20,30}
+		// In ln space: lnY = (x/10)*ln3, slope = ln3/10
+		// m = exp(ln3/10) = 3^0.1, b = exp(intercept)
+		// Actually: slope = ln3/10, intercept = 0 from regression
+		v, err := fnLOGEST([]Value{
+			rowArray(3, 9, 27),
+			rowArray(10, 20, 30),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		expectedM := math.Pow(3, 0.1) // 3^(1/10)
+		if math.Abs(m-expectedM) > tol {
+			t.Errorf("m: got %f, want %f", m, expectedM)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("single_y_only", func(t *testing.T) {
+		// Single y value with no x: x defaults to {1}
+		// n=1, slope=0, b=y
+		v, err := fnLOGEST([]Value{
+			rowArray(7),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1) > tol {
+			t.Errorf("m: got %f, want 1", m)
+		}
+		if math.Abs(b-7) > tol {
+			t.Errorf("b: got %f, want 7", b)
+		}
+	})
+
+	t.Run("all_y_same_const_false", func(t *testing.T) {
+		// const=FALSE with all y same: y={5,5,5}, x={1,2,3}
+		// slope = Σ(xi*lnYi)/Σ(xi²) = ln5*(1+2+3)/(1+4+9) = 6*ln5/14
+		// m = exp(6*ln5/14), b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(5, 5, 5),
+			rowArray(1, 2, 3),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		expectedSlope := 6 * math.Log(5) / 14
+		expectedM := math.Exp(expectedSlope)
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-expectedM) > tol {
+			t.Errorf("m: got %f, want %f", m, expectedM)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("six_data_points_stats", func(t *testing.T) {
+		// y = 2 * 1.5^x for x=0..5 => y={2, 3, 4.5, 6.75, 10.125, 15.1875}
+		ys := make([]float64, 6)
+		for i := 0; i < 6; i++ {
+			ys[i] = 2 * math.Pow(1.5, float64(i))
+		}
+		v, err := fnLOGEST([]Value{
+			rowArray(ys...),
+			rowArray(0, 1, 2, 3, 4, 5),
+			BoolVal(true),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-1.5) > tol {
+			t.Errorf("m: got %f, want 1.5", m)
+		}
+		if math.Abs(b-2) > tol {
+			t.Errorf("b: got %f, want 2", b)
+		}
+		// df = 6-2 = 4
+		if math.Abs(v.Array[3][1].Num-4) > tol {
+			t.Errorf("df: got %f, want 4", v.Array[3][1].Num)
+		}
+		// r² = 1
+		if math.Abs(v.Array[2][0].Num-1) > tol {
+			t.Errorf("r²: got %f, want 1", v.Array[2][0].Num)
+		}
+	})
+
+	t.Run("const_false_stats_perfect_fit", func(t *testing.T) {
+		// const=FALSE, stats=TRUE, perfect fit: y = 2^x with x={1,2,3,4}
+		// b forced to 1, and actual data passes through origin in log space
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8, 16),
+			rowArray(1, 2, 3, 4),
+			BoolVal(false),
+			BoolVal(true),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		// b must be 1
+		if math.Abs(v.Array[0][1].Num-1) > tol {
+			t.Errorf("b: got %f, want 1", v.Array[0][1].Num)
+		}
+		// df = n-1 = 3
+		if math.Abs(v.Array[3][1].Num-3) > tol {
+			t.Errorf("df: got %f, want 3", v.Array[3][1].Num)
+		}
+		// se_intercept = #N/A
+		if v.Array[1][1].Type != ValueError || v.Array[1][1].Err != ErrValNA {
+			t.Errorf("se_intercept: expected #N/A, got %v", v.Array[1][1])
+		}
+	})
+
+	t.Run("all_args_explicit", func(t *testing.T) {
+		// All four arguments provided explicitly
+		v, err := fnLOGEST([]Value{
+			rowArray(2, 4, 8),
+			rowArray(1, 2, 3),
+			BoolVal(true),
+			BoolVal(false),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		if v.Type != ValueArray {
+			t.Fatalf("expected array, got type=%d", v.Type)
+		}
+		if len(v.Array) != 1 || len(v.Array[0]) != 2 {
+			t.Fatalf("expected 1x2 array, got %dx%d", len(v.Array), len(v.Array[0]))
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-2) > tol {
+			t.Errorf("m: got %f, want 2", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("fractional_y_only", func(t *testing.T) {
+		// y values less than 1 with default x
+		// y = {0.1, 0.01, 0.001}: y = 0.1^x => m = 0.1, b = 1
+		v, err := fnLOGEST([]Value{
+			rowArray(0.1, 0.01, 0.001),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		if math.Abs(m-0.1) > tol {
+			t.Errorf("m: got %f, want 0.1", m)
+		}
+		if math.Abs(b-1) > tol {
+			t.Errorf("b: got %f, want 1", b)
+		}
+	})
+
+	t.Run("prediction_matches_manual_calc", func(t *testing.T) {
+		// Verify predicted values from LOGEST match manual calculation
+		// y = {3, 12, 48} for x = {1, 2, 3}: y = 0.75*4^x
+		v, err := fnLOGEST([]Value{
+			rowArray(3, 12, 48),
+			rowArray(1, 2, 3),
+		})
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		m := v.Array[0][0].Num
+		b := v.Array[0][1].Num
+		// Verify predictions at each data point
+		for i, x := range []float64{1, 2, 3} {
+			predicted := b * math.Pow(m, x)
+			actual := []float64{3, 12, 48}[i]
+			if math.Abs(predicted-actual) > 1e-6 {
+				t.Errorf("prediction at x=%g: got %f, want %f", x, predicted, actual)
+			}
+		}
+	})
 }
