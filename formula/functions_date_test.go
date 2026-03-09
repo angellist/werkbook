@@ -323,6 +323,109 @@ func TestMONTH(t *testing.T) {
 	}
 }
 
+func TestMONTH_Comprehensive(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name   string
+		formula string
+		want   float64
+		isErr  bool
+		errVal ErrorValue
+	}{
+		// --- Basic happy path: each month Jan through Dec ---
+		{"jan_date_func", "MONTH(DATE(2024,1,15))", 1, false, 0},
+		{"feb_date_func", "MONTH(DATE(2024,2,10))", 2, false, 0},
+		{"mar_date_func", "MONTH(DATE(2024,3,1))", 3, false, 0},
+		{"apr_date_func", "MONTH(DATE(2024,4,30))", 4, false, 0},
+		{"may_date_func", "MONTH(DATE(2023,5,23))", 5, false, 0},
+		{"jun_date_func", "MONTH(DATE(2023,6,15))", 6, false, 0},
+		{"jul_date_func", "MONTH(DATE(2023,7,4))", 7, false, 0},
+		{"aug_date_func", "MONTH(DATE(2023,8,31))", 8, false, 0},
+		{"sep_date_func", "MONTH(DATE(2025,9,1))", 9, false, 0},
+		{"oct_date_func", "MONTH(DATE(2025,10,15))", 10, false, 0},
+		{"nov_date_func", "MONTH(DATE(2025,11,30))", 11, false, 0},
+		{"dec_date_func", "MONTH(DATE(2025,12,25))", 12, false, 0},
+
+		// --- Serial number inputs ---
+		{"serial_1_jan_1900", "MONTH(1)", 1, false, 0},           // Jan 1, 1900
+		{"serial_45306_jan_2024", "MONTH(45306)", 1, false, 0},   // Jan 15, 2024
+		{"serial_44927_jan_2023", "MONTH(44927)", 1, false, 0},   // Jan 1, 2023
+		{"serial_32_feb_1_1900", "MONTH(32)", 2, false, 0},       // Feb 1, 1900
+		{"serial_59_feb_28_1900", "MONTH(59)", 2, false, 0},      // Feb 28, 1900
+		{"serial_61_mar_1_1900", "MONTH(61)", 3, false, 0},       // Mar 1, 1900
+
+		// --- Boundary: serial 0 (Jan 0, 1900 sentinel) ---
+		{"serial_0_jan", "MONTH(0)", 1, false, 0},
+
+		// --- Boundary: serial 60 (fictional Feb 29, 1900 — Excel's leap year bug) ---
+		{"serial_60_feb_29_1900", "MONTH(60)", 2, false, 0},
+
+		// --- Fractional serial numbers (time component ignored) ---
+		{"fractional_0_25", "MONTH(44927.25)", 1, false, 0},
+		{"fractional_0_5", "MONTH(44927.5)", 1, false, 0},
+		{"fractional_0_75", "MONTH(44927.75)", 1, false, 0},
+		{"fractional_0_99", "MONTH(44927.99)", 1, false, 0},
+
+		// --- Very large serial number (far future) ---
+		{"max_serial_dec_9999", "MONTH(2958465)", 12, false, 0}, // Dec 31, 9999
+
+		// --- Boolean inputs ---
+		{"bool_true_serial_1", "MONTH(TRUE)", 1, false, 0},  // TRUE coerces to 1 = Jan 1, 1900
+		{"bool_false_serial_0", "MONTH(FALSE)", 1, false, 0}, // FALSE coerces to 0 = Jan 0, 1900
+
+		// --- Numeric string coercion ---
+		{"string_numeric_44927", `MONTH("44927")`, 1, false, 0},
+		{"string_numeric_1", `MONTH("1")`, 1, false, 0},
+
+		// --- Error: negative serial numbers ---
+		{"negative_serial", "MONTH(-1)", 0, true, ErrValNUM},
+
+		// --- Error: beyond max serial ---
+		{"beyond_max_serial", "MONTH(2958466)", 0, true, ErrValNUM},
+
+		// --- Error: wrong argument count ---
+		{"no_args", "MONTH()", 0, true, ErrValVALUE},
+		{"two_args", "MONTH(1,2)", 0, true, ErrValVALUE},
+
+		// --- Error: non-numeric string ---
+		{"non_date_string", `MONTH("hello")`, 0, true, ErrValVALUE},
+		{"empty_string", `MONTH("")`, 0, true, ErrValVALUE},
+
+		// --- Error propagation ---
+		{"div_by_zero", "MONTH(1/0)", 0, true, ErrValDIV0},
+
+		// --- Date boundary: Dec 31 of a year, next day is Jan of next year ---
+		{"dec_31_2023", "MONTH(DATE(2023,12,31))", 12, false, 0},
+		{"jan_1_2024", "MONTH(DATE(2024,1,1))", 1, false, 0},
+
+		// --- Leap year Feb 29 (real) ---
+		{"leap_feb_29_2024", "MONTH(DATE(2024,2,29))", 2, false, 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tc.formula, err)
+			}
+			if tc.isErr {
+				if got.Type != ValueError || got.Err != tc.errVal {
+					t.Errorf("%s: got %v, want error %v", tc.formula, got, tc.errVal)
+				}
+				return
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("%s: got type %v, want number", tc.formula, got.Type)
+			}
+			if got.Num != tc.want {
+				t.Errorf("%s = %g, want %g", tc.formula, got.Num, tc.want)
+			}
+		})
+	}
+}
+
 func TestDAY(t *testing.T) {
 	resolver := &mockResolver{}
 

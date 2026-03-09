@@ -268,7 +268,7 @@ Werkbook supports **437** spreadsheet formula functions.
 | MODE | Returns the most frequently occurring value. | Statistical | 19 |
 | MODE.MULT | Returns all modes in a data set. | Statistical | 22 |
 | MODE.SNGL | Returns a single mode from a data set. | Statistical | 19 |
-| MONTH | Returns the month number from a date. | Date & Time | 5 |
+| MONTH | Returns the month number from a date. | Date & Time | 45 |
 | MROUND | Rounds a number to the nearest multiple. | Math & Trig | 38 |
 | MULTINOMIAL | Returns the multinomial of a set of numbers. | Math & Trig | 36 |
 | MUNIT | Returns a unit matrix of a requested size. | Math & Trig | 38 |
