@@ -454,3 +454,68 @@ func TestSetDefinedNameRebuildsFormulaState(t *testing.T) {
 		t.Fatalf("B1 after rename = %#v, want 8", v)
 	}
 }
+
+func TestLocalSheetScopedDefinedNamesFixtures(t *testing.T) {
+	fixtures := []struct {
+		name string
+		path string
+	}{
+		{name: "exceljs", path: "../testdata/exceljs/11_local_name_scopes.xlsx"},
+		{name: "xlsxwriter", path: "../testdata/xlsxwriter/11_local_name_scopes.xlsx"},
+	}
+	expected := []struct {
+		cell string
+		want any
+	}{
+		{cell: "B2", want: float64(180)},
+		{cell: "B3", want: float64(250)},
+		{cell: "B4", want: float64(3)},
+		{cell: "B5", want: float64(2)},
+		{cell: "B6", want: float64(450)},
+		{cell: "B7", want: float64(585)},
+		{cell: "B8", want: "North Desk"},
+		{cell: "B9", want: "Field Desk"},
+		{cell: "B10", want: "Field Desk"},
+		{cell: "B11", want: float64(1)},
+		{cell: "B12", want: float64(1)},
+		{cell: "B13", want: float64(4)},
+		{cell: "B14", want: float64(1035)},
+		{cell: "B15", want: float64(70)},
+		{cell: "B16", want: "OVER"},
+		{cell: "B17", want: "North Desk"},
+	}
+
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			f, err := werkbook.Open(fixture.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.Recalculate()
+
+			summary := f.Sheet("Summary")
+			if summary == nil {
+				t.Fatal("Summary sheet not found")
+			}
+
+			for _, tc := range expected {
+				v, err := summary.GetValue(tc.cell)
+				if err != nil {
+					t.Fatalf("%s: %v", tc.cell, err)
+				}
+				switch want := tc.want.(type) {
+				case float64:
+					if v.Type != werkbook.TypeNumber || v.Number != want {
+						t.Fatalf("%s = %#v, want %v", tc.cell, v, want)
+					}
+				case string:
+					if v.Type != werkbook.TypeString || v.String != want {
+						t.Fatalf("%s = %#v, want %q", tc.cell, v, want)
+					}
+				default:
+					t.Fatalf("unsupported expected type %T", tc.want)
+				}
+			}
+		})
+	}
+}

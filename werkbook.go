@@ -467,7 +467,7 @@ func (f *File) rebuildFormulaState() {
 // expandFormula expands table refs and defined names in a formula string.
 func (f *File) expandFormula(src string, sheetName string, row int) string {
 	src = formula.ExpandTableRefs(src, f.tables, row)
-	src = formula.ExpandDefinedNames(src, f.definedNames, f.SheetIndex(sheetName))
+	src = formula.ExpandDefinedNames(src, f.definedNames, f.SheetIndex(sheetName), f.sheetNames)
 	return src
 }
 
