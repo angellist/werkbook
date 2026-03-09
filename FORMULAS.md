@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **411** spreadsheet formula functions.
+Werkbook supports **412** spreadsheet formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -108,6 +108,7 @@ Werkbook supports **411** spreadsheet formula functions.
 | DOLLARDE | Financial | 18 |
 | DOLLARFR | Financial | 17 |
 | DROP | Lookup & Reference | 26 |
+| DSUM | Db | 7 |
 | DURATION | Financial | 2 |
 | EDATE | Date & Time | 19 |
 | EFFECT | Financial | 18 |
@@ -418,7 +419,7 @@ Werkbook supports **411** spreadsheet formula functions.
 
 # Unsupported Formulas
 
-The following **59** functions are not yet supported.
+The following **58** functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -444,7 +445,6 @@ The following **59** functions are not yet supported.
 | DPRODUCT | Database |
 | DSTDEV | Database |
 | DSTDEVP | Database |
-| DSUM | Database |
 | DVAR | Database |
 | DVARP | Database |
 | FILTERXML | Web |
