@@ -120,6 +120,7 @@ func init() {
 	Register("NEGBINOM.DIST", NoCtx(fnNegbinomDist))
 	Register("PHI", NoCtx(fnPhi))
 	Register("PROB", NoCtx(fnPROB))
+	Register("T.TEST", NoCtx(fnTTest))
 	Register("Z.TEST", NoCtx(fnZTEST))
 	Register("AGGREGATE", NoCtx(fnAggregate))
 }
@@ -5195,6 +5196,158 @@ func fnAggregate(args []Value) (Value, error) {
 		callArgs = []Value{arr}
 	}
 	return CallFunc(id, callArgs, nil)
+}
+
+// ---------------------------------------------------------------------------
+// T.TEST — Student's t-Test
+// ---------------------------------------------------------------------------
+// T.TEST(array1, array2, tails, type)
+//   array1 – first data set
+//   array2 – second data set
+//   tails  – 1 = one-tailed, 2 = two-tailed
+//   type   – 1 = Paired, 2 = Two-sample equal variance (homoscedastic),
+//            3 = Two-sample unequal variance (heteroscedastic)
+
+func fnTTest(args []Value) (Value, error) {
+	if len(args) != 4 {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
+	// Collect numeric values from both arrays.
+	nums1, ev := collectNumeric(args[:1])
+	if ev != nil {
+		return *ev, nil
+	}
+	nums2, ev := collectNumeric(args[1:2])
+	if ev != nil {
+		return *ev, nil
+	}
+
+	// Extract tails and type, coerce to numeric.
+	tailsRaw, e := CoerceNum(args[2])
+	if e != nil {
+		return *e, nil
+	}
+	typeRaw, e := CoerceNum(args[3])
+	if e != nil {
+		return *e, nil
+	}
+
+	// Truncate to integers.
+	tails := int(math.Trunc(tailsRaw))
+	ttype := int(math.Trunc(typeRaw))
+
+	// Validate tails and type.
+	if tails != 1 && tails != 2 {
+		return ErrorVal(ErrValNUM), nil
+	}
+	if ttype < 1 || ttype > 3 {
+		return ErrorVal(ErrValNUM), nil
+	}
+
+	n1 := len(nums1)
+	n2 := len(nums2)
+
+	var tStat, df float64
+
+	switch ttype {
+	case 1: // Paired t-test.
+		if n1 != n2 {
+			return ErrorVal(ErrValNA), nil
+		}
+		n := n1
+		if n < 2 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		// Compute differences and their mean/stdev.
+		diffs := make([]float64, n)
+		sumD := 0.0
+		for i := 0; i < n; i++ {
+			diffs[i] = nums1[i] - nums2[i]
+			sumD += diffs[i]
+		}
+		meanD := sumD / float64(n)
+		ssq := 0.0
+		for _, d := range diffs {
+			ssq += (d - meanD) * (d - meanD)
+		}
+		sdD := math.Sqrt(ssq / float64(n-1))
+		if sdD == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		tStat = meanD / (sdD / math.Sqrt(float64(n)))
+		df = float64(n - 1)
+
+	case 2: // Two-sample equal variance (homoscedastic).
+		if n1 < 2 || n2 < 2 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		mean1 := mean(nums1)
+		mean2 := mean(nums2)
+		ssq1 := sumSqDev(nums1, mean1)
+		ssq2 := sumSqDev(nums2, mean2)
+		// Pooled variance.
+		sp2 := (ssq1 + ssq2) / float64(n1+n2-2)
+		denom := math.Sqrt(sp2 * (1.0/float64(n1) + 1.0/float64(n2)))
+		if denom == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		tStat = (mean1 - mean2) / denom
+		df = float64(n1 + n2 - 2)
+
+	case 3: // Two-sample unequal variance (Welch's t-test).
+		if n1 < 2 || n2 < 2 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		mean1 := mean(nums1)
+		mean2 := mean(nums2)
+		var1 := sumSqDev(nums1, mean1) / float64(n1-1)
+		var2 := sumSqDev(nums2, mean2) / float64(n2-1)
+		se := math.Sqrt(var1/float64(n1) + var2/float64(n2))
+		if se == 0 {
+			return ErrorVal(ErrValDIV0), nil
+		}
+		tStat = (mean1 - mean2) / se
+		// Welch-Satterthwaite degrees of freedom.
+		vn1 := var1 / float64(n1)
+		vn2 := var2 / float64(n2)
+		num := (vn1 + vn2) * (vn1 + vn2)
+		den := vn1*vn1/float64(n1-1) + vn2*vn2/float64(n2-1)
+		df = num / den
+	}
+
+	// Compute p-value from the t-distribution.
+	// p = P(|T| >= |t|) for two-tailed, or P(T >= |t|) for one-tailed.
+	// Using: P(T >= |t|) = 1 - tDistCDF(|t|, df) = 0.5 * I_x(df/2, 0.5)
+	// where x = df / (df + t²).
+	absT := math.Abs(tStat)
+	bx := df / (df + absT*absT)
+	p := 0.5 * regBetaInc(bx, df/2, 0.5)
+
+	if tails == 2 {
+		p = 2 * p
+	}
+
+	return NumberVal(p), nil
+}
+
+// mean computes the arithmetic mean of a slice of floats.
+func mean(vals []float64) float64 {
+	s := 0.0
+	for _, v := range vals {
+		s += v
+	}
+	return s / float64(len(vals))
+}
+
+// sumSqDev computes the sum of squared deviations from the mean.
+func sumSqDev(vals []float64, m float64) float64 {
+	s := 0.0
+	for _, v := range vals {
+		d := v - m
+		s += d * d
+	}
+	return s
 }
 
 // fnZTEST implements Z.TEST(array, x, [sigma]).

@@ -24254,3 +24254,213 @@ func TestCHISQ_TEST_iferror(t *testing.T) {
 		t.Errorf(`IFERROR(CHISQ.TEST({5},{5}),"caught") = %v, want "caught"`, got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// T.TEST
+// ---------------------------------------------------------------------------
+
+func TestTTEST(t *testing.T) {
+	const tol = 1e-4
+
+	// Shared resolver with two data sets.
+	// A1:A9 = {3,4,5,8,9,1,2,4,5}  B1:B9 = {6,19,3,2,14,4,5,17,1}
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(4),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 1, Row: 4}: NumberVal(8),
+			{Col: 1, Row: 5}: NumberVal(9),
+			{Col: 1, Row: 6}: NumberVal(1),
+			{Col: 1, Row: 7}: NumberVal(2),
+			{Col: 1, Row: 8}: NumberVal(4),
+			{Col: 1, Row: 9}: NumberVal(5),
+			{Col: 2, Row: 1}: NumberVal(6),
+			{Col: 2, Row: 2}: NumberVal(19),
+			{Col: 2, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 4}: NumberVal(2),
+			{Col: 2, Row: 5}: NumberVal(14),
+			{Col: 2, Row: 6}: NumberVal(4),
+			{Col: 2, Row: 7}: NumberVal(5),
+			{Col: 2, Row: 8}: NumberVal(17),
+			{Col: 2, Row: 9}: NumberVal(1),
+		},
+	}
+
+	tests := []struct {
+		name      string
+		formula   string
+		wantNum   float64
+		wantError bool
+		wantErr   ErrorValue
+	}{
+		// --- Paired (type=1) ---
+		// Excel: T.TEST(A1:A9,B1:B9,2,1) = 0.196016 (paired, two-tailed)
+		{"paired_two_tailed", "T.TEST(A1:A9,B1:B9,2,1)", 0.196016, false, 0},
+		// Paired, one-tailed should be half of two-tailed.
+		{"paired_one_tailed", "T.TEST(A1:A9,B1:B9,1,1)", 0.098008, false, 0},
+
+		// --- Two-sample equal variance (type=2) ---
+		{"equal_var_two_tailed", "T.TEST(A1:A9,B1:B9,2,2)", 0.191996, false, 0},
+		{"equal_var_one_tailed", "T.TEST(A1:A9,B1:B9,1,2)", 0.095998, false, 0},
+
+		// --- Two-sample unequal variance (type=3) ---
+		{"unequal_var_two_tailed", "T.TEST(A1:A9,B1:B9,2,3)", 0.202294, false, 0},
+		{"unequal_var_one_tailed", "T.TEST(A1:A9,B1:B9,1,3)", 0.101147, false, 0},
+
+		// --- Array literals with non-degenerate data ---
+		{"literal_paired_2t", "T.TEST({1,3,5,7,9},{2,4,3,8,12},2,1)", 0.373901, false, 0},
+		{"literal_paired_1t", "T.TEST({1,3,5,7,9},{2,4,3,8,12},1,1)", 0.186950, false, 0},
+		{"literal_eq_var_2t", "T.TEST({1,3,5,7,9},{2,4,3,8,12},2,2)", 0.740439, false, 0},
+		{"literal_uneq_var_2t", "T.TEST({1,3,5,7,9},{2,4,3,8,12},2,3)", 0.741044, false, 0},
+
+		// --- Negative values mixed ---
+		{"negative_mixed_paired", "T.TEST({-2,0,3,-1,5},{1,-3,4,2,-1},2,1)", 0.832994, false, 0},
+		{"negative_mixed_eq_var", "T.TEST({-2,0,3,-1,5},{1,-3,4,2,-1},2,2)", 0.827607, false, 0},
+
+		// --- Different sized arrays for type 2 and 3 ---
+		{"diff_size_eq_var", "T.TEST({1,2,3,4,5},{10,20,30},2,2)", 0.007671, false, 0},
+		{"diff_size_uneq_var", "T.TEST({1,2,3,4,5},{10,20,30},2,3)", 0.096437, false, 0},
+
+		// --- Constant differences → sd=0 → #DIV/0! for paired ---
+		{"const_diff_paired", "T.TEST({1,2,3},{4,5,6},2,1)", 0, true, ErrValDIV0},
+
+		// --- Identical arrays ---
+		// Paired: all differences 0, sd=0 → #DIV/0!
+		{"identical_paired", "T.TEST(A1:A9,A1:A9,2,1)", 0, true, ErrValDIV0},
+		// Type=2: t=0 because means equal, but pooled variance non-zero → p=1.0
+		{"identical_eq_var", "T.TEST(A1:A9,A1:A9,2,2)", 1.0, false, 0},
+
+		// --- Constant arrays → sd=0 → #DIV/0! ---
+		{"const_arrays", "T.TEST({1,1,1},{100,100,100},2,2)", 0, true, ErrValDIV0},
+
+		// --- Error cases ---
+		// Wrong number of arguments.
+		{"too_few_args", "T.TEST(A1:A9,B1:B9,2)", 0, true, ErrValVALUE},
+		{"too_many_args", "T.TEST(A1:A9,B1:B9,2,1,1)", 0, true, ErrValVALUE},
+
+		// Non-numeric tails.
+		{"nonnumeric_tails", `T.TEST(A1:A9,B1:B9,"abc",1)`, 0, true, ErrValVALUE},
+		// Non-numeric type.
+		{"nonnumeric_type", `T.TEST(A1:A9,B1:B9,2,"abc")`, 0, true, ErrValVALUE},
+
+		// Invalid tails values.
+		{"tails_zero", "T.TEST(A1:A9,B1:B9,0,1)", 0, true, ErrValNUM},
+		{"tails_three", "T.TEST(A1:A9,B1:B9,3,1)", 0, true, ErrValNUM},
+
+		// Invalid type values.
+		{"type_zero", "T.TEST(A1:A9,B1:B9,2,0)", 0, true, ErrValNUM},
+		{"type_four", "T.TEST(A1:A9,B1:B9,2,4)", 0, true, ErrValNUM},
+
+		// Paired test with different length arrays → #N/A.
+		{"paired_diff_len", "T.TEST({1,2,3},{4,5},2,1)", 0, true, ErrValNA},
+
+		// Tails and type truncation (1.9 → 1, 2.7 → 2).
+		{"tails_truncated", "T.TEST(A1:A9,B1:B9,1.9,1)", 0.098008, false, 0},
+		{"type_truncated", "T.TEST(A1:A9,B1:B9,2,1.7)", 0.196016, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if tt.wantError {
+				if got.Type != ValueError {
+					t.Errorf("%s: want error %d, got type=%d num=%g", tt.formula, tt.wantErr, got.Type, got.Num)
+				} else if got.Err != tt.wantErr {
+					t.Errorf("%s: want err=%d, got err=%d", tt.formula, tt.wantErr, got.Err)
+				}
+				return
+			}
+			if got.Type != ValueError && got.Type != ValueNumber {
+				t.Fatalf("%s: want number, got type=%d", tt.formula, got.Type)
+			}
+			if got.Type == ValueError {
+				t.Fatalf("%s: unexpected error %d", tt.formula, got.Err)
+			}
+			if math.Abs(got.Num-tt.wantNum) > tol {
+				t.Errorf("%s = %g, want %g", tt.formula, got.Num, tt.wantNum)
+			}
+		})
+	}
+}
+
+func TestTTEST_SmallArrays(t *testing.T) {
+	resolver := &mockResolver{}
+
+	// Single element arrays → #DIV/0! (need at least 2).
+	cf := evalCompile(t, "T.TEST({1},{2},2,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("T.TEST single element: want #DIV/0!, got type=%d err=%d num=%g", got.Type, got.Err, got.Num)
+	}
+
+	// Empty arrays (type=2) → #DIV/0!
+	cf = evalCompile(t, `T.TEST({TRUE},{TRUE},2,2)`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("T.TEST empty arrays type=2: want #DIV/0!, got type=%d err=%d", got.Type, got.Err)
+	}
+
+	// Type=2 with single element → #DIV/0!
+	cf = evalCompile(t, "T.TEST({5},{10},2,2)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("T.TEST single element type=2: want #DIV/0!, got type=%d err=%d", got.Type, got.Err)
+	}
+
+	// Type=3 with single element → #DIV/0!
+	cf = evalCompile(t, "T.TEST({5},{10},2,3)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("T.TEST single element type=3: want #DIV/0!, got type=%d err=%d", got.Type, got.Err)
+	}
+}
+
+func TestTTEST_MixedNonNumeric(t *testing.T) {
+	// Array with booleans and text mixed in — collectNumeric skips non-numeric in arrays.
+	// Use data that doesn't produce constant differences.
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 1, Row: 4}: BoolVal(true),  // skipped by collectNumeric
+			{Col: 1, Row: 5}: StringVal("x"), // skipped by collectNumeric
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 2, Row: 2}: NumberVal(8),
+			{Col: 2, Row: 3}: NumberVal(4),
+			{Col: 2, Row: 4}: BoolVal(false), // skipped
+			{Col: 2, Row: 5}: StringVal("y"), // skipped
+		},
+	}
+
+	// After filtering: array1={1,3,5}, array2={2,8,4}. Type=2 (eq var), tails=2.
+	cf := evalCompile(t, "T.TEST(A1:A5,B1:B5,2,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+	if got.Type != ValueNumber {
+		t.Fatalf("want number, got type=%d err=%d", got.Type, got.Err)
+	}
+	// Verify it produces a valid probability.
+	if got.Num < 0 || got.Num > 1 {
+		t.Errorf("T.TEST with mixed non-numeric = %g, want value in [0,1]", got.Num)
+	}
+}

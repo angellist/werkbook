@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **408** Excel formula functions.
+Werkbook supports **409** Excel formula functions.
 
 | Function | Category | Tests |
 |----------|----------|------:|
@@ -357,6 +357,7 @@ Werkbook supports **408** Excel formula functions.
 | T.DIST.RT | Statistical | 18 |
 | T.INV | Statistical | 33 |
 | T.INV.2T | Statistical | 20 |
+| T.TEST | Statistical | 34 |
 | TAKE | Lookup & Reference | 30 |
 | TAN | Math & Trig | 23 |
 | TANH | Math & Trig | 27 |
@@ -415,7 +416,7 @@ Werkbook supports **408** Excel formula functions.
 
 # Unsupported Formulas
 
-The following **62** Excel functions are not yet supported.
+The following **61** Excel functions are not yet supported.
 
 | Function | Category |
 |----------|----------|
@@ -478,6 +479,5 @@ The following **62** Excel functions are not yet supported.
 | SEARCHB | Text |
 | SHEET | Information |
 | SHEETS | Information |
-| T.TEST | Statistical |
 | TREND | Statistical |
 | WEBSERVICE | Web |
