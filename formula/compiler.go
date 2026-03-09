@@ -139,9 +139,9 @@ func (c *compiler) compileNode(node Node) error {
 		sheet := n.From.Sheet
 		sheetEnd := n.From.SheetEnd
 		addr := RangeAddr{
-			Sheet:   sheet,
+			Sheet:    sheet,
 			SheetEnd: sheetEnd,
-			FromCol: n.From.Col, FromRow: n.From.Row,
+			FromCol:  n.From.Col, FromRow: n.From.Row,
 			ToCol: n.To.Col, ToRow: n.To.Row,
 		}
 		idx := c.addRange(addr)

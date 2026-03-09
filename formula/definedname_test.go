@@ -46,8 +46,8 @@ func TestExpandDefinedNames(t *testing.T) {
 
 func TestExpandDefinedNamesLocalScope(t *testing.T) {
 	names := []DefinedNameInfo{
-		{Name: "Rate", Value: "0.05", LocalSheetID: 0},       // local to sheet 0
-		{Name: "Rate", Value: "0.10", LocalSheetID: 1},       // local to sheet 1
+		{Name: "Rate", Value: "0.05", LocalSheetID: 0},               // local to sheet 0
+		{Name: "Rate", Value: "0.10", LocalSheetID: 1},               // local to sheet 1
 		{Name: "GlobalName", Value: "Sheet1!$B$2", LocalSheetID: -1}, // global
 	}
 

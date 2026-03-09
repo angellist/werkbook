@@ -2191,14 +2191,14 @@ func TestUNICHAR(t *testing.T) {
 		{"code_1", `UNICHAR(1)`, "\x01"},
 
 		// Unicode characters beyond ASCII
-		{"copyright", `UNICHAR(169)`, "\u00A9"},        // ©
-		{"euro_sign", `UNICHAR(8364)`, "\u20AC"},        // €
-		{"snowman", `UNICHAR(9731)`, "\u2603"},          // ☃
-		{"greek_alpha", `UNICHAR(945)`, "\u03B1"},       // α
-		{"cjk_char", `UNICHAR(20013)`, "\u4E2D"},       // 中
-		{"musical_note", `UNICHAR(9834)`, "\u266A"},     // ♪
-		{"infinity", `UNICHAR(8734)`, "\u221E"},         // ∞
-		{"check_mark", `UNICHAR(10003)`, "\u2713"},      // ✓
+		{"copyright", `UNICHAR(169)`, "\u00A9"},     // ©
+		{"euro_sign", `UNICHAR(8364)`, "\u20AC"},    // €
+		{"snowman", `UNICHAR(9731)`, "\u2603"},      // ☃
+		{"greek_alpha", `UNICHAR(945)`, "\u03B1"},   // α
+		{"cjk_char", `UNICHAR(20013)`, "\u4E2D"},    // 中
+		{"musical_note", `UNICHAR(9834)`, "\u266A"}, // ♪
+		{"infinity", `UNICHAR(8734)`, "\u221E"},     // ∞
+		{"check_mark", `UNICHAR(10003)`, "\u2713"},  // ✓
 
 		// Emoji (supplementary plane)
 		{"grinning_face", `UNICHAR(128512)`, "\U0001F600"}, // 😀
@@ -2247,9 +2247,9 @@ func TestUNICHAR(t *testing.T) {
 		{"too_large", `UNICHAR(1114112)`, ErrValVALUE},
 		{"very_large", `UNICHAR(9999999)`, ErrValVALUE},
 		// Surrogate code points → #N/A
-		{"surrogate_start", `UNICHAR(55296)`, ErrValNA},  // 0xD800
-		{"surrogate_mid", `UNICHAR(56000)`, ErrValNA},    // 0xDAC0
-		{"surrogate_end", `UNICHAR(57343)`, ErrValNA},    // 0xDFFF
+		{"surrogate_start", `UNICHAR(55296)`, ErrValNA}, // 0xD800
+		{"surrogate_mid", `UNICHAR(56000)`, ErrValNA},   // 0xDAC0
+		{"surrogate_end", `UNICHAR(57343)`, ErrValNA},   // 0xDFFF
 		// Non-numeric string → #VALUE!
 		{"non_numeric_string", `UNICHAR("hello")`, ErrValVALUE},
 		// Wrong number of args
@@ -4674,7 +4674,7 @@ func TestUNICODE(t *testing.T) {
 		{"grinning_face", `UNICODE("😀")`, 128512},
 
 		// Number coercion: numbers are converted to string first
-		{"number_1", `UNICODE(1)`, 49},    // "1" → 49
+		{"number_1", `UNICODE(1)`, 49},     // "1" → 49
 		{"number_123", `UNICODE(123)`, 49}, // "123" → first char "1" → 49
 		{"number_0", `UNICODE(0)`, 48},     // "0" → 48
 		{"number_9", `UNICODE(9)`, 57},     // "9" → 57

@@ -1,11 +1,12 @@
 // Script to regenerate FORMULAS.md from the source of truth:
-//   1. Supported functions = all Register() calls in formula/*.go
-//   2. Test counts = formula strings + TestFUNC_ patterns in *_test.go
-//   3. Unsupported functions = those in the known function list but not registered
+//  1. Supported functions = all Register() calls in formula/*.go
+//  2. Test counts = formula strings + TestFUNC_ patterns in *_test.go
+//  3. Unsupported functions = those in the known function list but not registered
 //
 // Usage: go run scripts/count_formula_tests.go [--check]
-//   (default) regenerate FORMULAS.md
-//   --check   exit 1 if FORMULAS.md would change (for CI)
+//
+//	(default) regenerate FORMULAS.md
+//	--check   exit 1 if FORMULAS.md would change (for CI)
 package main
 
 import (

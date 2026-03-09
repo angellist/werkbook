@@ -1289,9 +1289,9 @@ func TestHEX2BIN(t *testing.T) {
 			{"HEX2BIN(10)", "10000"},
 
 			// Negative numbers (two's complement hex → binary)
-			{`HEX2BIN("FFFFFFFFFF")`, "1111111111"},   // -1
-			{`HEX2BIN("FFFFFFFFFE")`, "1111111110"},   // -2
-			{`HEX2BIN("FFFFFFFE00")`, "1000000000"},   // -512
+			{`HEX2BIN("FFFFFFFFFF")`, "1111111111"}, // -1
+			{`HEX2BIN("FFFFFFFFFE")`, "1111111110"}, // -2
+			{`HEX2BIN("FFFFFFFE00")`, "1000000000"}, // -512
 
 			// Max positive
 			{`HEX2BIN("1FF")`, "111111111"}, // 511

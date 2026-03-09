@@ -5407,7 +5407,6 @@ func fnTTest(args []Value) (Value, error) {
 	return NumberVal(p), nil
 }
 
-
 // mean computes the arithmetic mean of a slice of floats.
 func mean(vals []float64) float64 {
 	s := 0.0

@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-
 func TestISBLANK(t *testing.T) {
 	t.Run("empty_cell_reference", func(t *testing.T) {
 		// ISBLANK should return TRUE for a reference to an empty cell.

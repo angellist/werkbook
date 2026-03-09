@@ -23996,15 +23996,15 @@ func TestZTEST_MixedTypes(t *testing.T) {
 	// Text values in ranges are ignored by collectNumeric.
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
-			{Col: 1, Row: 1}: NumberVal(3),
-			{Col: 1, Row: 2}: StringVal("hello"),
-			{Col: 1, Row: 3}: NumberVal(7),
-			{Col: 1, Row: 4}: NumberVal(8),
-			{Col: 1, Row: 5}: NumberVal(6),
-			{Col: 1, Row: 6}: NumberVal(5),
-			{Col: 1, Row: 7}: NumberVal(4),
-			{Col: 1, Row: 8}: NumberVal(2),
-			{Col: 1, Row: 9}: NumberVal(1),
+			{Col: 1, Row: 1}:  NumberVal(3),
+			{Col: 1, Row: 2}:  StringVal("hello"),
+			{Col: 1, Row: 3}:  NumberVal(7),
+			{Col: 1, Row: 4}:  NumberVal(8),
+			{Col: 1, Row: 5}:  NumberVal(6),
+			{Col: 1, Row: 6}:  NumberVal(5),
+			{Col: 1, Row: 7}:  NumberVal(4),
+			{Col: 1, Row: 8}:  NumberVal(2),
+			{Col: 1, Row: 9}:  NumberVal(1),
 			{Col: 1, Row: 10}: NumberVal(9),
 			{Col: 1, Row: 11}: BoolVal(true), // booleans ignored in ranges
 		},
@@ -24472,34 +24472,34 @@ func TestFTEST(t *testing.T) {
 	// A1:A5 = {6,7,9,15,21}  B1:B5 = {20,28,31,38,40}
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
-			{Col: 1, Row: 1}:  NumberVal(6),
-			{Col: 1, Row: 2}:  NumberVal(7),
-			{Col: 1, Row: 3}:  NumberVal(9),
-			{Col: 1, Row: 4}:  NumberVal(15),
-			{Col: 1, Row: 5}:  NumberVal(21),
-			{Col: 2, Row: 1}:  NumberVal(20),
-			{Col: 2, Row: 2}:  NumberVal(28),
-			{Col: 2, Row: 3}:  NumberVal(31),
-			{Col: 2, Row: 4}:  NumberVal(38),
-			{Col: 2, Row: 5}:  NumberVal(40),
+			{Col: 1, Row: 1}: NumberVal(6),
+			{Col: 1, Row: 2}: NumberVal(7),
+			{Col: 1, Row: 3}: NumberVal(9),
+			{Col: 1, Row: 4}: NumberVal(15),
+			{Col: 1, Row: 5}: NumberVal(21),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 2, Row: 2}: NumberVal(28),
+			{Col: 2, Row: 3}: NumberVal(31),
+			{Col: 2, Row: 4}: NumberVal(38),
+			{Col: 2, Row: 5}: NumberVal(40),
 			// C1:C3 = {5,5,5} (zero variance)
-			{Col: 3, Row: 1}:  NumberVal(5),
-			{Col: 3, Row: 2}:  NumberVal(5),
-			{Col: 3, Row: 3}:  NumberVal(5),
+			{Col: 3, Row: 1}: NumberVal(5),
+			{Col: 3, Row: 2}: NumberVal(5),
+			{Col: 3, Row: 3}: NumberVal(5),
 			// D1:D3 = {1,2,3}
-			{Col: 4, Row: 1}:  NumberVal(1),
-			{Col: 4, Row: 2}:  NumberVal(2),
-			{Col: 4, Row: 3}:  NumberVal(3),
+			{Col: 4, Row: 1}: NumberVal(1),
+			{Col: 4, Row: 2}: NumberVal(2),
+			{Col: 4, Row: 3}: NumberVal(3),
 			// E1:E3 = mixed types: 10, TRUE, "hello"
-			{Col: 5, Row: 1}:  NumberVal(10),
-			{Col: 5, Row: 2}:  BoolVal(true),
-			{Col: 5, Row: 3}:  StringVal("hello"),
+			{Col: 5, Row: 1}: NumberVal(10),
+			{Col: 5, Row: 2}: BoolVal(true),
+			{Col: 5, Row: 3}: StringVal("hello"),
 			// F1:F5 = {0,1,2,3,4} (zeros included)
-			{Col: 6, Row: 1}:  NumberVal(0),
-			{Col: 6, Row: 2}:  NumberVal(1),
-			{Col: 6, Row: 3}:  NumberVal(2),
-			{Col: 6, Row: 4}:  NumberVal(3),
-			{Col: 6, Row: 5}:  NumberVal(4),
+			{Col: 6, Row: 1}: NumberVal(0),
+			{Col: 6, Row: 2}: NumberVal(1),
+			{Col: 6, Row: 3}: NumberVal(2),
+			{Col: 6, Row: 4}: NumberVal(3),
+			{Col: 6, Row: 5}: NumberVal(4),
 			// G1:G10 = large array {1,2,...,10}
 			{Col: 7, Row: 1}:  NumberVal(1),
 			{Col: 7, Row: 2}:  NumberVal(2),
@@ -24654,7 +24654,7 @@ func TestFTEST_MixedNonNumeric(t *testing.T) {
 			{Col: 1, Row: 2}: NumberVal(5),
 			{Col: 1, Row: 3}: NumberVal(10),
 			{Col: 1, Row: 4}: BoolVal(true),   // skipped
-			{Col: 1, Row: 5}: StringVal("hi"),  // skipped
+			{Col: 1, Row: 5}: StringVal("hi"), // skipped
 			{Col: 2, Row: 1}: NumberVal(2),
 			{Col: 2, Row: 2}: NumberVal(6),
 			{Col: 2, Row: 3}: NumberVal(11),

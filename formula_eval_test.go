@@ -59,8 +59,8 @@ func TestTEXTWithStringFormatCell(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
 
-	s.SetValue("B1", "0.00")   // Format string that looks like a number
-	s.SetValue("C1", 12.344)   // Number to format
+	s.SetValue("B1", "0.00") // Format string that looks like a number
+	s.SetValue("C1", 12.344) // Number to format
 	s.SetFormula("A1", `TEXT(C1, B1)`)
 
 	val, err := s.GetValue("A1")
@@ -81,7 +81,7 @@ func TestArithmeticWithStringCell(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
 
-	s.SetValue("A1", "42")  // String that looks like a number
+	s.SetValue("A1", "42") // String that looks like a number
 	s.SetValue("A2", 8)
 	s.SetFormula("B1", "A1+A2")
 

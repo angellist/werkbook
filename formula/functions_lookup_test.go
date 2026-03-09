@@ -7998,8 +7998,8 @@ func TestHYPERLINK(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		formula string
+		name     string
+		formula  string
 		wantType ValueType
 		wantStr  string
 		wantNum  float64
@@ -8574,7 +8574,7 @@ func TestOFFSETBooleanCell(t *testing.T) {
 func TestOFFSETLargeOffset(t *testing.T) {
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
-			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 1}:     NumberVal(1),
 			{Col: 100, Row: 200}: NumberVal(999),
 		},
 	}

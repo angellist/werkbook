@@ -1051,18 +1051,18 @@ func TestMROUND(t *testing.T) {
 		{"pos_round_up", "MROUND(8,5)", 10, 0},
 		{"pos_exact", "MROUND(10,5)", 10, 0},
 		{"pos_round_nearest", "MROUND(13,5)", 15, 0},
-		{"pos_round_mid_away", "MROUND(7.5,5)", 10, 0},     // midpoint rounds away from zero
+		{"pos_round_mid_away", "MROUND(7.5,5)", 10, 0}, // midpoint rounds away from zero
 
 		// Negative rounding - both signs negative
 		{"neg_round_down", "MROUND(-7,-5)", -5, 0},
 		{"neg_round_up", "MROUND(-8,-5)", -10, 0},
 		{"neg_exact", "MROUND(-10,-5)", -10, 0},
 		{"neg_round_nearest", "MROUND(-13,-5)", -15, 0},
-		{"neg_round_mid_away", "MROUND(-7.5,-5)", -10, 0},  // midpoint rounds away from zero
+		{"neg_round_mid_away", "MROUND(-7.5,-5)", -10, 0}, // midpoint rounds away from zero
 
 		// Decimal multiples
-		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per docs
-		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10},  // midpoint with decimal multiple: direction undefined per docs
+		{"decimal_mult_1", "MROUND(1.05,0.1)", 1.1, 1e-10}, // midpoint with decimal multiple: direction undefined per docs
+		{"decimal_mult_2", "MROUND(1.15,0.1)", 1.1, 1e-10}, // midpoint with decimal multiple: direction undefined per docs
 		{"decimal_mult_3", "MROUND(0.5,0.25)", 0.5, 1e-10},
 		{"decimal_mult_4", "MROUND(0.6,0.25)", 0.5, 1e-10},
 		{"decimal_mult_5", "MROUND(0.63,0.25)", 0.75, 1e-10},
@@ -2866,17 +2866,17 @@ func TestMDETERM(t *testing.T) {
 
 		// 2x2 matrices
 		{"MDETERM({3,6;1,1})", -3, 0},
-		{"MDETERM({1,0;0,1})", 1, 0},    // identity
-		{"MDETERM({0,0;0,0})", 0, 0},    // zero matrix
-		{"MDETERM({2,0;0,3})", 6, 0},    // diagonal
-		{"MDETERM({1,2;2,4})", 0, 0},    // singular
-		{"MDETERM({-1,-2;3,4})", 2, 0},  // negative numbers
+		{"MDETERM({1,0;0,1})", 1, 0},   // identity
+		{"MDETERM({0,0;0,0})", 0, 0},   // zero matrix
+		{"MDETERM({2,0;0,3})", 6, 0},   // diagonal
+		{"MDETERM({1,2;2,4})", 0, 0},   // singular
+		{"MDETERM({-1,-2;3,4})", 2, 0}, // negative numbers
 
 		// 3x3 matrices
 		{"MDETERM({3,6,1;1,1,0;3,10,2})", 1, 1e-10},
-		{"MDETERM({1,0,0;0,1,0;0,0,1})", 1, 0},        // 3x3 identity
-		{"MDETERM({2,0,0;0,3,0;0,0,4})", 24, 1e-10},    // diagonal
-		{"MDETERM({1,2,3;4,5,6;7,8,9})", 0, 1e-10},     // singular
+		{"MDETERM({1,0,0;0,1,0;0,0,1})", 1, 0},      // 3x3 identity
+		{"MDETERM({2,0,0;0,3,0;0,0,4})", 24, 1e-10}, // diagonal
+		{"MDETERM({1,2,3;4,5,6;7,8,9})", 0, 1e-10},  // singular
 
 		// 4x4 matrix
 		{"MDETERM({1,3,8,5;1,3,6,1;1,1,1,0;7,3,10,2})", 88, 1e-10},
@@ -6496,18 +6496,18 @@ func TestFACTDOUBLE(t *testing.T) {
 		{"one", "FACTDOUBLE(1)", 1},
 		// Even numbers: n!! = n*(n-2)*(n-4)...(4)(2)
 		{"two", "FACTDOUBLE(2)", 2},
-		{"four", "FACTDOUBLE(4)", 8},        // 4*2
-		{"six", "FACTDOUBLE(6)", 48},        // 6*4*2
-		{"eight", "FACTDOUBLE(8)", 384},     // 8*6*4*2
-		{"ten", "FACTDOUBLE(10)", 3840},     // 10*8*6*4*2
+		{"four", "FACTDOUBLE(4)", 8},    // 4*2
+		{"six", "FACTDOUBLE(6)", 48},    // 6*4*2
+		{"eight", "FACTDOUBLE(8)", 384}, // 8*6*4*2
+		{"ten", "FACTDOUBLE(10)", 3840}, // 10*8*6*4*2
 		// Odd numbers: n!! = n*(n-2)*(n-4)...(3)(1)
-		{"three", "FACTDOUBLE(3)", 3},       // 3*1
-		{"five", "FACTDOUBLE(5)", 15},       // 5*3*1
-		{"seven", "FACTDOUBLE(7)", 105},     // 7*5*3*1
-		{"nine", "FACTDOUBLE(9)", 945},      // 9*7*5*3*1
+		{"three", "FACTDOUBLE(3)", 3},   // 3*1
+		{"five", "FACTDOUBLE(5)", 15},   // 5*3*1
+		{"seven", "FACTDOUBLE(7)", 105}, // 7*5*3*1
+		{"nine", "FACTDOUBLE(9)", 945},  // 9*7*5*3*1
 		// Larger values
-		{"fifteen", "FACTDOUBLE(15)", 2027025},     // 15*13*11*9*7*5*3*1
-		{"twenty", "FACTDOUBLE(20)", 3715891200},   // 20*18*16*14*12*10*8*6*4*2
+		{"fifteen", "FACTDOUBLE(15)", 2027025},   // 15*13*11*9*7*5*3*1
+		{"twenty", "FACTDOUBLE(20)", 3715891200}, // 20*18*16*14*12*10*8*6*4*2
 		// FACTDOUBLE(-1) = 1 by convention
 		{"negative_one", "FACTDOUBLE(-1)", 1},
 		// Decimal inputs — truncated to integer (doc: non-integer is truncated)
@@ -7768,8 +7768,8 @@ func TestSINH(t *testing.T) {
 
 		// Standard values
 		{"sinh_1", "SINH(1)", math.Sinh(1), 1e-10},       // ~1.1752
-		{"sinh_neg1", "SINH(-1)", math.Sinh(-1), 1e-10},   // ~-1.1752
-		{"sinh_0_5", "SINH(0.5)", math.Sinh(0.5), 1e-10},  // ~0.5211
+		{"sinh_neg1", "SINH(-1)", math.Sinh(-1), 1e-10},  // ~-1.1752
+		{"sinh_0_5", "SINH(0.5)", math.Sinh(0.5), 1e-10}, // ~0.5211
 		{"sinh_neg0_5", "SINH(-0.5)", math.Sinh(-0.5), 1e-10},
 
 		// Odd function: SINH(-x) = -SINH(x)
@@ -7777,8 +7777,8 @@ func TestSINH(t *testing.T) {
 		{"odd_3", "SINH(-3)", -math.Sinh(3), 1e-10},
 
 		// Larger values
-		{"sinh_5", "SINH(5)", math.Sinh(5), 1e-10},    // ~74.2032
-		{"sinh_10", "SINH(10)", math.Sinh(10), 1e-4},   // ~11013.2329
+		{"sinh_5", "SINH(5)", math.Sinh(5), 1e-10},   // ~74.2032
+		{"sinh_10", "SINH(10)", math.Sinh(10), 1e-4}, // ~11013.2329
 
 		// Small values (near-linear region: SINH(x) ~ x for small x)
 		{"sinh_small", "SINH(0.001)", math.Sinh(0.001), 1e-14},
@@ -9659,7 +9659,6 @@ func TestBASE(t *testing.T) {
 		})
 	}
 }
-
 
 func TestMULTINOMIAL(t *testing.T) {
 	resolver := &mockResolver{}

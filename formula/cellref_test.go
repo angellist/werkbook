@@ -136,8 +136,8 @@ func TestParseCellRefTokenOutOfRange(t *testing.T) {
 	}{
 		{"col_too_large", "AAAA1"},           // 4 letters → col > 16384
 		{"col_beyond_xfd", "XFE1"},           // one past XFD
-		{"row_too_large", "A1048577"},         // one past max row
-		{"row_way_too_large", "A9999999999"},  // very large row
+		{"row_too_large", "A1048577"},        // one past max row
+		{"row_way_too_large", "A9999999999"}, // very large row
 	}
 
 	for _, tt := range tests {

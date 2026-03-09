@@ -1643,43 +1643,43 @@ func TestWEEKNUM(t *testing.T) {
 		{"doc_example_rt2", "WEEKNUM(DATE(2012,3,9),2)", 11, false, 0},
 
 		// Default return_type (1 = Sunday start)
-		{"jan1_2023_default", "WEEKNUM(DATE(2023,1,1))", 1, false, 0},             // Jan 1, 2023 (Sunday)
-		{"jan1_2024_default", "WEEKNUM(DATE(2024,1,1))", 1, false, 0},             // Jan 1, 2024 (Monday)
-		{"dec31_2023_default", "WEEKNUM(DATE(2023,12,31))", 53, false, 0},         // Dec 31, 2023 (Sunday)
-		{"dec31_2024_default", "WEEKNUM(DATE(2024,12,31))", 53, false, 0},         // Dec 31, 2024 (Tuesday)
-		{"jun15_2023_default", "WEEKNUM(DATE(2023,6,15))", 24, false, 0},          // Jun 15, 2023 (Thursday)
-		{"jan7_2023_sat_default", "WEEKNUM(DATE(2023,1,7))", 1, false, 0},         // Jan 7, 2023 (Saturday) - last day of week 1
-		{"jan8_2023_sun_default", "WEEKNUM(DATE(2023,1,8))", 2, false, 0},         // Jan 8, 2023 (Sunday) - first day of week 2
+		{"jan1_2023_default", "WEEKNUM(DATE(2023,1,1))", 1, false, 0},     // Jan 1, 2023 (Sunday)
+		{"jan1_2024_default", "WEEKNUM(DATE(2024,1,1))", 1, false, 0},     // Jan 1, 2024 (Monday)
+		{"dec31_2023_default", "WEEKNUM(DATE(2023,12,31))", 53, false, 0}, // Dec 31, 2023 (Sunday)
+		{"dec31_2024_default", "WEEKNUM(DATE(2024,12,31))", 53, false, 0}, // Dec 31, 2024 (Tuesday)
+		{"jun15_2023_default", "WEEKNUM(DATE(2023,6,15))", 24, false, 0},  // Jun 15, 2023 (Thursday)
+		{"jan7_2023_sat_default", "WEEKNUM(DATE(2023,1,7))", 1, false, 0}, // Jan 7, 2023 (Saturday) - last day of week 1
+		{"jan8_2023_sun_default", "WEEKNUM(DATE(2023,1,8))", 2, false, 0}, // Jan 8, 2023 (Sunday) - first day of week 2
 
 		// return_type 2 (Monday start)
-		{"jan1_2023_rt2", "WEEKNUM(DATE(2023,1,1),2)", 1, false, 0},              // Jan 1, 2023 (Sunday)
-		{"jan2_2023_rt2", "WEEKNUM(DATE(2023,1,2),2)", 2, false, 0},              // Jan 2, 2023 (Monday) - new week
-		{"jun15_2023_rt2", "WEEKNUM(DATE(2023,6,15),2)", 25, false, 0},           // Jun 15, 2023 (Thursday)
-		{"jul4_2023_rt2", "WEEKNUM(DATE(2023,7,4),2)", 28, false, 0},             // Jul 4, 2023 (Tuesday)
+		{"jan1_2023_rt2", "WEEKNUM(DATE(2023,1,1),2)", 1, false, 0},    // Jan 1, 2023 (Sunday)
+		{"jan2_2023_rt2", "WEEKNUM(DATE(2023,1,2),2)", 2, false, 0},    // Jan 2, 2023 (Monday) - new week
+		{"jun15_2023_rt2", "WEEKNUM(DATE(2023,6,15),2)", 25, false, 0}, // Jun 15, 2023 (Thursday)
+		{"jul4_2023_rt2", "WEEKNUM(DATE(2023,7,4),2)", 28, false, 0},   // Jul 4, 2023 (Tuesday)
 
 		// return_type 21 (ISO week, Monday start, System 2)
-		{"jan1_2023_iso", "WEEKNUM(DATE(2023,1,1),21)", 52, false, 0},            // Jan 1, 2023 (Sun) -> ISO week 52 of 2022
-		{"jan1_2024_iso", "WEEKNUM(DATE(2024,1,1),21)", 1, false, 0},             // Jan 1, 2024 (Mon) -> ISO week 1
-		{"dec31_2023_iso", "WEEKNUM(DATE(2023,12,31),21)", 52, false, 0},         // Dec 31, 2023 -> ISO week 52
-		{"dec31_2024_iso", "WEEKNUM(DATE(2024,12,31),21)", 1, false, 0},          // Dec 31, 2024 (Tue) -> ISO week 1 of 2025
-		{"jan1_2021_iso", "WEEKNUM(DATE(2021,1,1),21)", 53, false, 0},            // Jan 1, 2021 (Fri) -> ISO week 53 of 2020
+		{"jan1_2023_iso", "WEEKNUM(DATE(2023,1,1),21)", 52, false, 0},    // Jan 1, 2023 (Sun) -> ISO week 52 of 2022
+		{"jan1_2024_iso", "WEEKNUM(DATE(2024,1,1),21)", 1, false, 0},     // Jan 1, 2024 (Mon) -> ISO week 1
+		{"dec31_2023_iso", "WEEKNUM(DATE(2023,12,31),21)", 52, false, 0}, // Dec 31, 2023 -> ISO week 52
+		{"dec31_2024_iso", "WEEKNUM(DATE(2024,12,31),21)", 1, false, 0},  // Dec 31, 2024 (Tue) -> ISO week 1 of 2025
+		{"jan1_2021_iso", "WEEKNUM(DATE(2021,1,1),21)", 53, false, 0},    // Jan 1, 2021 (Fri) -> ISO week 53 of 2020
 
 		// Various return_type values (other week start days) - Mar 1, 2023 (Wednesday)
-		{"mar1_2023_rt11", "WEEKNUM(DATE(2023,3,1),11)", 10, false, 0},           // rt 11 = Monday start
-		{"mar1_2023_rt12", "WEEKNUM(DATE(2023,3,1),12)", 10, false, 0},           // rt 12 = Tuesday start
-		{"mar1_2023_rt13", "WEEKNUM(DATE(2023,3,1),13)", 10, false, 0},           // rt 13 = Wednesday start
-		{"mar1_2023_rt14", "WEEKNUM(DATE(2023,3,1),14)", 9, false, 0},            // rt 14 = Thursday start
-		{"mar1_2023_rt15", "WEEKNUM(DATE(2023,3,1),15)", 9, false, 0},            // rt 15 = Friday start
-		{"mar1_2023_rt16", "WEEKNUM(DATE(2023,3,1),16)", 9, false, 0},            // rt 16 = Saturday start
-		{"mar1_2023_rt17", "WEEKNUM(DATE(2023,3,1),17)", 9, false, 0},            // rt 17 = Sunday start (same as 1)
+		{"mar1_2023_rt11", "WEEKNUM(DATE(2023,3,1),11)", 10, false, 0}, // rt 11 = Monday start
+		{"mar1_2023_rt12", "WEEKNUM(DATE(2023,3,1),12)", 10, false, 0}, // rt 12 = Tuesday start
+		{"mar1_2023_rt13", "WEEKNUM(DATE(2023,3,1),13)", 10, false, 0}, // rt 13 = Wednesday start
+		{"mar1_2023_rt14", "WEEKNUM(DATE(2023,3,1),14)", 9, false, 0},  // rt 14 = Thursday start
+		{"mar1_2023_rt15", "WEEKNUM(DATE(2023,3,1),15)", 9, false, 0},  // rt 15 = Friday start
+		{"mar1_2023_rt16", "WEEKNUM(DATE(2023,3,1),16)", 9, false, 0},  // rt 16 = Saturday start
+		{"mar1_2023_rt17", "WEEKNUM(DATE(2023,3,1),17)", 9, false, 0},  // rt 17 = Sunday start (same as 1)
 
 		// Leap year date
-		{"leap_day_2024", "WEEKNUM(DATE(2024,2,29))", 9, false, 0},               // Feb 29, 2024 (Thursday)
+		{"leap_day_2024", "WEEKNUM(DATE(2024,2,29))", 9, false, 0}, // Feb 29, 2024 (Thursday)
 
 		// Dec 31 / year boundary edge cases
-		{"dec31_2020_default", "WEEKNUM(DATE(2020,12,31))", 53, false, 0},        // Dec 31, 2020 (Thursday)
-		{"dec31_2020_rt14", "WEEKNUM(DATE(2020,12,31),14)", 54, false, 0},        // rt 14 = Thursday start -> week 54
-		{"jan1_2025_default", "WEEKNUM(DATE(2025,1,1))", 1, false, 0},            // Jan 1, 2025 (Wednesday)
+		{"dec31_2020_default", "WEEKNUM(DATE(2020,12,31))", 53, false, 0}, // Dec 31, 2020 (Thursday)
+		{"dec31_2020_rt14", "WEEKNUM(DATE(2020,12,31),14)", 54, false, 0}, // rt 14 = Thursday start -> week 54
+		{"jan1_2025_default", "WEEKNUM(DATE(2025,1,1))", 1, false, 0},     // Jan 1, 2025 (Wednesday)
 
 		// Error cases: wrong argument count
 		{"no_args", "WEEKNUM()", 0, true, ErrValVALUE},

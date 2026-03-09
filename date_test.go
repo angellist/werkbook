@@ -61,10 +61,10 @@ func TestSerialToTimeExported(t *testing.T) {
 
 func TestIsDateFormat(t *testing.T) {
 	tests := []struct {
-		name    string
-		numFmt  string
+		name     string
+		numFmt   string
 		numFmtID int
-		want    bool
+		want     bool
 	}{
 		{"built-in 14", "", 14, true},
 		{"built-in 22", "", 22, true},

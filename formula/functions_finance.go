@@ -2838,7 +2838,7 @@ func durationCalc(settlement, maturity, coupon, yld float64, freq, basis int) fl
 	// Fraction of the first coupon period remaining.
 	accruedFrac := dsc / e
 
-	yf := yld / float64(freq)   // yield per period
+	yf := yld / float64(freq)    // yield per period
 	cf := coupon / float64(freq) // coupon per period (as rate)
 
 	var numerator, denominator float64

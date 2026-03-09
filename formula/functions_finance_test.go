@@ -198,59 +198,59 @@ func TestPMT_Comprehensive(t *testing.T) {
 
 		// --- Error: too few arguments ---
 		{
-			name: "error: too few args (2)",
-			args: numArgs(0.05, 12),
+			name:    "error: too few args (2)",
+			args:    numArgs(0.05, 12),
 			wantErr: true,
 		},
 		{
-			name: "error: too few args (0)",
-			args: []Value{},
+			name:    "error: too few args (0)",
+			args:    []Value{},
 			wantErr: true,
 		},
 
 		// --- Error: too many arguments ---
 		{
-			name: "error: too many args (6)",
-			args: numArgs(0.05, 12, 1000, 0, 0, 0),
+			name:    "error: too many args (6)",
+			args:    numArgs(0.05, 12, 1000, 0, 0, 0),
 			wantErr: true,
 		},
 
 		// --- Error: non-numeric ---
 		{
-			name: "error: non-numeric rate",
-			args: []Value{StringVal("abc"), NumberVal(12), NumberVal(1000)},
+			name:    "error: non-numeric rate",
+			args:    []Value{StringVal("abc"), NumberVal(12), NumberVal(1000)},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric nper",
-			args: []Value{NumberVal(0.05), StringVal("xyz"), NumberVal(1000)},
+			name:    "error: non-numeric nper",
+			args:    []Value{NumberVal(0.05), StringVal("xyz"), NumberVal(1000)},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric pv",
-			args: []Value{NumberVal(0.05), NumberVal(12), StringVal("bad")},
+			name:    "error: non-numeric pv",
+			args:    []Value{NumberVal(0.05), NumberVal(12), StringVal("bad")},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric fv",
-			args: []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), StringVal("no")},
+			name:    "error: non-numeric fv",
+			args:    []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), StringVal("no")},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric type",
-			args: []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), NumberVal(0), StringVal("x")},
+			name:    "error: non-numeric type",
+			args:    []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), NumberVal(0), StringVal("x")},
 			wantErr: true,
 		},
 
 		// --- Error propagation ---
 		{
-			name: "error propagation in rate",
-			args: []Value{ErrorVal(ErrValNUM), NumberVal(12), NumberVal(1000)},
+			name:    "error propagation in rate",
+			args:    []Value{ErrorVal(ErrValNUM), NumberVal(12), NumberVal(1000)},
 			wantErr: true,
 		},
 		{
-			name: "error propagation in fv",
-			args: []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), ErrorVal(ErrValREF)},
+			name:    "error propagation in fv",
+			args:    []Value{NumberVal(0.05), NumberVal(12), NumberVal(1000), ErrorVal(ErrValREF)},
 			wantErr: true,
 		},
 	}
@@ -436,7 +436,7 @@ func TestFV_Comprehensive(t *testing.T) {
 		},
 		{
 			name: "string coercion type",
-			args: []Value{NumberVal(0.06/12), NumberVal(12), NumberVal(-100), NumberVal(0), StringVal("1")},
+			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), StringVal("1")},
 			want: 1239.72,
 		},
 	}
@@ -648,7 +648,7 @@ func TestPV_Comprehensive(t *testing.T) {
 		},
 		{
 			name: "string coercion type",
-			args: []Value{NumberVal(0.06/12), NumberVal(12), NumberVal(-100), NumberVal(0), StringVal("1")},
+			args: []Value{NumberVal(0.06 / 12), NumberVal(12), NumberVal(-100), NumberVal(0), StringVal("1")},
 			want: 1167.70,
 		},
 	}
@@ -782,8 +782,8 @@ func TestNPER_Comprehensive(t *testing.T) {
 			want: 30,
 		},
 		{
-			name: "zero rate: pmt=0 should error",
-			args: numArgs(0, 0, 1000),
+			name:    "zero rate: pmt=0 should error",
+			args:    numArgs(0, 0, 1000),
 			wantErr: true,
 		},
 
@@ -848,37 +848,37 @@ func TestNPER_Comprehensive(t *testing.T) {
 
 		// --- Error: too few args ---
 		{
-			name: "error: too few args (2)",
-			args: numArgs(0.01, -100),
+			name:    "error: too few args (2)",
+			args:    numArgs(0.01, -100),
 			wantErr: true,
 		},
 		{
-			name: "error: too few args (1)",
-			args: numArgs(0.01),
+			name:    "error: too few args (1)",
+			args:    numArgs(0.01),
 			wantErr: true,
 		},
 
 		// --- Error: too many args ---
 		{
-			name: "error: too many args (6)",
-			args: numArgs(0.01, -100, 1000, 0, 0, 99),
+			name:    "error: too many args (6)",
+			args:    numArgs(0.01, -100, 1000, 0, 0, 99),
 			wantErr: true,
 		},
 
 		// --- Error: non-numeric ---
 		{
-			name: "error: non-numeric rate",
-			args: []Value{StringVal("abc"), NumberVal(-100), NumberVal(1000)},
+			name:    "error: non-numeric rate",
+			args:    []Value{StringVal("abc"), NumberVal(-100), NumberVal(1000)},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric pmt",
-			args: []Value{NumberVal(0.01), StringVal("xyz"), NumberVal(1000)},
+			name:    "error: non-numeric pmt",
+			args:    []Value{NumberVal(0.01), StringVal("xyz"), NumberVal(1000)},
 			wantErr: true,
 		},
 		{
-			name: "error: non-numeric pv",
-			args: []Value{NumberVal(0.01), NumberVal(-100), StringVal("bad")},
+			name:    "error: non-numeric pv",
+			args:    []Value{NumberVal(0.01), NumberVal(-100), StringVal("bad")},
 			wantErr: true,
 		},
 	}
@@ -1007,16 +1007,16 @@ func TestRATE_Comprehensive(t *testing.T) {
 		},
 		// --- Negative nper → #NUM! ---
 		{
-			name: "negative nper",
-			args: numArgs(-12, -100, 1000),
-			want: 0,
+			name:    "negative nper",
+			args:    numArgs(-12, -100, 1000),
+			want:    0,
 			wantErr: true,
 		},
 		// --- Zero nper → #NUM! ---
 		{
-			name: "zero nper",
-			args: numArgs(0, -100, 1000),
-			want: 0,
+			name:    "zero nper",
+			args:    numArgs(0, -100, 1000),
+			want:    0,
 			wantErr: true,
 		},
 	}
@@ -1852,7 +1852,7 @@ func TestIRR_LowReturnRate(t *testing.T) {
 		flows[i] = NumberVal(1001)
 	}
 	arr := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{flows},
 	}
 	v, err := fnIRR([]Value{arr})
@@ -1891,7 +1891,7 @@ func TestIRR_MonthlyCashFlows(t *testing.T) {
 		flows[i] = NumberVal(900)
 	}
 	arr := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{flows},
 	}
 	v, err := fnIRR([]Value{arr})
@@ -1936,7 +1936,7 @@ func TestIRR_LargeNumberOfPeriods(t *testing.T) {
 		flows[i] = NumberVal(1200)
 	}
 	arr := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{flows},
 	}
 	v, err := fnIRR([]Value{arr})
@@ -2021,7 +2021,7 @@ func TestIRR_EmptyGuessIgnored(t *testing.T) {
 			{NumberVal(-10000), NumberVal(3000), NumberVal(4200), NumberVal(6800)},
 		},
 	}
-	v, err := fnIRR([]Value{arr, Value{Type: ValueEmpty}})
+	v, err := fnIRR([]Value{arr, {Type: ValueEmpty}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2504,11 +2504,11 @@ func TestXNPV_NegativeRate(t *testing.T) {
 func TestXNPV_EmptyArrays(t *testing.T) {
 	// Empty arrays → #NUM!
 	vals := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{{}},
 	}
 	dates := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{{}},
 	}
 	v, _ := fnXNPV([]Value{NumberVal(0.05), vals, dates})
@@ -4124,11 +4124,11 @@ func TestXIRR_MonthlyCashFlows(t *testing.T) {
 		cfDates = append(cfDates, NumberVal(39448+float64(i*30)))
 	}
 	vals := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{cfVals},
 	}
 	dates := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{cfDates},
 	}
 	v, err := fnXIRR([]Value{vals, dates})
@@ -4788,7 +4788,7 @@ func TestMIRR_BothRatesZero(t *testing.T) {
 
 func TestMIRR_EmptyValuesSkipped(t *testing.T) {
 	arr := Value{
-		Type: ValueArray,
+		Type:  ValueArray,
 		Array: [][]Value{{NumberVal(-100), {Type: ValueEmpty}, NumberVal(110)}},
 	}
 	v, err := fnMirr([]Value{arr, NumberVal(0.1), NumberVal(0.1)})
@@ -9698,10 +9698,10 @@ func TestYIELD_ViaEval(t *testing.T) {
 // TestPRICE_YIELD_RoundTrip verifies that YIELD(PRICE(yld)) ≈ yld for various inputs.
 func TestPRICE_YIELD_RoundTrip(t *testing.T) {
 	type roundTrip struct {
-		name                          string
-		settlement, maturity          float64
-		rate, yld, redemption         float64
-		freq, basis                   int
+		name                  string
+		settlement, maturity  float64
+		rate, yld, redemption float64
+		freq, basis           int
 	}
 
 	trips := []roundTrip{
@@ -10066,20 +10066,20 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 		},
 		// --- Rate giving life < 1 (#NUM!) ---
 		{
-			name: "rate 2.0 life 0.5 NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 0, 2.0, 1),
+			name:    "rate 2.0 life 0.5 NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 0, 2.0, 1),
 			wantErr: true,
 		},
 		// --- Rate giving life 1-2 (#NUM!) ---
 		{
-			name: "rate 0.7 life 1.43 NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 0, 0.7, 1),
+			name:    "rate 0.7 life 1.43 NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 0, 0.7, 1),
 			wantErr: true,
 		},
 		// --- Rate giving life = 2 exactly (#NUM!) ---
 		{
-			name: "rate 0.5 life 2.0 NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 0, 0.5, 1),
+			name:    "rate 0.5 life 2.0 NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 0, 0.5, 1),
 			wantErr: true,
 		},
 		// --- Rate giving life 2.5 (accepted, coeff=1.5) ---
@@ -10091,8 +10091,8 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 		},
 		// --- Basis 2 not supported (#NUM!) ---
 		{
-			name: "basis 2 not supported NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 2),
+			name:    "basis 2 not supported NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, 2),
 			wantErr: true,
 		},
 		// --- Basis 0 (US NASD 30/360) ---
@@ -10140,38 +10140,38 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 		},
 		// --- Negative cost (#NUM!) ---
 		{
-			name: "negative cost NUM error",
-			args: numArgs(-2400, 39679, 39813, 300, 1, 0.15, 1),
+			name:    "negative cost NUM error",
+			args:    numArgs(-2400, 39679, 39813, 300, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// --- Negative salvage (#NUM!) ---
 		{
-			name: "negative salvage NUM error",
-			args: numArgs(2400, 39679, 39813, -300, 1, 0.15, 1),
+			name:    "negative salvage NUM error",
+			args:    numArgs(2400, 39679, 39813, -300, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// --- Salvage > cost (#NUM!) ---
 		{
-			name: "salvage exceeds cost NUM error",
-			args: numArgs(2400, 39679, 39813, 3000, 1, 0.15, 1),
+			name:    "salvage exceeds cost NUM error",
+			args:    numArgs(2400, 39679, 39813, 3000, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// --- Negative period (#NUM!) ---
 		{
-			name: "negative period NUM error",
-			args: numArgs(2400, 39679, 39813, 300, -1, 0.15, 1),
+			name:    "negative period NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, -1, 0.15, 1),
 			wantErr: true,
 		},
 		// --- Negative rate (#NUM!) ---
 		{
-			name: "negative rate NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, -0.15, 1),
+			name:    "negative rate NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, -0.15, 1),
 			wantErr: true,
 		},
 		// --- Zero rate (#NUM!) ---
 		{
-			name: "zero rate NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0, 1),
+			name:    "zero rate NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0, 1),
 			wantErr: true,
 		},
 		// --- Period beyond asset life returns 0 ---
@@ -10182,14 +10182,14 @@ func TestAMORDEGRC_Comprehensive(t *testing.T) {
 		},
 		// --- Invalid basis 5 (#NUM!) ---
 		{
-			name: "basis 5 invalid NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 5),
+			name:    "basis 5 invalid NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, 5),
 			wantErr: true,
 		},
 		// --- Invalid basis -1 (#NUM!) ---
 		{
-			name: "basis negative invalid NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, -1),
+			name:    "basis negative invalid NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, -1),
 			wantErr: true,
 		},
 	}
@@ -10429,12 +10429,12 @@ func TestAMORLINC_Comprehensive(t *testing.T) {
 		},
 		// --- Zero cost → #NUM! ---
 		{
-			name: "zero cost period 0",
+			name:    "zero cost period 0",
 			args:    numArgs(0, 39679, 39813, 0, 0, 0.15, 1),
 			wantErr: true,
 		},
 		{
-			name: "zero cost period 1",
+			name:    "zero cost period 1",
 			args:    numArgs(0, 39679, 39813, 0, 1, 0.15, 1),
 			wantErr: true,
 		},
@@ -10452,56 +10452,56 @@ func TestAMORLINC_Comprehensive(t *testing.T) {
 		// --- Error cases ---
 		// Negative cost
 		{
-			name: "negative cost NUM error",
-			args: numArgs(-2400, 39679, 39813, 300, 1, 0.15, 1),
+			name:    "negative cost NUM error",
+			args:    numArgs(-2400, 39679, 39813, 300, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// Negative salvage
 		{
-			name: "negative salvage NUM error",
-			args: numArgs(2400, 39679, 39813, -300, 1, 0.15, 1),
+			name:    "negative salvage NUM error",
+			args:    numArgs(2400, 39679, 39813, -300, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// Salvage > cost
 		{
-			name: "salvage exceeds cost NUM error",
-			args: numArgs(2400, 39679, 39813, 3000, 1, 0.15, 1),
+			name:    "salvage exceeds cost NUM error",
+			args:    numArgs(2400, 39679, 39813, 3000, 1, 0.15, 1),
 			wantErr: true,
 		},
 		// Negative period
 		{
-			name: "negative period NUM error",
-			args: numArgs(2400, 39679, 39813, 300, -1, 0.15, 1),
+			name:    "negative period NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, -1, 0.15, 1),
 			wantErr: true,
 		},
 		// Negative rate
 		{
-			name: "negative rate NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, -0.15, 1),
+			name:    "negative rate NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, -0.15, 1),
 			wantErr: true,
 		},
 		// Zero rate
 		{
-			name: "zero rate NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0, 1),
+			name:    "zero rate NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0, 1),
 			wantErr: true,
 		},
 		// Invalid basis 2
 		{
-			name: "basis 2 invalid NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 2),
+			name:    "basis 2 invalid NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, 2),
 			wantErr: true,
 		},
 		// Invalid basis 5
 		{
-			name: "basis 5 invalid NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, 5),
+			name:    "basis 5 invalid NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, 5),
 			wantErr: true,
 		},
 		// Invalid basis -1
 		{
-			name: "basis negative invalid NUM error",
-			args: numArgs(2400, 39679, 39813, 300, 1, 0.15, -1),
+			name:    "basis negative invalid NUM error",
+			args:    numArgs(2400, 39679, 39813, 300, 1, 0.15, -1),
 			wantErr: true,
 		},
 		// Period far beyond life

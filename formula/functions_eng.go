@@ -1381,17 +1381,17 @@ var convertMass = convertCategory{
 var convertDistance = convertCategory{
 	name: "distance",
 	units: map[string]float64{
-		"m":    1,
-		"km":   1e3,
-		"mi":   1609.344,
-		"yd":   0.9144,
-		"ft":   0.3048,
-		"in":   0.0254,
-		"Nmi":  1852,
-		"ang":  1e-10,
-		"Pica": 0.0254 / 72 * 6, // 1 Pica = 1/6 inch (PostScript pica)
-		"ell":  1.143,
-		"ly":   9.46073047258e15,
+		"m":         1,
+		"km":        1e3,
+		"mi":        1609.344,
+		"yd":        0.9144,
+		"ft":        0.3048,
+		"in":        0.0254,
+		"Nmi":       1852,
+		"ang":       1e-10,
+		"Pica":      0.0254 / 72 * 6, // 1 Pica = 1/6 inch (PostScript pica)
+		"ell":       1.143,
+		"ly":        9.46073047258e15,
 		"survey_mi": 1609.3472186944373,
 	},
 }

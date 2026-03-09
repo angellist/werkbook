@@ -1567,12 +1567,12 @@ func formatNumberSection(n float64, format string) string {
 	}
 
 	// Count integer and decimal digit placeholders.
-	intZeros := 0   // minimum integer digits (from '0')
-	intDigits := 0  // total integer placeholders (from '0', '#', '?')
-	intSpaces := 0  // integer '?' count (space-padded positions)
-	decZeros := 0   // decimal '0' count
-	decHashes := 0  // decimal '#' count
-	decSpaces := 0  // decimal '?' count
+	intZeros := 0  // minimum integer digits (from '0')
+	intDigits := 0 // total integer placeholders (from '0', '#', '?')
+	intSpaces := 0 // integer '?' count (space-padded positions)
+	decZeros := 0  // decimal '0' count
+	decHashes := 0 // decimal '#' count
+	decSpaces := 0 // decimal '?' count
 
 	inDecimal := false
 	for _, tok := range tokens {
@@ -1844,13 +1844,13 @@ type numFmtTokenKind byte
 
 const (
 	tokLiteral    numFmtTokenKind = iota
-	tokDigit                       // '0' — required digit
-	tokDigitOpt                    // '#' — optional digit
-	tokDigitSpace                  // '?' — digit padded with space
-	tokDecimal                  // '.'
-	tokComma                    // ','
-	tokPercent                  // '%'
-	tokExponent                 // 'E+' or 'E-'
+	tokDigit                      // '0' — required digit
+	tokDigitOpt                   // '#' — optional digit
+	tokDigitSpace                 // '?' — digit padded with space
+	tokDecimal                    // '.'
+	tokComma                      // ','
+	tokPercent                    // '%'
+	tokExponent                   // 'E+' or 'E-'
 )
 
 type numFmtToken struct {
