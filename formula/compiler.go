@@ -278,6 +278,14 @@ func (c *compiler) compileNode(node Node) error {
 			c.emit(OpEnterArrayCtx, 0)
 		}
 		for _, arg := range n.Args {
+			if !arrayCtx && PreservesDirectRangeArgs(name) && preservesDirectRangeArg(arg) {
+				c.emit(OpEnterArrayCtx, 0)
+				if err := c.compileNode(arg); err != nil {
+					return err
+				}
+				c.emit(OpLeaveArrayCtx, 0)
+				continue
+			}
 			if err := c.compileNode(arg); err != nil {
 				return err
 			}
@@ -342,4 +350,9 @@ func binaryOpCode(op string) (OpCode, error) {
 	default:
 		return 0, fmt.Errorf("unknown binary operator %q", op)
 	}
+}
+
+func preservesDirectRangeArg(node Node) bool {
+	_, ok := node.(*RangeRef)
+	return ok
 }

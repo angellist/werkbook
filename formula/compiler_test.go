@@ -283,15 +283,22 @@ func TestCompileArrayLit(t *testing.T) {
 
 func TestCompileComplexSUM(t *testing.T) {
 	cf := compileFormula(t, "SUM(A1:A10)")
-	// LoadRange, Call
-	if len(cf.Code) != 2 {
-		t.Fatalf("expected 2 instructions, got %d", len(cf.Code))
+	// Direct range arguments are wrapped so full-row/full-column references
+	// are preserved instead of being implicitly intersected in scalar formulas.
+	if len(cf.Code) != 4 {
+		t.Fatalf("expected 4 instructions, got %d", len(cf.Code))
 	}
-	if cf.Code[0].Op != OpLoadRange {
-		t.Errorf("code[0] = %s, want LoadRange", cf.Code[0].Op)
+	if cf.Code[0].Op != OpEnterArrayCtx {
+		t.Errorf("code[0] = %s, want EnterArrayCtx", cf.Code[0].Op)
 	}
-	if cf.Code[1].Op != OpCall {
-		t.Errorf("code[1] = %s, want Call", cf.Code[1].Op)
+	if cf.Code[1].Op != OpLoadRange {
+		t.Errorf("code[1] = %s, want LoadRange", cf.Code[1].Op)
+	}
+	if cf.Code[2].Op != OpLeaveArrayCtx {
+		t.Errorf("code[2] = %s, want LeaveArrayCtx", cf.Code[2].Op)
+	}
+	if cf.Code[3].Op != OpCall {
+		t.Errorf("code[3] = %s, want Call", cf.Code[3].Op)
 	}
 }
 
