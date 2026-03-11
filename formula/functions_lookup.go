@@ -416,6 +416,7 @@ func fnINDEX(args []Value) (Value, error) {
 	if arr.Type != ValueArray {
 		return arr, nil
 	}
+	rows, cols := indexArrayBounds(arr)
 	rowNum, e := CoerceNum(args[1])
 	if e != nil {
 		return *e, nil
@@ -430,7 +431,7 @@ func fnINDEX(args []Value) (Value, error) {
 			return *e, nil
 		}
 		colNum = int(cn)
-	} else if len(arr.Array) == 1 {
+	} else if rows == 1 {
 		// INDEX(single_row_array, n) is treated as INDEX(array, 1, n).
 		// This also preserves the row/column zero semantics in the special
 		// handling below: INDEX(single_row_array, 0) returns the full row.
@@ -456,33 +457,93 @@ func fnINDEX(args []Value) (Value, error) {
 	if ri == 0 {
 		// Return entire column as a single-column array.
 		ci := colNum - 1
-		var col [][]Value
-		for _, row := range arr.Array {
-			if ci < 0 || ci >= len(row) {
-				return ErrorVal(ErrValREF), nil
-			}
-			col = append(col, []Value{row[ci]})
+		if ci < 0 || ci >= cols {
+			return ErrorVal(ErrValREF), nil
 		}
-		return Value{Type: ValueArray, Array: col, NoSpill: true}, nil
+		col := make([][]Value, len(arr.Array))
+		for i, row := range arr.Array {
+			cell := EmptyVal()
+			if ci < len(row) {
+				cell = row[ci]
+			}
+			col[i] = []Value{cell}
+		}
+		out := Value{Type: ValueArray, Array: col, NoSpill: true}
+		if arr.RangeOrigin != nil {
+			origin := *arr.RangeOrigin
+			origin.FromCol += ci
+			origin.ToCol = origin.FromCol
+			out.RangeOrigin = &origin
+		}
+		return out, nil
 	}
 	if colNum == 0 {
 		// Return entire row as a single-row array.
 		ri--
-		if ri < 0 || ri >= len(arr.Array) {
+		if ri < 0 || ri >= rows {
 			return ErrorVal(ErrValREF), nil
 		}
-		return Value{Type: ValueArray, Array: [][]Value{arr.Array[ri]}, NoSpill: true}, nil
+		width := materializedArrayCols(arr.Array)
+		if width == 0 {
+			width = 1
+		}
+		row := make([]Value, width)
+		if ri < len(arr.Array) {
+			copy(row, arr.Array[ri])
+		}
+		out := Value{Type: ValueArray, Array: [][]Value{row}, NoSpill: true}
+		if arr.RangeOrigin != nil {
+			origin := *arr.RangeOrigin
+			origin.FromRow += ri
+			origin.ToRow = origin.FromRow
+			out.RangeOrigin = &origin
+		}
+		return out, nil
 	}
 
 	ri--
 	colNum--
-	if ri >= len(arr.Array) {
+	if ri < 0 || ri >= rows {
 		return ErrorVal(ErrValREF), nil
 	}
-	if colNum >= len(arr.Array[ri]) {
+	if colNum < 0 || colNum >= cols {
 		return ErrorVal(ErrValREF), nil
 	}
-	return arr.Array[ri][colNum], nil
+	return indexArrayValue(arr, ri, colNum), nil
+}
+
+func indexArrayBounds(arr Value) (rows, cols int) {
+	rows = len(arr.Array)
+	cols = materializedArrayCols(arr.Array)
+	if arr.RangeOrigin == nil {
+		return rows, cols
+	}
+	originRows := arr.RangeOrigin.ToRow - arr.RangeOrigin.FromRow + 1
+	originCols := arr.RangeOrigin.ToCol - arr.RangeOrigin.FromCol + 1
+	if originRows > rows {
+		rows = originRows
+	}
+	if originCols > cols {
+		cols = originCols
+	}
+	return rows, cols
+}
+
+func materializedArrayCols(rows [][]Value) int {
+	cols := 0
+	for _, row := range rows {
+		if len(row) > cols {
+			cols = len(row)
+		}
+	}
+	return cols
+}
+
+func indexArrayValue(arr Value, rowIdx, colIdx int) Value {
+	if rowIdx >= 0 && rowIdx < len(arr.Array) && colIdx >= 0 && colIdx < len(arr.Array[rowIdx]) {
+		return arr.Array[rowIdx][colIdx]
+	}
+	return EmptyVal()
 }
 
 func fnMATCH(args []Value) (Value, error) {

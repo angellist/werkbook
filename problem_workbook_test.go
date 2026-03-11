@@ -106,3 +106,27 @@ func TestProblemWorkbookRecalculateMatchesExcel(t *testing.T) {
 		}
 	}
 }
+
+func TestCoolTest4119RecalculateMatchesExcel(t *testing.T) {
+	f, err := werkbook.Open("cool-test-4119.xlsx")
+	if err != nil {
+		t.Fatalf("Open(cool-test-4119.xlsx): %v", err)
+	}
+
+	f.Recalculate()
+
+	vals, err := f.ResolveDefinedName("CurrentTreasuryBalance", -1)
+	if err != nil {
+		t.Fatalf("ResolveDefinedName(CurrentTreasuryBalance): %v", err)
+	}
+	if len(vals) != 1 || len(vals[0]) != 1 {
+		cols := 0
+		if len(vals) > 0 {
+			cols = len(vals[0])
+		}
+		t.Fatalf("ResolveDefinedName(CurrentTreasuryBalance) shape = %dx%d, want 1x1", len(vals), cols)
+	}
+	if vals[0][0].Type != werkbook.TypeNumber || vals[0][0].Number != 0 {
+		t.Fatalf("CurrentTreasuryBalance = %#v, want 0", vals[0][0])
+	}
+}

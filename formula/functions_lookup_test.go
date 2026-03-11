@@ -1181,27 +1181,27 @@ func TestHLOOKUP_Comprehensive(t *testing.T) {
 
 			// Rows 23-24: large table (12 columns), sorted
 			// A23:L24
-			{Col: 1, Row: 23}: NumberVal(5),
-			{Col: 2, Row: 23}: NumberVal(10),
-			{Col: 3, Row: 23}: NumberVal(15),
-			{Col: 4, Row: 23}: NumberVal(20),
-			{Col: 5, Row: 23}: NumberVal(25),
-			{Col: 6, Row: 23}: NumberVal(30),
-			{Col: 7, Row: 23}: NumberVal(35),
-			{Col: 8, Row: 23}: NumberVal(40),
-			{Col: 9, Row: 23}: NumberVal(45),
+			{Col: 1, Row: 23}:  NumberVal(5),
+			{Col: 2, Row: 23}:  NumberVal(10),
+			{Col: 3, Row: 23}:  NumberVal(15),
+			{Col: 4, Row: 23}:  NumberVal(20),
+			{Col: 5, Row: 23}:  NumberVal(25),
+			{Col: 6, Row: 23}:  NumberVal(30),
+			{Col: 7, Row: 23}:  NumberVal(35),
+			{Col: 8, Row: 23}:  NumberVal(40),
+			{Col: 9, Row: 23}:  NumberVal(45),
 			{Col: 10, Row: 23}: NumberVal(50),
 			{Col: 11, Row: 23}: NumberVal(55),
 			{Col: 12, Row: 23}: NumberVal(60),
-			{Col: 1, Row: 24}: StringVal("c1"),
-			{Col: 2, Row: 24}: StringVal("c2"),
-			{Col: 3, Row: 24}: StringVal("c3"),
-			{Col: 4, Row: 24}: StringVal("c4"),
-			{Col: 5, Row: 24}: StringVal("c5"),
-			{Col: 6, Row: 24}: StringVal("c6"),
-			{Col: 7, Row: 24}: StringVal("c7"),
-			{Col: 8, Row: 24}: StringVal("c8"),
-			{Col: 9, Row: 24}: StringVal("c9"),
+			{Col: 1, Row: 24}:  StringVal("c1"),
+			{Col: 2, Row: 24}:  StringVal("c2"),
+			{Col: 3, Row: 24}:  StringVal("c3"),
+			{Col: 4, Row: 24}:  StringVal("c4"),
+			{Col: 5, Row: 24}:  StringVal("c5"),
+			{Col: 6, Row: 24}:  StringVal("c6"),
+			{Col: 7, Row: 24}:  StringVal("c7"),
+			{Col: 8, Row: 24}:  StringVal("c8"),
+			{Col: 9, Row: 24}:  StringVal("c9"),
 			{Col: 10, Row: 24}: StringVal("c10"),
 			{Col: 11, Row: 24}: StringVal("c11"),
 			{Col: 12, Row: 24}: StringVal("c12"),
@@ -1916,6 +1916,28 @@ func TestINDEXEdgeCases(t *testing.T) {
 	}
 	if got.Type != ValueError || got.Err != ErrValVALUE {
 		t.Errorf("INDEX negative col: got %v, want #VALUE!", got)
+	}
+}
+
+func TestINDEXFullColumnUsesRangeOriginForTwoArgForm(t *testing.T) {
+	arr := Value{
+		Type:  ValueArray,
+		Array: [][]Value{{EmptyVal()}},
+		RangeOrigin: &RangeAddr{
+			Sheet:   "Sheet1",
+			FromCol: 7,
+			FromRow: 1,
+			ToCol:   7,
+			ToRow:   maxRows,
+		},
+	}
+
+	got, err := fnINDEX([]Value{arr, NumberVal(2)})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueEmpty {
+		t.Fatalf("INDEX(full-column,2) = %v, want empty", got)
 	}
 }
 
@@ -2706,21 +2728,21 @@ func TestINDIRECT_R1C1_Invalid(t *testing.T) {
 func TestINDIRECT_Comprehensive(t *testing.T) {
 	// Shared cell data used across most subtests.
 	cells := map[CellAddr]Value{
-		{Col: 1, Row: 1}:                     NumberVal(10),
-		{Col: 1, Row: 2}:                     NumberVal(20),
-		{Col: 1, Row: 3}:                     NumberVal(30),
-		{Col: 1, Row: 4}:                     NumberVal(40),
-		{Col: 1, Row: 5}:                     NumberVal(50),
-		{Col: 2, Row: 1}:                     StringVal("alpha"),
-		{Col: 2, Row: 2}:                     StringVal("beta"),
-		{Col: 3, Row: 1}:                     NumberVal(100),
-		{Col: 3, Row: 5}:                     NumberVal(99),
-		{Col: 26, Row: 1}:                    NumberVal(260),  // Z1
-		{Col: 27, Row: 1}:                    NumberVal(270),  // AA1
-		{Sheet: "Sheet2", Col: 1, Row: 1}:    NumberVal(77),
-		{Sheet: "Sheet2", Col: 2, Row: 1}:    NumberVal(88),
-		{Sheet: "Sheet 1", Col: 1, Row: 1}:   NumberVal(111),
-		{Sheet: "Data", Col: 1, Row: 1}:      NumberVal(999),
+		{Col: 1, Row: 1}:                   NumberVal(10),
+		{Col: 1, Row: 2}:                   NumberVal(20),
+		{Col: 1, Row: 3}:                   NumberVal(30),
+		{Col: 1, Row: 4}:                   NumberVal(40),
+		{Col: 1, Row: 5}:                   NumberVal(50),
+		{Col: 2, Row: 1}:                   StringVal("alpha"),
+		{Col: 2, Row: 2}:                   StringVal("beta"),
+		{Col: 3, Row: 1}:                   NumberVal(100),
+		{Col: 3, Row: 5}:                   NumberVal(99),
+		{Col: 26, Row: 1}:                  NumberVal(260), // Z1
+		{Col: 27, Row: 1}:                  NumberVal(270), // AA1
+		{Sheet: "Sheet2", Col: 1, Row: 1}:  NumberVal(77),
+		{Sheet: "Sheet2", Col: 2, Row: 1}:  NumberVal(88),
+		{Sheet: "Sheet 1", Col: 1, Row: 1}: NumberVal(111),
+		{Sheet: "Data", Col: 1, Row: 1}:    NumberVal(999),
 	}
 
 	type testCase struct {
