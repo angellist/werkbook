@@ -20,22 +20,13 @@ func TestProblemWorkbookRecalculateMatchesExcel(t *testing.T) {
 		t.Fatalf("NewSheet(FundExpenses): %v", err)
 	}
 
-	headers := []string{
-		"ID",
-		"Category",
-		"Recipient",
-		"Recipient Name",
-		"Estimated Total Cents",
-		"Total Paid In Cash Cents",
-		"Total Paid Cashless Cents",
-	}
-	for i, header := range headers {
-		cell, err := werkbook.CoordinatesToCellName(i+1, 1)
-		if err != nil {
-			t.Fatalf("header cell %d: %v", i+1, err)
-		}
-		fundExpenses.SetValue(cell, header)
-	}
+	fundExpenses.SetValue("A1", "ID")
+	fundExpenses.SetValue("B1", "Category")
+	fundExpenses.SetValue("C1", "Recipient")
+	fundExpenses.SetValue("D1", "Recipient Name")
+	fundExpenses.SetValue("E1", "Estimated Total Cents")
+	fundExpenses.SetValue("F1", "Total Paid In Cash Cents")
+	fundExpenses.SetValue("G1", "Total Paid Cashless Cents")
 
 	rows := []struct {
 		id        string
