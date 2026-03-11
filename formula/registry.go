@@ -94,9 +94,81 @@ var arrayForcingFuncs = map[string]bool{
 	"HLOOKUP":    true,
 }
 
+// directRangeArgFuncs lists functions that should preserve direct range
+// arguments like A:A or 1:1 instead of implicitly intersecting them down to
+// the formula's row or column. Unlike arrayForcingFuncs, this only needs to
+// apply to plain range references, not arbitrary range expressions.
+var directRangeArgFuncs = map[string]bool{
+	"AGGREGATE":       true,
+	"AVERAGE":         true,
+	"AVERAGEA":        true,
+	"AVEDEV":          true,
+	"CORREL":          true,
+	"COUNT":           true,
+	"COUNTA":          true,
+	"COUNTBLANK":      true,
+	"COVAR":           true,
+	"COVARIANCE.P":    true,
+	"COVARIANCE.S":    true,
+	"DEVSQ":           true,
+	"FORECAST":        true,
+	"FORECAST.LINEAR": true,
+	"GEOMEAN":         true,
+	"HARMEAN":         true,
+	"INTERCEPT":       true,
+	"KURT":            true,
+	"LARGE":           true,
+	"MAX":             true,
+	"MAXA":            true,
+	"MEDIAN":          true,
+	"MIN":             true,
+	"MINA":            true,
+	"MODE":            true,
+	"MODE.MULT":       true,
+	"MODE.SNGL":       true,
+	"PEARSON":         true,
+	"PERCENTILE":      true,
+	"PERCENTILE.EXC":  true,
+	"PERCENTILE.INC":  true,
+	"PRODUCT":         true,
+	"QUARTILE":        true,
+	"QUARTILE.EXC":    true,
+	"QUARTILE.INC":    true,
+	"RSQ":             true,
+	"SKEW":            true,
+	"SKEW.P":          true,
+	"SLOPE":           true,
+	"SMALL":           true,
+	"STANDARDIZE":     true,
+	"STEYX":           true,
+	"STDEV":           true,
+	"STDEV.P":         true,
+	"STDEV.S":         true,
+	"STDEVA":          true,
+	"STDEVP":          true,
+	"STDEVPA":         true,
+	"SUBTOTAL":        true,
+	"SUM":             true,
+	"SUMSQ":           true,
+	"TRIMMEAN":        true,
+	"VAR":             true,
+	"VAR.P":           true,
+	"VAR.S":           true,
+	"VARA":            true,
+	"VARP":            true,
+	"VARPA":           true,
+}
+
 // IsArrayFunc reports whether the named function forces array evaluation of
 // its arguments. The compiler uses this to emit OpEnterArrayCtx / OpLeaveArrayCtx
 // around the function's argument expressions.
 func IsArrayFunc(name string) bool {
 	return arrayForcingFuncs[strings.ToUpper(name)]
+}
+
+// PreservesDirectRangeArgs reports whether the named function should receive a
+// direct range reference as a range, even in legacy non-array formula
+// contexts.
+func PreservesDirectRangeArgs(name string) bool {
+	return directRangeArgFuncs[strings.ToUpper(name)]
 }

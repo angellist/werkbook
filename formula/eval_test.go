@@ -474,6 +474,60 @@ func TestEvalArrayFormulaFullColumn(t *testing.T) {
 	}
 }
 
+func TestEvalSUMPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 5, Row: 1}: StringVal("Estimated Total Cents"),
+			{Col: 5, Row: 2}: NumberVal(800000),
+			{Col: 5, Row: 3}: NumberVal(0),
+			{Col: 5, Row: 4}: NumberVal(0),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     2,
+		CurrentRow:     1,
+		CurrentSheet:   "Out - Summary",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "SUM(E:E)/100")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 8000 {
+		t.Errorf("SUM(E:E)/100 = %v (%g), want 8000", got.Type, got.Num)
+	}
+}
+
+func TestEvalCOUNTAPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("ID"),
+			{Col: 1, Row: 2}: StringVal("a"),
+			{Col: 1, Row: 3}: StringVal("b"),
+			{Col: 1, Row: 4}: StringVal("c"),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     2,
+		CurrentRow:     6,
+		CurrentSheet:   "Out - Summary",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "MAX(COUNTA(A:A)-1,0)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("MAX(COUNTA(A:A)-1,0) = %v (%g), want 3", got.Type, got.Num)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // coerceNum edge cases (exercised through arithmetic operations)
 // ---------------------------------------------------------------------------
