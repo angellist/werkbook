@@ -871,6 +871,79 @@ func TestEvalCompareValues(t *testing.T) {
 	}
 }
 
+func TestArrayElementTrimmedRangeOriginUsesBlankForMissingLogicalCells(t *testing.T) {
+	trimmed := trimmedRangeValue([][]Value{
+		{NumberVal(10)},
+	}, 1, 1, 1, 3)
+
+	assertLookupValueEqual(t, ArrayElement(trimmed, 0, 0), NumberVal(10))
+	assertLookupValueEqual(t, ArrayElement(trimmed, 1, 0), EmptyVal())
+
+	got := ArrayElement(trimmed, 3, 0)
+	if got.Type != ValueError || got.Err != ErrValNA {
+		t.Fatalf("ArrayElement(out of bounds) = %#v, want #N/A", got)
+	}
+}
+
+func TestBinaryArithTrimmedRangeOriginUsesLogicalBounds(t *testing.T) {
+	trimmed := trimmedRangeValue([][]Value{
+		{NumberVal(10)},
+	}, 1, 1, 1, 3)
+
+	got := binaryArith(trimmed, NumberVal(0), func(an, bn float64) Value {
+		return NumberVal(an + bn)
+	})
+
+	assertLookupValueEqual(t, got, Value{Type: ValueArray, Array: [][]Value{
+		{NumberVal(10)},
+		{NumberVal(0)},
+		{NumberVal(0)},
+	}})
+	if got.RangeOrigin == nil || got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 3 {
+		t.Fatalf("binaryArith RangeOrigin = %+v, want rows 1:3", got.RangeOrigin)
+	}
+}
+
+func TestBinaryCompareTrimmedRangeOriginUsesLogicalBounds(t *testing.T) {
+	trimmed := trimmedRangeValue([][]Value{
+		{StringVal("keep")},
+	}, 1, 1, 1, 3)
+
+	got := binaryCompare(trimmed, StringVal("keep"), func(c int) bool { return c == 0 })
+
+	assertLookupValueEqual(t, got, Value{Type: ValueArray, Array: [][]Value{
+		{BoolVal(true)},
+		{BoolVal(false)},
+		{BoolVal(false)},
+	}})
+	if got.RangeOrigin == nil || got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 3 {
+		t.Fatalf("binaryCompare RangeOrigin = %+v, want rows 1:3", got.RangeOrigin)
+	}
+}
+
+func TestLiftUnaryTrimmedRangeOriginUsesLogicalBounds(t *testing.T) {
+	trimmed := trimmedRangeValue([][]Value{
+		{NumberVal(-10)},
+	}, 1, 1, 1, 3)
+
+	got := LiftUnary(trimmed, func(v Value) Value {
+		n, e := CoerceNum(v)
+		if e != nil {
+			return *e
+		}
+		return NumberVal(math.Abs(n))
+	})
+
+	assertLookupValueEqual(t, got, Value{Type: ValueArray, Array: [][]Value{
+		{NumberVal(10)},
+		{NumberVal(0)},
+		{NumberVal(0)},
+	}})
+	if got.RangeOrigin == nil || got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 3 {
+		t.Fatalf("LiftUnary RangeOrigin = %+v, want rows 1:3", got.RangeOrigin)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // isTruthy — exercised through IF
 // ---------------------------------------------------------------------------
