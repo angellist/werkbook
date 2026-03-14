@@ -84,12 +84,12 @@ Werkbook supports **445** spreadsheet formula functions.
 | COUNTBLANK | Counts blank cells in a range. | Statistical | 15 |
 | COUNTIF | Counts values that match one condition. | Statistical | 20 |
 | COUNTIFS | Counts values that match all supplied conditions. | Statistical | 49 |
-| COUPDAYBS | Returns the number of days from the coupon period start to settlement. | Financial | 2 |
-| COUPDAYS | Returns the number of days in the coupon period containing settlement. | Financial | 2 |
-| COUPDAYSNC | Returns the number of days from settlement to the next coupon date. | Financial | 2 |
-| COUPNCD | Returns the next coupon date after settlement. | Financial | 2 |
-| COUPNUM | Returns the number of coupons payable between settlement and maturity. | Financial | 2 |
-| COUPPCD | Returns the previous coupon date before settlement. | Financial | 2 |
+| COUPDAYBS | Returns the number of days from the coupon period start to settlement. | Financial | 17 |
+| COUPDAYS | Returns the number of days in the coupon period containing settlement. | Financial | 17 |
+| COUPDAYSNC | Returns the number of days from settlement to the next coupon date. | Financial | 17 |
+| COUPNCD | Returns the next coupon date after settlement. | Financial | 19 |
+| COUPNUM | Returns the number of coupons payable between settlement and maturity. | Financial | 38 |
+| COUPPCD | Returns the previous coupon date before settlement. | Financial | 19 |
 | COVAR | Returns the population covariance of two data sets. | Statistical | 34 |
 | COVARIANCE.P | Returns the population covariance of two data sets. | Statistical | 21 |
 | COVARIANCE.S | Returns the sample covariance of two data sets. | Statistical | 6 |

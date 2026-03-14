@@ -11657,6 +11657,425 @@ func TestCOUPDAYSNC_ViaEval(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Comprehensive COUP* ViaEval tests
+// ---------------------------------------------------------------------------
+
+func TestCOUPNUM_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// --- Basic frequency / term combos ---
+		{name: "semiannual 1yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2021,1,15),2,0)", want: 2},
+		{name: "semiannual 5yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,0)", want: 10},
+		{name: "annual 3yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2023,1,15),1,0)", want: 3},
+		{name: "quarterly 2yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2022,1,15),4,0)", want: 8},
+		{name: "annual 1yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2021,1,15),1,0)", want: 1},
+		{name: "quarterly 1yr", formula: "COUPNUM(DATE(2020,1,15),DATE(2021,1,15),4,0)", want: 4},
+		{name: "semiannual 10yr", formula: "COUPNUM(DATE(2010,3,1),DATE(2020,3,1),2,0)", want: 20},
+		{name: "annual 10yr", formula: "COUPNUM(DATE(2010,3,1),DATE(2020,3,1),1,0)", want: 10},
+
+		// --- Settlement just after a coupon date ---
+		// maturity Nov 15, semiannual => coupons May 15, Nov 15
+		// settlement May 16 2007 -> NCD = Nov 15 2007, then May 15, Nov 15 2008 => 3
+		{name: "settlement just after coupon", formula: "COUPNUM(DATE(2007,5,16),DATE(2008,11,15),2,0)", want: 3},
+
+		// --- Settlement just before maturity ---
+		{name: "1 day before maturity semi", formula: "COUPNUM(DATE(2008,11,14),DATE(2008,11,15),2,0)", want: 1},
+		{name: "1 day before maturity annual", formula: "COUPNUM(DATE(2021,1,14),DATE(2021,1,15),1,0)", want: 1},
+		{name: "1 day before maturity quarterly", formula: "COUPNUM(DATE(2021,1,14),DATE(2021,1,15),4,0)", want: 1},
+
+		// --- Settlement on a coupon date ---
+		// settlement = coupon date May 15, maturity Nov 15 => 1 remaining (Nov 15)
+		{name: "settlement on coupon date", formula: "COUPNUM(DATE(2011,5,15),DATE(2011,11,15),2,0)", want: 1},
+
+		// --- Each basis with same dates should give same count ---
+		{name: "basis 0", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,0)", want: 10},
+		{name: "basis 1", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,1)", want: 10},
+		{name: "basis 2", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,2)", want: 10},
+		{name: "basis 3", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,3)", want: 10},
+		{name: "basis 4", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,4)", want: 10},
+
+		// --- Short period (settlement close to maturity) ---
+		{name: "short period 2 months semi", formula: "COUPNUM(DATE(2020,9,15),DATE(2020,11,15),2,0)", want: 1},
+
+		// --- Long period (30 years) ---
+		{name: "30yr semiannual", formula: "COUPNUM(DATE(2000,1,1),DATE(2030,1,1),2,0)", want: 60},
+		{name: "30yr annual", formula: "COUPNUM(DATE(2000,1,1),DATE(2030,1,1),1,0)", want: 30},
+		{name: "30yr quarterly", formula: "COUPNUM(DATE(2000,1,1),DATE(2030,1,1),4,0)", want: 120},
+
+		// --- Excel doc example cross-check ---
+		{name: "excel doc example", formula: "COUPNUM(DATE(2007,1,25),DATE(2008,11,15),2,1)", want: 4},
+
+		// --- String coercion for dates ---
+		{name: "string date coercion", formula: `COUPNUM(DATE(2007,1,25),DATE(2008,11,15),2,1)`, want: 4},
+
+		// --- EOM maturity ---
+		{name: "EOM maturity Feb 28 semi", formula: "COUPNUM(DATE(2019,1,15),DATE(2021,2,28),2,0)", want: 5},
+		{name: "EOM maturity Feb 29 leap", formula: "COUPNUM(DATE(2019,1,15),DATE(2020,2,29),2,0)", want: 3},
+
+		// --- Error cases ---
+		{name: "invalid freq 3", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid freq 0", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),0,0)", wantErr: true},
+		{name: "invalid freq 5", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),5,0)", wantErr: true},
+		{name: "invalid basis -1", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,-1)", wantErr: true},
+		{name: "invalid basis 5", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,5)", wantErr: true},
+		{name: "settlement eq maturity", formula: "COUPNUM(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "settlement gt maturity", formula: "COUPNUM(DATE(2025,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "too few args", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15))", wantErr: true},
+		{name: "too many args", formula: "COUPNUM(DATE(2020,1,15),DATE(2025,1,15),2,0,1)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestCOUPDAYBS_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// --- Basis 0 (US 30/360) ---
+		// PCD = Nov 15 2010, settlement Jan 25 2011: 30/360 days = 70
+		{name: "basis0 semi", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,0)", want: 70},
+		// --- Basis 1 (actual/actual) ---
+		// Nov 15 2010 to Jan 25 2011 = 71 actual days
+		{name: "basis1 semi", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,1)", want: 71},
+		// --- Basis 2 (actual/360) ---
+		{name: "basis2 semi", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,2)", want: 71},
+		// --- Basis 3 (actual/365) ---
+		{name: "basis3 semi", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,3)", want: 71},
+		// --- Basis 4 (European 30/360) ---
+		{name: "basis4 semi", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,4)", want: 70},
+		// Settlement on coupon date => 0
+		{name: "settlement on coupon", formula: "COUPDAYBS(DATE(2010,11,15),DATE(2011,11,15),2,1)", want: 0},
+		// Settlement 1 day after coupon => 1
+		{name: "one day after coupon", formula: "COUPDAYBS(DATE(2010,11,16),DATE(2011,11,15),2,1)", want: 1},
+		// Annual frequency: PCD = Nov 15 2010, settlement Jan 25 2011 = 71 actual days
+		{name: "annual basis1", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),1,1)", want: 71},
+		// Quarterly frequency: PCD = Nov 15 2010, settlement Jan 25 2011 = 71 actual days
+		{name: "quarterly basis1", formula: "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),4,1)", want: 71},
+		// Settlement near end of period: May 14 2011, PCD = Nov 15 2010 = 180 actual days
+		{name: "near end of period basis1", formula: "COUPDAYBS(DATE(2011,5,14),DATE(2011,11,15),2,1)", want: 180},
+		// Leap year: settlement Feb 28 2020, maturity Sep 15 2020, semi, basis 1
+		// PCD = Mar 15 2020... wait, let's use maturity Sep 15, coupon dates: Mar 15, Sep 15
+		// PCD for Feb 28 = Sep 15 2019. Actual days Sep 15 2019 to Feb 28 2020 = 166
+		{name: "leap year basis1", formula: "COUPDAYBS(DATE(2020,2,28),DATE(2020,9,15),2,1)", want: 166},
+		// --- Error cases ---
+		{name: "settlement eq maturity", formula: "COUPDAYBS(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "invalid freq", formula: "COUPDAYBS(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid basis", formula: "COUPDAYBS(DATE(2020,1,15),DATE(2025,1,15),2,5)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestCOUPDAYS_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// Basis 0: 360/freq
+		{name: "basis0 semi", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,0)", want: 180},
+		{name: "basis0 annual", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),1,0)", want: 360},
+		{name: "basis0 quarterly", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),4,0)", want: 90},
+		// Basis 1: actual/actual (varies by period)
+		// PCD = Nov 15 2010, NCD = May 15 2011 = 181 actual days
+		{name: "basis1 semi Nov-May", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,1)", want: 181},
+		// PCD = May 15 2011, NCD = Nov 15 2011 = 184 actual days
+		{name: "basis1 semi May-Nov", formula: "COUPDAYS(DATE(2011,5,16),DATE(2011,11,15),2,1)", want: 184},
+		// Basis 2: 360/freq
+		{name: "basis2 semi", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,2)", want: 180},
+		// Basis 3: 365/freq
+		{name: "basis3 semi", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,3)", want: 182.5},
+		{name: "basis3 annual", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),1,3)", want: 365},
+		{name: "basis3 quarterly", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),4,3)", want: 91.25},
+		// Basis 4: 360/freq (European 30/360)
+		{name: "basis4 semi", formula: "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,4)", want: 180},
+		// Basis 1 with leap year period: Feb 29 2020 is in period
+		// PCD = Sep 15 2019, NCD = Mar 15 2020 => actual = 182 days
+		{name: "basis1 leap year period", formula: "COUPDAYS(DATE(2020,2,28),DATE(2020,9,15),2,1)", want: 182},
+		// --- Error cases ---
+		{name: "settlement eq maturity", formula: "COUPDAYS(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "invalid freq", formula: "COUPDAYS(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid basis", formula: "COUPDAYS(DATE(2020,1,15),DATE(2025,1,15),2,6)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestCOUPDAYSNC_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// Basis 0 (30/360): COUPDAYS(180) - COUPDAYBS(70) = 110
+		{name: "basis0 semi", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,0)", want: 110},
+		// Basis 1 (actual): Jan 25 to May 15 = 110 actual days
+		{name: "basis1 semi", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,1)", want: 110},
+		// Basis 2 (actual/360): actual days
+		{name: "basis2 semi", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,2)", want: 110},
+		// Basis 3 (actual/365): actual days
+		{name: "basis3 semi", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,3)", want: 110},
+		// Basis 4 (European 30/360)
+		{name: "basis4 semi", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,4)", want: 110},
+		// Annual: NCD = Nov 15 2011, settlement Jan 25 2011 = 294 actual days
+		{name: "annual basis1", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),1,1)", want: 294},
+		// Quarterly: NCD = Feb 15 2011, settlement Jan 25 2011 = 21 actual days
+		{name: "quarterly basis1", formula: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),4,1)", want: 21},
+		// Settlement 1 day before maturity: NCD = maturity = 1 day
+		{name: "1 day before maturity", formula: "COUPDAYSNC(DATE(2011,11,14),DATE(2011,11,15),2,1)", want: 1},
+		// Settlement on coupon date: days to next coupon = full period
+		{name: "settlement on coupon basis1", formula: "COUPDAYSNC(DATE(2010,11,15),DATE(2011,11,15),2,1)", want: 181},
+		// Settlement 1 day after coupon: 180 days to NCD
+		{name: "one day after coupon basis1", formula: "COUPDAYSNC(DATE(2010,11,16),DATE(2011,11,15),2,1)", want: 180},
+		// Leap year: settlement Feb 28 2020, maturity Sep 15 2020, semi
+		// NCD = Mar 15 2020 => Feb 28 to Mar 15 = 16 actual days
+		{name: "leap year basis1", formula: "COUPDAYSNC(DATE(2020,2,28),DATE(2020,9,15),2,1)", want: 16},
+		// --- Error cases ---
+		{name: "settlement eq maturity", formula: "COUPDAYSNC(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "invalid freq", formula: "COUPDAYSNC(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid basis", formula: "COUPDAYSNC(DATE(2020,1,15),DATE(2025,1,15),2,7)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestCOUPNCD_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// Basic semiannual: settlement Jan 25 2011, maturity Nov 15 2011 => NCD = May 15 2011 (40678)
+		{name: "semi basic", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),2,0)", want: 40678},
+		// Annual: NCD = Nov 15 2011 (40862)
+		{name: "annual", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),1,0)", want: 40862},
+		// Quarterly: NCD = Feb 15 2011 (40589)
+		{name: "quarterly", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),4,0)", want: 40589},
+		// Settlement on coupon date: NCD = next coupon (May 15 2011 = 40678)
+		{name: "settlement on coupon", formula: "COUPNCD(DATE(2010,11,15),DATE(2011,11,15),2,0)", want: 40678},
+		// Settlement 1 day after coupon: NCD = May 15 2011 (40678)
+		{name: "1 day after coupon", formula: "COUPNCD(DATE(2010,11,16),DATE(2011,11,15),2,0)", want: 40678},
+		// Settlement 1 day before maturity: NCD = maturity Nov 15 2011 (40862)
+		{name: "1 day before maturity", formula: "COUPNCD(DATE(2011,11,14),DATE(2011,11,15),2,0)", want: 40862},
+		// Basis does not affect coupon dates
+		{name: "basis1", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),2,1)", want: 40678},
+		{name: "basis2", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),2,2)", want: 40678},
+		{name: "basis3", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),2,3)", want: 40678},
+		{name: "basis4", formula: "COUPNCD(DATE(2011,1,25),DATE(2011,11,15),2,4)", want: 40678},
+		// EOM maturity: Aug 31 2012, settlement Jan 25 2012 => NCD = Feb 29 2012 (40968)
+		{name: "EOM maturity Aug31", formula: "COUPNCD(DATE(2012,1,25),DATE(2012,8,31),2,0)", want: 40968},
+		// Long-term bond: settlement Jan 25 2007, maturity Nov 15 2011 => NCD = May 15 2007 (39217)
+		{name: "long-term bond", formula: "COUPNCD(DATE(2007,1,25),DATE(2011,11,15),2,0)", want: 39217},
+		// --- Error cases ---
+		{name: "settlement eq maturity", formula: "COUPNCD(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "settlement gt maturity", formula: "COUPNCD(DATE(2025,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "invalid freq", formula: "COUPNCD(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid basis", formula: "COUPNCD(DATE(2020,1,15),DATE(2025,1,15),2,5)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+func TestCOUPPCD_Comprehensive_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		wantErr bool
+	}{
+		// Basic semiannual: settlement Jan 25 2011, maturity Nov 15 2011 => PCD = Nov 15 2010 (40497)
+		{name: "semi basic", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),2,0)", want: 40497},
+		// Annual: PCD = Nov 15 2010 (40497)
+		{name: "annual", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),1,0)", want: 40497},
+		// Quarterly: PCD = Nov 15 2010 (40497)
+		{name: "quarterly", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),4,0)", want: 40497},
+		// Settlement on coupon date: PCD = settlement itself (Nov 15 2010 = 40497)
+		{name: "settlement on coupon", formula: "COUPPCD(DATE(2010,11,15),DATE(2011,11,15),2,0)", want: 40497},
+		// Settlement 1 day after coupon: PCD = Nov 15 2010 (40497)
+		{name: "1 day after coupon", formula: "COUPPCD(DATE(2010,11,16),DATE(2011,11,15),2,0)", want: 40497},
+		// Settlement 1 day before maturity: PCD = May 15 2011 (40678)
+		{name: "1 day before maturity", formula: "COUPPCD(DATE(2011,11,14),DATE(2011,11,15),2,0)", want: 40678},
+		// Basis does not affect coupon dates
+		{name: "basis1", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),2,1)", want: 40497},
+		{name: "basis2", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),2,2)", want: 40497},
+		{name: "basis3", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),2,3)", want: 40497},
+		{name: "basis4", formula: "COUPPCD(DATE(2011,1,25),DATE(2011,11,15),2,4)", want: 40497},
+		// EOM maturity: Aug 31 2012, settlement Jan 25 2012 => PCD = Aug 31 2011 (40786)
+		{name: "EOM maturity Aug31", formula: "COUPPCD(DATE(2012,1,25),DATE(2012,8,31),2,0)", want: 40786},
+		// Long-term bond: settlement Jan 25 2007, maturity Nov 15 2011 => PCD = Nov 15 2006 (39036)
+		{name: "long-term bond", formula: "COUPPCD(DATE(2007,1,25),DATE(2011,11,15),2,0)", want: 39036},
+		// --- Error cases ---
+		{name: "settlement eq maturity", formula: "COUPPCD(DATE(2020,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "settlement gt maturity", formula: "COUPPCD(DATE(2025,1,15),DATE(2020,1,15),2,0)", wantErr: true},
+		{name: "invalid freq", formula: "COUPPCD(DATE(2020,1,15),DATE(2025,1,15),3,0)", wantErr: true},
+		{name: "invalid basis", formula: "COUPPCD(DATE(2020,1,15),DATE(2025,1,15),2,5)", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				assertClose(t, tc.name, v, tc.want)
+			}
+		})
+	}
+}
+
+// TestCOUP_CrossCheck verifies internal consistency: COUPDAYBS + COUPDAYSNC == COUPDAYS
+// for basis values where this identity holds (basis 0 and 4 use 30/360 throughout).
+func TestCOUP_CrossCheck(t *testing.T) {
+	formulas := []struct {
+		name  string
+		daybs string
+		days  string
+		daysnc string
+	}{
+		{
+			name:   "basis0 semi",
+			daybs:  "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,0)",
+			days:   "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,0)",
+			daysnc: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,0)",
+		},
+		{
+			name:   "basis1 semi",
+			daybs:  "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,1)",
+			days:   "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,1)",
+			daysnc: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,1)",
+		},
+		{
+			name:   "basis4 semi",
+			daybs:  "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),2,4)",
+			days:   "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),2,4)",
+			daysnc: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),2,4)",
+		},
+		{
+			name:   "basis0 quarterly",
+			daybs:  "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),4,0)",
+			days:   "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),4,0)",
+			daysnc: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),4,0)",
+		},
+		{
+			name:   "basis1 annual",
+			daybs:  "COUPDAYBS(DATE(2011,1,25),DATE(2011,11,15),1,1)",
+			days:   "COUPDAYS(DATE(2011,1,25),DATE(2011,11,15),1,1)",
+			daysnc: "COUPDAYSNC(DATE(2011,1,25),DATE(2011,11,15),1,1)",
+		},
+	}
+
+	for _, tc := range formulas {
+		t.Run(tc.name, func(t *testing.T) {
+			cfDaybs := evalCompile(t, tc.daybs)
+			cfDays := evalCompile(t, tc.days)
+			cfDaysnc := evalCompile(t, tc.daysnc)
+
+			vDaybs, err := Eval(cfDaybs, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			vDays, err := Eval(cfDays, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			vDaysnc, err := Eval(cfDaysnc, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if vDaybs.Type != ValueNumber || vDays.Type != ValueNumber || vDaysnc.Type != ValueNumber {
+				t.Fatalf("expected all numbers, got daybs=%v days=%v daysnc=%v", vDaybs.Type, vDays.Type, vDaysnc.Type)
+			}
+
+			sum := vDaybs.Num + vDaysnc.Num
+			if math.Abs(sum-vDays.Num) > 0.01 {
+				t.Errorf("COUPDAYBS(%f) + COUPDAYSNC(%f) = %f, but COUPDAYS = %f",
+					vDaybs.Num, vDaysnc.Num, sum, vDays.Num)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DURATION tests
 // ---------------------------------------------------------------------------
 
