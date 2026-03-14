@@ -15907,3 +15907,1213 @@ func TestMATCH_OneArg(t *testing.T) {
 		t.Errorf("MATCH 1 arg: got %v, want #VALUE!", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Comprehensive XLOOKUP tests
+// ---------------------------------------------------------------------------
+
+func TestXLOOKUP_ComprehensiveExtended(t *testing.T) {
+	// Shared resolver with multiple data layouts.
+	// A1:A6 = sorted ascending numbers, B1:B6 = labels, C1:C6 = extra data
+	// D1:D6 = sorted descending numbers, E1:E6 = desc labels
+	// F1:J1 = horizontal lookup row, F2:J2 = horizontal return row
+	// K1:K6 = strings with duplicates
+	// L1:L6 = return values for K
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// Sorted ascending: A1:A6
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(10),
+			{Col: 1, Row: 3}: NumberVal(20),
+			{Col: 1, Row: 4}: NumberVal(30),
+			{Col: 1, Row: 5}: NumberVal(40),
+			{Col: 1, Row: 6}: NumberVal(50),
+			// Labels: B1:B6
+			{Col: 2, Row: 1}: StringVal("five"),
+			{Col: 2, Row: 2}: StringVal("ten"),
+			{Col: 2, Row: 3}: StringVal("twenty"),
+			{Col: 2, Row: 4}: StringVal("thirty"),
+			{Col: 2, Row: 5}: StringVal("forty"),
+			{Col: 2, Row: 6}: StringVal("fifty"),
+			// Extra data: C1:C6
+			{Col: 3, Row: 1}: NumberVal(500),
+			{Col: 3, Row: 2}: NumberVal(1000),
+			{Col: 3, Row: 3}: NumberVal(2000),
+			{Col: 3, Row: 4}: NumberVal(3000),
+			{Col: 3, Row: 5}: NumberVal(4000),
+			{Col: 3, Row: 6}: NumberVal(5000),
+			// Sorted descending: D1:D6
+			{Col: 4, Row: 1}: NumberVal(50),
+			{Col: 4, Row: 2}: NumberVal(40),
+			{Col: 4, Row: 3}: NumberVal(30),
+			{Col: 4, Row: 4}: NumberVal(20),
+			{Col: 4, Row: 5}: NumberVal(10),
+			{Col: 4, Row: 6}: NumberVal(5),
+			// Desc labels: E1:E6
+			{Col: 5, Row: 1}: StringVal("fifty"),
+			{Col: 5, Row: 2}: StringVal("forty"),
+			{Col: 5, Row: 3}: StringVal("thirty"),
+			{Col: 5, Row: 4}: StringVal("twenty"),
+			{Col: 5, Row: 5}: StringVal("ten"),
+			{Col: 5, Row: 6}: StringVal("five"),
+			// Horizontal lookup: F1:J1
+			{Col: 6, Row: 1}:  StringVal("Mon"),
+			{Col: 7, Row: 1}:  StringVal("Tue"),
+			{Col: 8, Row: 1}:  StringVal("Wed"),
+			{Col: 9, Row: 1}:  StringVal("Thu"),
+			{Col: 10, Row: 1}: StringVal("Fri"),
+			// Horizontal return: F2:J2
+			{Col: 6, Row: 2}:  NumberVal(100),
+			{Col: 7, Row: 2}:  NumberVal(200),
+			{Col: 8, Row: 2}:  NumberVal(300),
+			{Col: 9, Row: 2}:  NumberVal(400),
+			{Col: 10, Row: 2}: NumberVal(500),
+			// Strings with duplicates: K1:K6
+			{Col: 11, Row: 1}: StringVal("red"),
+			{Col: 11, Row: 2}: StringVal("blue"),
+			{Col: 11, Row: 3}: StringVal("green"),
+			{Col: 11, Row: 4}: StringVal("blue"),
+			{Col: 11, Row: 5}: StringVal("red"),
+			{Col: 11, Row: 6}: StringVal("yellow"),
+			// Return values: L1:L6
+			{Col: 12, Row: 1}: NumberVal(1),
+			{Col: 12, Row: 2}: NumberVal(2),
+			{Col: 12, Row: 3}: NumberVal(3),
+			{Col: 12, Row: 4}: NumberVal(4),
+			{Col: 12, Row: 5}: NumberVal(5),
+			{Col: 12, Row: 6}: NumberVal(6),
+		},
+	}
+
+	// --- Exact match found ---
+	t.Run("exact_match_found_number", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(20,A1:A6,B1:B6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "twenty" {
+			t.Errorf("got %v, want twenty", got)
+		}
+	})
+
+	// --- Not found with if_not_found ---
+	t.Run("not_found_with_if_not_found_string", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(99,A1:A6,B1:B6,"missing")`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "missing" {
+			t.Errorf("got %v, want missing", got)
+		}
+	})
+
+	// --- Not found without if_not_found -> #N/A ---
+	t.Run("not_found_without_if_not_found_returns_NA", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(99,A1:A6,B1:B6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- match_mode -1: exact or next smaller ---
+	t.Run("match_mode_neg1_next_smaller", func(t *testing.T) {
+		// 25 is between 20 and 30; next smaller is 20 -> "twenty"
+		cf := evalCompile(t, `XLOOKUP(25,A1:A6,B1:B6,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "twenty" {
+			t.Errorf("got %v, want twenty", got)
+		}
+	})
+
+	t.Run("match_mode_neg1_exact_hit", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(30,A1:A6,B1:B6,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("match_mode_neg1_below_min_returns_NA", func(t *testing.T) {
+		// 1 is below minimum (5); no value <= 1 among the data -> but wait, 5 > 1
+		// Actually all values >= 5, so no value <= 1 -> #N/A
+		cf := evalCompile(t, `XLOOKUP(1,A1:A6,B1:B6,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- match_mode 1: exact or next larger ---
+	t.Run("match_mode_1_next_larger", func(t *testing.T) {
+		// 25 is between 20 and 30; next larger is 30 -> "thirty"
+		cf := evalCompile(t, `XLOOKUP(25,A1:A6,B1:B6,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("match_mode_1_above_max_returns_NA", func(t *testing.T) {
+		// 100 is above maximum (50); no value >= 100 -> #N/A
+		cf := evalCompile(t, `XLOOKUP(100,A1:A6,B1:B6,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- match_mode 2: wildcard ---
+	t.Run("match_mode_2_wildcard_star", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("*ed",K1:K6,L1:L6,,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// First match for *ed: "red" at position 1 -> returns 1
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("match_mode_2_wildcard_question", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("bl?e",K1:K6,L1:L6,,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// "bl?e" matches "blue" at position 2 -> returns 2
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	// --- search_mode -1: last-to-first ---
+	t.Run("search_mode_neg1_returns_last_match", func(t *testing.T) {
+		// "blue" appears at K2 and K4; reverse search should find K4 -> returns 4
+		cf := evalCompile(t, `XLOOKUP("blue",K1:K6,L1:L6,,0,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4 (last occurrence of blue)", got)
+		}
+	})
+
+	t.Run("search_mode_1_returns_first_match", func(t *testing.T) {
+		// "blue" appears at K2 and K4; forward search should find K2 -> returns 2
+		cf := evalCompile(t, `XLOOKUP("blue",K1:K6,L1:L6,,0,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2 (first occurrence of blue)", got)
+		}
+	})
+
+	// --- search_mode 2: binary search ascending ---
+	t.Run("search_mode_2_binary_asc_exact", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(30,A1:A6,B1:B6,,0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("search_mode_2_binary_asc_not_found", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(25,A1:A6,B1:B6,,0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("search_mode_2_binary_asc_next_smaller", func(t *testing.T) {
+		// Binary ascending with match_mode -1: 25 -> next smaller is 20 -> "twenty"
+		cf := evalCompile(t, `XLOOKUP(25,A1:A6,B1:B6,,-1,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "twenty" {
+			t.Errorf("got %v, want twenty", got)
+		}
+	})
+
+	t.Run("search_mode_2_binary_asc_next_larger", func(t *testing.T) {
+		// Binary ascending with match_mode 1: 25 -> next larger is 30 -> "thirty"
+		cf := evalCompile(t, `XLOOKUP(25,A1:A6,B1:B6,,1,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	// --- search_mode -2: binary search descending ---
+	t.Run("search_mode_neg2_binary_desc_exact", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(30,D1:D6,E1:E6,,0,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	t.Run("search_mode_neg2_binary_desc_not_found", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(25,D1:D6,E1:E6,,0,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("search_mode_neg2_binary_desc_next_smaller", func(t *testing.T) {
+		// Binary descending with match_mode -1: 25 -> next smaller is 20 -> "twenty"
+		cf := evalCompile(t, `XLOOKUP(25,D1:D6,E1:E6,,-1,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "twenty" {
+			t.Errorf("got %v, want twenty", got)
+		}
+	})
+
+	t.Run("search_mode_neg2_binary_desc_next_larger", func(t *testing.T) {
+		// Binary descending with match_mode 1: 25 -> next larger is 30 -> "thirty"
+		cf := evalCompile(t, `XLOOKUP(25,D1:D6,E1:E6,,1,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "thirty" {
+			t.Errorf("got %v, want thirty", got)
+		}
+	})
+
+	// --- Horizontal arrays ---
+	t.Run("horizontal_lookup_exact", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("Wed",F1:J1,F2:J2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 300 {
+			t.Errorf("got %v, want 300", got)
+		}
+	})
+
+	t.Run("horizontal_lookup_first_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("Mon",F1:J1,F2:J2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 100 {
+			t.Errorf("got %v, want 100", got)
+		}
+	})
+
+	t.Run("horizontal_lookup_last_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("Fri",F1:J1,F2:J2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 500 {
+			t.Errorf("got %v, want 500", got)
+		}
+	})
+
+	// --- Case-insensitive text lookup ---
+	t.Run("case_insensitive_text", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("GREEN",K1:K6,L1:L6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3", got)
+		}
+	})
+
+	// --- Numeric vs text type matching ---
+	t.Run("numeric_vs_text_no_match", func(t *testing.T) {
+		// Looking for string "10" in numeric array should not match number 10
+		cf := evalCompile(t, `XLOOKUP("10",A1:A6,B1:B6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A (string vs number mismatch)", got)
+		}
+	})
+
+	// --- Empty if_not_found (comma present but value empty) ---
+	t.Run("empty_if_not_found_reverts_to_NA", func(t *testing.T) {
+		// XLOOKUP(99,A1:A6,B1:B6,,0,1) - the 4th arg is empty -> defaults to #N/A
+		cf := evalCompile(t, `XLOOKUP(99,A1:A6,B1:B6,,0,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- Wrong arg count ---
+	t.Run("too_few_args_error", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(10,A1:A6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error for too few args", got)
+		}
+	})
+
+	t.Run("too_many_args_error", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(10,A1:A6,B1:B6,"nf",0,1,99)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error for too many args", got)
+		}
+	})
+
+	// --- Return array is different range than lookup ---
+	t.Run("return_array_different_cols", func(t *testing.T) {
+		// Lookup in A, return from C (skipping B)
+		cf := evalCompile(t, `XLOOKUP(20,A1:A6,C1:C6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2000 {
+			t.Errorf("got %v, want 2000", got)
+		}
+	})
+
+	// --- XLOOKUP defaults: match_mode=0, search_mode=1 ---
+	t.Run("defaults_equivalent_explicit", func(t *testing.T) {
+		// Explicit: XLOOKUP(30,A1:A6,B1:B6,,0,1) should equal XLOOKUP(30,A1:A6,B1:B6)
+		cf1 := evalCompile(t, `XLOOKUP(30,A1:A6,B1:B6)`)
+		got1, err := Eval(cf1, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval default: %v", err)
+		}
+		cf2 := evalCompile(t, `XLOOKUP(30,A1:A6,B1:B6,,0,1)`)
+		got2, err := Eval(cf2, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval explicit: %v", err)
+		}
+		if got1.Type != got2.Type || got1.Str != got2.Str {
+			t.Errorf("defaults %v != explicit %v", got1, got2)
+		}
+	})
+
+	// --- XLOOKUP vs VLOOKUP cross-check ---
+	t.Run("xlookup_matches_vlookup_exact", func(t *testing.T) {
+		// VLOOKUP(20,A1:B6,2,FALSE) should equal XLOOKUP(20,A1:A6,B1:B6,,0,1)
+		cfV := evalCompile(t, `VLOOKUP(20,A1:B6,2,FALSE)`)
+		gotV, err := Eval(cfV, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval VLOOKUP: %v", err)
+		}
+		cfX := evalCompile(t, `XLOOKUP(20,A1:A6,B1:B6,,0,1)`)
+		gotX, err := Eval(cfX, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval XLOOKUP: %v", err)
+		}
+		if gotV.Type != gotX.Type || gotV.Str != gotX.Str {
+			t.Errorf("VLOOKUP %v != XLOOKUP %v", gotV, gotX)
+		}
+	})
+
+	// --- Wildcard with search_mode -1 (reverse) ---
+	t.Run("wildcard_reverse_search", func(t *testing.T) {
+		// "*ed" matches "red" at K1 and K5; reverse search finds K5 -> returns 5
+		cf := evalCompile(t, `XLOOKUP("*ed",K1:K6,L1:L6,,2,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5 (last match of *ed via reverse)", got)
+		}
+	})
+
+	// --- match_mode -1 with lookup above max returns last element ---
+	t.Run("match_mode_neg1_above_max_returns_last", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(999,A1:A6,B1:B6,,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "fifty" {
+			t.Errorf("got %v, want fifty", got)
+		}
+	})
+
+	// --- match_mode 1 with lookup below min returns first element ---
+	t.Run("match_mode_1_below_min_returns_first", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(1,A1:A6,B1:B6,,1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "five" {
+			t.Errorf("got %v, want five", got)
+		}
+	})
+
+	// --- if_not_found with zero ---
+	t.Run("if_not_found_zero_value", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(99,A1:A6,B1:B6,0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v, want 0", got)
+		}
+	})
+
+	// --- Binary search ascending: first and last element ---
+	t.Run("binary_asc_first_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(5,A1:A6,B1:B6,,0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "five" {
+			t.Errorf("got %v, want five", got)
+		}
+	})
+
+	t.Run("binary_asc_last_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(50,A1:A6,B1:B6,,0,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "fifty" {
+			t.Errorf("got %v, want fifty", got)
+		}
+	})
+
+	// --- Binary search descending: first and last element ---
+	t.Run("binary_desc_first_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(50,D1:D6,E1:E6,,0,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "fifty" {
+			t.Errorf("got %v, want fifty", got)
+		}
+	})
+
+	t.Run("binary_desc_last_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(5,D1:D6,E1:E6,,0,-2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "five" {
+			t.Errorf("got %v, want five", got)
+		}
+	})
+
+	// --- Wildcard with no match and custom if_not_found ---
+	t.Run("wildcard_no_match_custom_not_found", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP("zzz*",K1:K6,L1:L6,"nope",2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "nope" {
+			t.Errorf("got %v, want nope", got)
+		}
+	})
+
+	// --- Exact match at boundary positions ---
+	t.Run("exact_first_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(5,A1:A6,B1:B6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "five" {
+			t.Errorf("got %v, want five", got)
+		}
+	})
+
+	t.Run("exact_last_element", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(50,A1:A6,B1:B6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "fifty" {
+			t.Errorf("got %v, want fifty", got)
+		}
+	})
+
+	// --- Binary ascending next_smaller below minimum -> not found ---
+	t.Run("binary_asc_next_smaller_below_min", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(1,A1:A6,B1:B6,"none",-1,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "none" {
+			t.Errorf("got %v, want none", got)
+		}
+	})
+
+	// --- Binary ascending next_larger above max -> not found ---
+	t.Run("binary_asc_next_larger_above_max", func(t *testing.T) {
+		cf := evalCompile(t, `XLOOKUP(100,A1:A6,B1:B6,"none",1,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "none" {
+			t.Errorf("got %v, want none", got)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Comprehensive XMATCH tests
+// ---------------------------------------------------------------------------
+
+func TestXMATCH_ComprehensiveExtended(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// A1:A8 — ascending numbers
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(10),
+			{Col: 1, Row: 3}: NumberVal(20),
+			{Col: 1, Row: 4}: NumberVal(30),
+			{Col: 1, Row: 5}: NumberVal(40),
+			{Col: 1, Row: 6}: NumberVal(50),
+			{Col: 1, Row: 7}: NumberVal(60),
+			{Col: 1, Row: 8}: NumberVal(70),
+
+			// B1:B8 — descending numbers
+			{Col: 2, Row: 1}: NumberVal(70),
+			{Col: 2, Row: 2}: NumberVal(60),
+			{Col: 2, Row: 3}: NumberVal(50),
+			{Col: 2, Row: 4}: NumberVal(40),
+			{Col: 2, Row: 5}: NumberVal(30),
+			{Col: 2, Row: 6}: NumberVal(20),
+			{Col: 2, Row: 7}: NumberVal(10),
+			{Col: 2, Row: 8}: NumberVal(5),
+
+			// C1:C6 — strings
+			{Col: 3, Row: 1}: StringVal("alpha"),
+			{Col: 3, Row: 2}: StringVal("bravo"),
+			{Col: 3, Row: 3}: StringVal("charlie"),
+			{Col: 3, Row: 4}: StringVal("delta"),
+			{Col: 3, Row: 5}: StringVal("echo"),
+			{Col: 3, Row: 6}: StringVal("foxtrot"),
+
+			// D1:D6 — duplicates
+			{Col: 4, Row: 1}: NumberVal(10),
+			{Col: 4, Row: 2}: NumberVal(20),
+			{Col: 4, Row: 3}: NumberVal(30),
+			{Col: 4, Row: 4}: NumberVal(20),
+			{Col: 4, Row: 5}: NumberVal(10),
+			{Col: 4, Row: 6}: NumberVal(20),
+
+			// E1:E1 — single element
+			{Col: 5, Row: 1}: NumberVal(42),
+
+			// F1:F4 — wildcard test strings
+			{Col: 6, Row: 1}: StringVal("Banana Split"),
+			{Col: 6, Row: 2}: StringVal("Apple Pie"),
+			{Col: 6, Row: 3}: StringVal("Cherry Tart"),
+			{Col: 6, Row: 4}: StringVal("Apple Crumble"),
+
+			// G1:G10 — large array (10 ascending elements)
+			{Col: 7, Row: 1}:  NumberVal(100),
+			{Col: 7, Row: 2}:  NumberVal(200),
+			{Col: 7, Row: 3}:  NumberVal(300),
+			{Col: 7, Row: 4}:  NumberVal(400),
+			{Col: 7, Row: 5}:  NumberVal(500),
+			{Col: 7, Row: 6}:  NumberVal(600),
+			{Col: 7, Row: 7}:  NumberVal(700),
+			{Col: 7, Row: 8}:  NumberVal(800),
+			{Col: 7, Row: 9}:  NumberVal(900),
+			{Col: 7, Row: 10}: NumberVal(1000),
+		},
+	}
+
+	// --- Exact match: found ---
+	t.Run("exact_found_number", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(30,A1:A8)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4", got)
+		}
+	})
+
+	t.Run("exact_found_string", func(t *testing.T) {
+		cf := evalCompile(t, `XMATCH("charlie",C1:C6)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3", got)
+		}
+	})
+
+	// --- Exact match: not found ---
+	t.Run("exact_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(99,A1:A8)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- match_mode -1: next smaller ---
+	t.Run("next_smaller_between_values", func(t *testing.T) {
+		// 25 between 20 (pos 3) and 30 (pos 4); next smaller = 20 -> position 3
+		cf := evalCompile(t, "XMATCH(25,A1:A8,-1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3 (position of 20)", got)
+		}
+	})
+
+	t.Run("next_smaller_exact_hit", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(40,A1:A8,-1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5", got)
+		}
+	})
+
+	// --- match_mode 1: next larger ---
+	t.Run("next_larger_between_values", func(t *testing.T) {
+		// 25 between 20 and 30; next larger = 30 -> position 4
+		cf := evalCompile(t, "XMATCH(25,A1:A8,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4 (position of 30)", got)
+		}
+	})
+
+	t.Run("next_larger_exact_hit", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(40,A1:A8,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5", got)
+		}
+	})
+
+	// --- match_mode 2: wildcard ---
+	t.Run("wildcard_star_match", func(t *testing.T) {
+		cf := evalCompile(t, `XMATCH("Apple*",F1:F4,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2 (Apple Pie)", got)
+		}
+	})
+
+	t.Run("wildcard_question_mark", func(t *testing.T) {
+		// "Cherry Tar?" should match "Cherry Tart"
+		cf := evalCompile(t, `XMATCH("Cherry Tar?",F1:F4,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3", got)
+		}
+	})
+
+	t.Run("wildcard_no_match", func(t *testing.T) {
+		cf := evalCompile(t, `XMATCH("Mango*",F1:F4,2)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- search_mode -1: reverse search ---
+	t.Run("reverse_search_finds_last_duplicate", func(t *testing.T) {
+		// D has 20 at positions 2, 4, 6; reverse should find position 6
+		cf := evalCompile(t, "XMATCH(20,D1:D6,0,-1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("got %v, want 6 (last occurrence of 20)", got)
+		}
+	})
+
+	t.Run("forward_search_finds_first_duplicate", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(20,D1:D6,0,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2 (first occurrence of 20)", got)
+		}
+	})
+
+	// --- search_mode 2: binary ascending ---
+	t.Run("binary_asc_exact_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(40,A1:A8,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5", got)
+		}
+	})
+
+	t.Run("binary_asc_exact_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(25,A1:A8,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("binary_asc_next_smaller", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(25,A1:A8,-1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v, want 3 (position of 20)", got)
+		}
+	})
+
+	t.Run("binary_asc_next_larger", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(25,A1:A8,1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4 (position of 30)", got)
+		}
+	})
+
+	// --- search_mode -2: binary descending ---
+	t.Run("binary_desc_exact_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(40,B1:B8,0,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4", got)
+		}
+	})
+
+	t.Run("binary_desc_exact_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(25,B1:B8,0,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("binary_desc_next_smaller", func(t *testing.T) {
+		// 25 in descending [70,60,50,40,30,20,10,5]; next smaller is 20 at pos 6
+		cf := evalCompile(t, "XMATCH(25,B1:B8,-1,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("got %v, want 6 (position of 20)", got)
+		}
+	})
+
+	t.Run("binary_desc_next_larger", func(t *testing.T) {
+		// 25 in descending [70,60,50,40,30,20,10,5]; next larger is 30 at pos 5
+		cf := evalCompile(t, "XMATCH(25,B1:B8,1,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5 (position of 30)", got)
+		}
+	})
+
+	// --- Below minimum for next-smaller -> #N/A ---
+	t.Run("next_smaller_below_min_returns_NA", func(t *testing.T) {
+		// All values >= 5, lookup 1 with match_mode -1 -> no value <= 1
+		cf := evalCompile(t, "XMATCH(1,A1:A8,-1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- Above maximum for next-larger -> #N/A ---
+	t.Run("next_larger_above_max_returns_NA", func(t *testing.T) {
+		// All values <= 70, lookup 100 with match_mode 1 -> no value >= 100
+		cf := evalCompile(t, "XMATCH(100,A1:A8,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- Case-insensitive ---
+	t.Run("case_insensitive_string", func(t *testing.T) {
+		cf := evalCompile(t, `XMATCH("DELTA",C1:C6,0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4", got)
+		}
+	})
+
+	t.Run("case_insensitive_mixed_case", func(t *testing.T) {
+		cf := evalCompile(t, `XMATCH("FoXtRoT",C1:C6,0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("got %v, want 6", got)
+		}
+	})
+
+	// --- Single element ---
+	t.Run("single_element_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(42,E1:E1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("single_element_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(99,E1:E1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- Large array ---
+	t.Run("large_array_exact_match", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(700,G1:G10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 7 {
+			t.Errorf("got %v, want 7", got)
+		}
+	})
+
+	t.Run("large_array_binary_asc", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(700,G1:G10,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 7 {
+			t.Errorf("got %v, want 7", got)
+		}
+	})
+
+	t.Run("large_array_next_smaller_binary", func(t *testing.T) {
+		// 750 -> next smaller in ascending [100..1000 by 100] is 700 at pos 7
+		cf := evalCompile(t, "XMATCH(750,G1:G10,-1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 7 {
+			t.Errorf("got %v, want 7 (position of 700)", got)
+		}
+	})
+
+	t.Run("large_array_next_larger_binary", func(t *testing.T) {
+		// 750 -> next larger in ascending [100..1000 by 100] is 800 at pos 8
+		cf := evalCompile(t, "XMATCH(750,G1:G10,1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 8 {
+			t.Errorf("got %v, want 8 (position of 800)", got)
+		}
+	})
+
+	// --- Wrong arg count ---
+	t.Run("too_few_args", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(10)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error for too few args", got)
+		}
+	})
+
+	t.Run("too_many_args", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(10,A1:A8,0,1,99)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError {
+			t.Errorf("got %v, want error for too many args", got)
+		}
+	})
+
+	// --- Default match_mode and search_mode ---
+	t.Run("defaults_exact_first_to_last", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(50,A1:A8)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("got %v, want 6", got)
+		}
+	})
+
+	// --- Cross-check: XMATCH(val, range, 0) = MATCH(val, range, 0) ---
+	t.Run("cross_check_xmatch_vs_match", func(t *testing.T) {
+		cfX := evalCompile(t, "XMATCH(30,A1:A8,0)")
+		gotX, err := Eval(cfX, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval XMATCH: %v", err)
+		}
+		cfM := evalCompile(t, "MATCH(30,A1:A8,0)")
+		gotM, err := Eval(cfM, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval MATCH: %v", err)
+		}
+		if gotX.Type != gotM.Type || gotX.Num != gotM.Num {
+			t.Errorf("XMATCH %v != MATCH %v", gotX, gotM)
+		}
+	})
+
+	// --- Duplicate values with different search modes ---
+	t.Run("duplicates_forward_finds_first", func(t *testing.T) {
+		// 10 in D1:D6 at positions 1 and 5; forward finds 1
+		cf := evalCompile(t, "XMATCH(10,D1:D6,0,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("duplicates_reverse_finds_last", func(t *testing.T) {
+		// 10 in D1:D6 at positions 1 and 5; reverse finds 5
+		cf := evalCompile(t, "XMATCH(10,D1:D6,0,-1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v, want 5", got)
+		}
+	})
+
+	// --- Wildcard with reverse search ---
+	t.Run("wildcard_reverse_finds_last", func(t *testing.T) {
+		// "Apple*" matches F2 ("Apple Pie") and F4 ("Apple Crumble")
+		// Reverse search should find F4 (position 4)
+		cf := evalCompile(t, `XMATCH("Apple*",F1:F4,2,-1)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v, want 4 (last Apple match)", got)
+		}
+	})
+
+	// --- Number in string array returns NA ---
+	t.Run("number_in_string_array", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(42,C1:C6,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- First and last positions with binary search ---
+	t.Run("binary_asc_first_position", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(5,A1:A8,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("binary_asc_last_position", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(70,A1:A8,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 8 {
+			t.Errorf("got %v, want 8", got)
+		}
+	})
+
+	t.Run("binary_desc_first_position", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(70,B1:B8,0,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1", got)
+		}
+	})
+
+	t.Run("binary_desc_last_position", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(5,B1:B8,0,-2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 8 {
+			t.Errorf("got %v, want 8", got)
+		}
+	})
+
+	// --- Binary ascending: next_smaller below minimum -> NA ---
+	t.Run("binary_asc_next_smaller_below_min_NA", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(1,A1:A8,-1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	// --- Binary ascending: next_larger above max -> NA ---
+	t.Run("binary_asc_next_larger_above_max_NA", func(t *testing.T) {
+		cf := evalCompile(t, "XMATCH(100,A1:A8,1,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+}

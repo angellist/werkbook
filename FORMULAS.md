@@ -254,7 +254,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | LOWER | Converts text to lowercase. | Text | 23 |
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
-| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 74 |
+| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
 | MAX | Returns the largest numeric value. | Statistical | 37 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
@@ -430,7 +430,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | VARP | Returns the population variance. | Statistical | 30 |
 | VARPA | Returns the population variance including logical values and text coercions. | Statistical | 22 |
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
-| VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 86 |
+| VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 87 |
 | VSTACK | Stacks arrays vertically. | Lookup & Reference | 18 |
 | WEEKDAY | Returns the day of the week for a date. | Date & Time | 59 |
 | WEEKNUM | Returns the week number of a date. | Date & Time | 39 |
@@ -440,8 +440,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | WRAPCOLS | Wraps a vector into a two-dimensional array by columns. | Lookup & Reference | 20 |
 | WRAPROWS | Wraps a vector into a two-dimensional array by rows. | Lookup & Reference | 19 |
 | XIRR | Returns the internal rate of return for cash flows on irregular dates. | Financial | 19 |
-| XLOOKUP | Looks up a value in one array and returns the matching value from another array. | Lookup & Reference | 65 |
-| XMATCH | Returns the position of a lookup value with exact, wildcard, or binary search modes. | Lookup & Reference | 36 |
+| XLOOKUP | Looks up a value in one array and returns the matching value from another array. | Lookup & Reference | 111 |
+| XMATCH | Returns the position of a lookup value with exact, wildcard, or binary search modes. | Lookup & Reference | 81 |
 | XNPV | Returns the net present value of cash flows on irregular dates. | Financial | 18 |
 | XOR | Returns TRUE when an odd number of supplied conditions are TRUE. | Logical | 34 |
 | YEAR | Returns the year from a date. | Date & Time | 26 |
