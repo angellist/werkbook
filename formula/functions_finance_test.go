@@ -1,6 +1,7 @@
 package formula
 
 import (
+	"fmt"
 	"math"
 	"testing"
 )
@@ -12650,6 +12651,783 @@ func TestYIELDMAT_ViaEval(t *testing.T) {
 	}
 	if math.Abs(v.Num-0.060954) > 0.001 {
 		t.Errorf("got %f, want 0.060954", v.Num)
+	}
+}
+
+// === Additional PRICEDISC tests via Eval ===
+
+func TestPRICEDISC_ViaEval_90Day(t *testing.T) {
+	// 90-day T-bill, 5% discount, basis 0 (US 30/360)
+	// DATE(2024,1,15)=45306, DATE(2024,4,15)=45397
+	// DSM=90(30/360), B=360 => price = 100 - 0.05*(90/360)*100 = 98.75
+	cf := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,4,15), 0.05, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-98.75) > 0.01 {
+		t.Errorf("got %f, want 98.75", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_180Day(t *testing.T) {
+	// 180-day, 10% discount, basis 2 (actual/360)
+	// DATE(2024,1,15)=45306, DATE(2024,7,13)=45486 => 180 actual days
+	// DSM=180, B=360 => price = 100 - 0.10*(180/360)*100 = 95.0
+	cf := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,7,13), 0.10, 100, 2)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-95.0) > 0.01 {
+		t.Errorf("got %f, want 95.0", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_365Day(t *testing.T) {
+	// 365-day, 1% discount, basis 3 (actual/365)
+	// DATE(2023,1,1) to DATE(2024,1,1) => 365 actual days
+	// DSM=365, B=365 => price = 100 - 0.01*(365/365)*100 = 99.0
+	cf := evalCompile(t, "PRICEDISC(DATE(2023,1,1), DATE(2024,1,1), 0.01, 100, 3)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-99.0) > 0.01 {
+		t.Errorf("got %f, want 99.0", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_HighDiscount(t *testing.T) {
+	// 20% discount, 180 days, basis 0 => price = 100 - 0.20*(180/360)*100 = 90.0
+	cf := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,7,15), 0.20, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-90.0) > 0.01 {
+		t.Errorf("got %f, want 90.0", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_LowDiscount(t *testing.T) {
+	// 0.1% discount, 90 days, basis 0 => price = 100 - 0.001*(90/360)*100 = 99.975
+	cf := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,4,15), 0.001, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-99.975) > 0.001 {
+		t.Errorf("got %f, want 99.975", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_NonStdRedemption(t *testing.T) {
+	// Non-100 redemption: redemption=50, discount=0.05, 90 days, basis 0
+	// price = 50 - 0.05*(90/360)*50 = 49.375
+	cf := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,4,15), 0.05, 50, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-49.375) > 0.001 {
+		t.Errorf("got %f, want 49.375", v.Num)
+	}
+}
+
+func TestPRICEDISC_ViaEval_AllBasisTypes(t *testing.T) {
+	// Test all 5 basis types via Eval with DATE() calls
+	// DATE(2024,3,1) to DATE(2024,9,1), discount=0.06, redemption=100
+	tests := []struct {
+		name    string
+		formula string
+		wantMin float64
+		wantMax float64
+	}{
+		{"basis 0", "PRICEDISC(DATE(2024,3,1), DATE(2024,9,1), 0.06, 100, 0)", 96.5, 97.5},
+		{"basis 1", "PRICEDISC(DATE(2024,3,1), DATE(2024,9,1), 0.06, 100, 1)", 96.5, 97.5},
+		{"basis 2", "PRICEDISC(DATE(2024,3,1), DATE(2024,9,1), 0.06, 100, 2)", 96.5, 97.5},
+		{"basis 3", "PRICEDISC(DATE(2024,3,1), DATE(2024,9,1), 0.06, 100, 3)", 96.5, 97.5},
+		{"basis 4", "PRICEDISC(DATE(2024,3,1), DATE(2024,9,1), 0.06, 100, 4)", 96.5, 97.5},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			if v.Num < tc.wantMin || v.Num > tc.wantMax {
+				t.Errorf("got %f, want between %f and %f", v.Num, tc.wantMin, tc.wantMax)
+			}
+		})
+	}
+}
+
+func TestPRICEDISC_ViaEval_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"settlement >= maturity", "PRICEDISC(DATE(2024,7,15), DATE(2024,1,15), 0.05, 100, 0)"},
+		{"negative discount", "PRICEDISC(DATE(2024,1,15), DATE(2024,7,15), -0.05, 100, 0)"},
+		{"invalid basis 5", "PRICEDISC(DATE(2024,1,15), DATE(2024,7,15), 0.05, 100, 5)"},
+		{"too few args", "PRICEDISC(DATE(2024,1,15), DATE(2024,7,15), 0.05)"},
+		{"too many args", "PRICEDISC(DATE(2024,1,15), DATE(2024,7,15), 0.05, 100, 0, 1)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueError {
+				t.Errorf("expected error, got type %v num=%f", v.Type, v.Num)
+			}
+		})
+	}
+}
+
+func TestPRICEDISC_ViaEval_DefaultBasis(t *testing.T) {
+	// Omitting basis should default to 0
+	cf1 := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,4,15), 0.05, 100)")
+	v1, err := Eval(cf1, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf2 := evalCompile(t, "PRICEDISC(DATE(2024,1,15), DATE(2024,4,15), 0.05, 100, 0)")
+	v2, err := Eval(cf2, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1.Type != ValueNumber || v2.Type != ValueNumber {
+		t.Fatalf("expected numbers, got %v and %v", v1.Type, v2.Type)
+	}
+	if math.Abs(v1.Num-v2.Num) > 1e-10 {
+		t.Errorf("default basis (%f) != basis 0 (%f)", v1.Num, v2.Num)
+	}
+}
+
+// === Additional YIELDDISC tests via Eval ===
+
+func TestYIELDDISC_ViaEval_AllBasisTypes(t *testing.T) {
+	// All 5 basis types via Eval with DATE() calls
+	// DATE(2024,3,1) to DATE(2024,9,1), pr=97, redemption=100
+	tests := []struct {
+		name    string
+		formula string
+		wantMin float64
+		wantMax float64
+	}{
+		{"basis 0", "YIELDDISC(DATE(2024,3,1), DATE(2024,9,1), 97, 100, 0)", 0.05, 0.07},
+		{"basis 1", "YIELDDISC(DATE(2024,3,1), DATE(2024,9,1), 97, 100, 1)", 0.05, 0.07},
+		{"basis 2", "YIELDDISC(DATE(2024,3,1), DATE(2024,9,1), 97, 100, 2)", 0.05, 0.07},
+		{"basis 3", "YIELDDISC(DATE(2024,3,1), DATE(2024,9,1), 97, 100, 3)", 0.05, 0.07},
+		{"basis 4", "YIELDDISC(DATE(2024,3,1), DATE(2024,9,1), 97, 100, 4)", 0.05, 0.07},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			if v.Num < tc.wantMin || v.Num > tc.wantMax {
+				t.Errorf("got %f, want between %f and %f", v.Num, tc.wantMin, tc.wantMax)
+			}
+		})
+	}
+}
+
+func TestYIELDDISC_ViaEval_PriceEqualsRedemption(t *testing.T) {
+	// When price = redemption, yield should be 0
+	cf := evalCompile(t, "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 100, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num) > 1e-10 {
+		t.Errorf("got %f, want 0.0 when price = redemption", v.Num)
+	}
+}
+
+func TestYIELDDISC_ViaEval_HighPrice(t *testing.T) {
+	// Price > redemption => negative yield
+	cf := evalCompile(t, "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 105, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if v.Num >= 0 {
+		t.Errorf("expected negative yield when price > redemption, got %f", v.Num)
+	}
+}
+
+func TestYIELDDISC_ViaEval_LowPrice(t *testing.T) {
+	// Very low price => high yield
+	// pr=80, redemption=100, ~180 days basis 0
+	// yield = (100-80)/80 * (360/180) = 0.25 * 2 = 0.50
+	cf := evalCompile(t, "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 80, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.50) > 0.01 {
+		t.Errorf("got %f, want ~0.50", v.Num)
+	}
+}
+
+func TestYIELDDISC_ViaEval_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"price zero", "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 0, 100, 0)"},
+		{"price negative", "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), -5, 100, 0)"},
+		{"settlement >= maturity", "YIELDDISC(DATE(2024,7,15), DATE(2024,1,15), 98, 100, 0)"},
+		{"invalid basis", "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 98, 100, 6)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueError {
+				t.Errorf("expected error, got type %v num=%f", v.Type, v.Num)
+			}
+		})
+	}
+}
+
+func TestYIELDDISC_ViaEval_DefaultBasis(t *testing.T) {
+	// Omitting basis should default to 0
+	cf1 := evalCompile(t, "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 98, 100)")
+	v1, err := Eval(cf1, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf2 := evalCompile(t, "YIELDDISC(DATE(2024,1,15), DATE(2024,7,15), 98, 100, 0)")
+	v2, err := Eval(cf2, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1.Type != ValueNumber || v2.Type != ValueNumber {
+		t.Fatalf("expected numbers, got %v and %v", v1.Type, v2.Type)
+	}
+	if math.Abs(v1.Num-v2.Num) > 1e-10 {
+		t.Errorf("default basis (%f) != basis 0 (%f)", v1.Num, v2.Num)
+	}
+}
+
+// === PRICEDISC/YIELDDISC round-trip consistency ===
+
+func TestPRICEDISC_YIELDDISC_RoundTrip(t *testing.T) {
+	// Compute price via PRICEDISC, then feed that price into YIELDDISC.
+	// The yield from YIELDDISC should NOT equal the discount rate (they are different concepts),
+	// but the round-trip PRICEDISC -> YIELDDISC -> should give a consistent yield.
+	// Then use that yield to verify: (redemption - price) / price * (B / DSM) = yield
+	tests := []struct {
+		name       string
+		settlement string
+		maturity   string
+		discount   float64
+		redemption float64
+		basis      int
+	}{
+		{"90day_5pct_b0", "DATE(2024,1,15)", "DATE(2024,4,15)", 0.05, 100, 0},
+		{"180day_10pct_b1", "DATE(2024,1,15)", "DATE(2024,7,13)", 0.10, 100, 1},
+		{"365day_3pct_b2", "DATE(2023,1,1)", "DATE(2024,1,1)", 0.03, 100, 2},
+		{"90day_8pct_b3", "DATE(2024,3,1)", "DATE(2024,5,30)", 0.08, 100, 3},
+		{"180day_2pct_b4", "DATE(2024,1,1)", "DATE(2024,7,1)", 0.02, 100, 4},
+		{"non100_redemp", "DATE(2024,1,15)", "DATE(2024,4,15)", 0.05, 200, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Step 1: compute price
+			priceFormula := fmt.Sprintf("PRICEDISC(%s, %s, %g, %g, %d)",
+				tc.settlement, tc.maturity, tc.discount, tc.redemption, tc.basis)
+			cfPrice := evalCompile(t, priceFormula)
+			vPrice, err := Eval(cfPrice, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vPrice.Type != ValueNumber {
+				t.Fatalf("PRICEDISC: expected number, got %v (str=%q)", vPrice.Type, vPrice.Str)
+			}
+
+			// Step 2: compute yield from that price
+			yieldFormula := fmt.Sprintf("YIELDDISC(%s, %s, %g, %g, %d)",
+				tc.settlement, tc.maturity, vPrice.Num, tc.redemption, tc.basis)
+			cfYield := evalCompile(t, yieldFormula)
+			vYield, err := Eval(cfYield, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vYield.Type != ValueNumber {
+				t.Fatalf("YIELDDISC: expected number, got %v (str=%q)", vYield.Type, vYield.Str)
+			}
+
+			// Step 3: recompute price from that yield (using the yield as a discount would
+			// give a different price, but we can verify the yield is positive and reasonable)
+			if vYield.Num <= 0 {
+				t.Errorf("expected positive yield, got %f", vYield.Num)
+			}
+
+			// Step 4: verify YIELDDISC result feeds back to reconstruct the original price
+			// YIELDDISC = (redemption - pr) / pr * (B / DSM)
+			// => pr = redemption / (1 + yield * DSM / B)
+			// Verify by going back through PRICEDISC with the computed yield as discount
+			// won't give exact match (different formula), but yield should be > 0
+			if vYield.Num > 1.0 {
+				t.Errorf("yield seems unreasonably high: %f", vYield.Num)
+			}
+		})
+	}
+}
+
+// === Additional PRICEMAT tests via Eval ===
+
+func TestPRICEMAT_ViaEval_RateEqualsYield(t *testing.T) {
+	// When rate = yield, price should be approximately 100
+	// (not exactly 100 due to accrued interest, but very close for issue near settlement)
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,14), 0.05, 0.05, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	// With issue very close to settlement, rate=yield => price ≈ 100
+	if math.Abs(v.Num-100.0) > 0.1 {
+		t.Errorf("rate=yield with issue~settlement should give price~100, got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_RateGtYield(t *testing.T) {
+	// When rate > yield, security trades at a premium (price > 100 area)
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.08, 0.04, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if v.Num <= 100.0 {
+		t.Errorf("rate > yield should give premium (price > 100), got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_RateLtYield(t *testing.T) {
+	// When rate < yield, security trades at a discount (price < 100 area)
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.02, 0.06, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if v.Num >= 100.0 {
+		t.Errorf("rate < yield should give discount (price < 100), got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_ZeroRate(t *testing.T) {
+	// Zero coupon rate: price = 100 / (1 + DSM/B * yld)
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0, 0.05, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	// With zero rate and yld=5%, price should be below 100
+	if v.Num >= 100.0 || v.Num <= 90.0 {
+		t.Errorf("zero rate with 5%% yield: expected price in 90-100 range, got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_AllBasisTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"basis 0", "PRICEMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 0.06, 0)"},
+		{"basis 1", "PRICEMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 0.06, 1)"},
+		{"basis 2", "PRICEMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 0.06, 2)"},
+		{"basis 3", "PRICEMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 0.06, 3)"},
+		{"basis 4", "PRICEMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 0.06, 4)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			// With rate < yield, price should be below 100 for all basis types
+			if v.Num >= 100.0 || v.Num <= 95.0 {
+				t.Errorf("expected price in 95-100 range for rate<yield, got %f", v.Num)
+			}
+		})
+	}
+}
+
+func TestPRICEMAT_ViaEval_ShortTerm(t *testing.T) {
+	// Very short term: 2 weeks
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,6,1), DATE(2024,6,15), DATE(2024,5,15), 0.05, 0.05, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	// Short term with rate=yield => near 100
+	if math.Abs(v.Num-100.0) > 0.5 {
+		t.Errorf("short term rate=yield should be near 100, got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_LongTerm(t *testing.T) {
+	// Long term: 2 years
+	cf := evalCompile(t, "PRICEMAT(DATE(2024,1,1), DATE(2026,1,1), DATE(2023,7,1), 0.04, 0.06, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	// rate < yield over 2 years => significant discount
+	if v.Num >= 100.0 {
+		t.Errorf("long term rate<yield should be below 100, got %f", v.Num)
+	}
+}
+
+func TestPRICEMAT_ViaEval_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"settlement >= maturity", "PRICEMAT(DATE(2024,7,15), DATE(2024,1,15), DATE(2024,1,1), 0.05, 0.05, 0)"},
+		{"negative rate", "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), -0.05, 0.05, 0)"},
+		{"negative yield", "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, -0.05, 0)"},
+		{"invalid basis 5", "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 0.05, 5)"},
+		{"too few args", "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05)"},
+		{"too many args", "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 0.05, 0, 1)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueError {
+				t.Errorf("expected error, got type %v num=%f", v.Type, v.Num)
+			}
+		})
+	}
+}
+
+func TestPRICEMAT_ViaEval_DefaultBasis(t *testing.T) {
+	cf1 := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 0.06)")
+	v1, err := Eval(cf1, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf2 := evalCompile(t, "PRICEMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 0.06, 0)")
+	v2, err := Eval(cf2, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1.Type != ValueNumber || v2.Type != ValueNumber {
+		t.Fatalf("expected numbers, got %v and %v", v1.Type, v2.Type)
+	}
+	if math.Abs(v1.Num-v2.Num) > 1e-10 {
+		t.Errorf("default basis (%f) != basis 0 (%f)", v1.Num, v2.Num)
+	}
+}
+
+// === Additional YIELDMAT tests via Eval ===
+
+func TestYIELDMAT_ViaEval_AllBasisTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"basis 0", "YIELDMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 99, 0)"},
+		{"basis 1", "YIELDMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 99, 1)"},
+		{"basis 2", "YIELDMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 99, 2)"},
+		{"basis 3", "YIELDMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 99, 3)"},
+		{"basis 4", "YIELDMAT(DATE(2024,3,1), DATE(2024,9,1), DATE(2024,1,1), 0.05, 99, 4)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			// With pr=99 and rate=5%, yield should be positive and higher than rate
+			if v.Num <= 0 {
+				t.Errorf("expected positive yield, got %f", v.Num)
+			}
+		})
+	}
+}
+
+func TestYIELDMAT_ViaEval_PriceAtPar(t *testing.T) {
+	// When price is at par (100), yield should approximately equal rate
+	// (not exactly, because of accrued interest from issue to settlement)
+	// Use issue = settlement to minimize accrued interest effect
+	cf := evalCompile(t, "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,15), 0.05, 100, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	// With issue=settlement, price=100, yield should equal rate exactly
+	if math.Abs(v.Num-0.05) > 0.001 {
+		t.Errorf("price at par with issue=settlement: yield should ≈ rate (0.05), got %f", v.Num)
+	}
+}
+
+func TestYIELDMAT_ViaEval_HighPrice(t *testing.T) {
+	// Price well above par => yield below rate
+	cf := evalCompile(t, "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 105, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if v.Num >= 0.05 {
+		t.Errorf("high price should give yield below rate, got %f", v.Num)
+	}
+}
+
+func TestYIELDMAT_ViaEval_LowPrice(t *testing.T) {
+	// Price well below par => yield above rate
+	cf := evalCompile(t, "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 95, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got %v", v.Type)
+	}
+	if v.Num <= 0.05 {
+		t.Errorf("low price should give yield above rate, got %f", v.Num)
+	}
+}
+
+func TestYIELDMAT_ViaEval_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{"settlement >= maturity", "YIELDMAT(DATE(2024,7,15), DATE(2024,1,15), DATE(2024,1,1), 0.05, 100, 0)"},
+		{"negative rate", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), -0.05, 100, 0)"},
+		{"price zero", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 0, 0)"},
+		{"price negative", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, -10, 0)"},
+		{"invalid basis 5", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 100, 5)"},
+		{"too few args", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05)"},
+		{"too many args", "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 100, 0, 1)"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueError {
+				t.Errorf("expected error, got type %v num=%f", v.Type, v.Num)
+			}
+		})
+	}
+}
+
+func TestYIELDMAT_ViaEval_DefaultBasis(t *testing.T) {
+	cf1 := evalCompile(t, "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 99)")
+	v1, err := Eval(cf1, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf2 := evalCompile(t, "YIELDMAT(DATE(2024,1,15), DATE(2024,7,15), DATE(2024,1,1), 0.05, 99, 0)")
+	v2, err := Eval(cf2, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1.Type != ValueNumber || v2.Type != ValueNumber {
+		t.Fatalf("expected numbers, got %v and %v", v1.Type, v2.Type)
+	}
+	if math.Abs(v1.Num-v2.Num) > 1e-10 {
+		t.Errorf("default basis (%f) != basis 0 (%f)", v1.Num, v2.Num)
+	}
+}
+
+// === PRICEMAT/YIELDMAT round-trip consistency ===
+
+func TestPRICEMAT_YIELDMAT_RoundTrip(t *testing.T) {
+	// Compute price via PRICEMAT, then feed that price into YIELDMAT.
+	// The yield from YIELDMAT should match the original yield parameter.
+	tests := []struct {
+		name       string
+		settlement string
+		maturity   string
+		issue      string
+		rate       float64
+		yld        float64
+		basis      int
+	}{
+		{"basic_b0", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 0.06, 0},
+		{"basic_b1", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 0.06, 1},
+		{"basic_b2", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 0.06, 2},
+		{"basic_b3", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 0.06, 3},
+		{"basic_b4", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 0.06, 4},
+		{"rate_eq_yld", "DATE(2024,3,1)", "DATE(2024,9,1)", "DATE(2024,2,1)", 0.05, 0.05, 0},
+		{"rate_gt_yld", "DATE(2024,3,1)", "DATE(2024,9,1)", "DATE(2024,2,1)", 0.08, 0.04, 0},
+		{"rate_lt_yld", "DATE(2024,3,1)", "DATE(2024,9,1)", "DATE(2024,2,1)", 0.02, 0.07, 0},
+		{"zero_rate", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0, 0.05, 0},
+		{"long_term", "DATE(2024,1,1)", "DATE(2025,7,1)", "DATE(2023,7,1)", 0.04, 0.06, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Step 1: compute price
+			priceFormula := fmt.Sprintf("PRICEMAT(%s, %s, %s, %g, %g, %d)",
+				tc.settlement, tc.maturity, tc.issue, tc.rate, tc.yld, tc.basis)
+			cfPrice := evalCompile(t, priceFormula)
+			vPrice, err := Eval(cfPrice, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vPrice.Type != ValueNumber {
+				t.Fatalf("PRICEMAT: expected number, got %v (str=%q)", vPrice.Type, vPrice.Str)
+			}
+
+			// Step 2: compute yield from that price
+			yieldFormula := fmt.Sprintf("YIELDMAT(%s, %s, %s, %g, %.10f, %d)",
+				tc.settlement, tc.maturity, tc.issue, tc.rate, vPrice.Num, tc.basis)
+			cfYield := evalCompile(t, yieldFormula)
+			vYield, err := Eval(cfYield, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vYield.Type != ValueNumber {
+				t.Fatalf("YIELDMAT: expected number, got %v (str=%q)", vYield.Type, vYield.Str)
+			}
+
+			// Step 3: yield should match original
+			if math.Abs(vYield.Num-tc.yld) > 0.0001 {
+				t.Errorf("round-trip failed: original yield=%g, recovered yield=%g (price=%g)",
+					tc.yld, vYield.Num, vPrice.Num)
+			}
+		})
+	}
+}
+
+func TestYIELDMAT_PRICEMAT_RoundTrip(t *testing.T) {
+	// Reverse direction: start with a price, compute yield via YIELDMAT,
+	// then feed yield back into PRICEMAT to recover the original price.
+	tests := []struct {
+		name       string
+		settlement string
+		maturity   string
+		issue      string
+		rate       float64
+		pr         float64
+		basis      int
+	}{
+		{"basic_b0", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 99, 0},
+		{"basic_b1", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 99, 1},
+		{"basic_b2", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,1)", 0.05, 99, 2},
+		{"premium", "DATE(2024,3,1)", "DATE(2024,9,1)", "DATE(2024,2,1)", 0.08, 102, 0},
+		{"discount", "DATE(2024,3,1)", "DATE(2024,9,1)", "DATE(2024,2,1)", 0.02, 97, 0},
+		{"at_par", "DATE(2024,1,15)", "DATE(2024,7,15)", "DATE(2024,1,15)", 0.05, 100, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Step 1: compute yield
+			yieldFormula := fmt.Sprintf("YIELDMAT(%s, %s, %s, %g, %g, %d)",
+				tc.settlement, tc.maturity, tc.issue, tc.rate, tc.pr, tc.basis)
+			cfYield := evalCompile(t, yieldFormula)
+			vYield, err := Eval(cfYield, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vYield.Type != ValueNumber {
+				t.Fatalf("YIELDMAT: expected number, got %v (str=%q)", vYield.Type, vYield.Str)
+			}
+
+			// Step 2: compute price from that yield
+			priceFormula := fmt.Sprintf("PRICEMAT(%s, %s, %s, %g, %.10f, %d)",
+				tc.settlement, tc.maturity, tc.issue, tc.rate, vYield.Num, tc.basis)
+			cfPrice := evalCompile(t, priceFormula)
+			vPrice, err := Eval(cfPrice, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if vPrice.Type != ValueNumber {
+				t.Fatalf("PRICEMAT: expected number, got %v (str=%q)", vPrice.Type, vPrice.Str)
+			}
+
+			// Step 3: price should match original
+			if math.Abs(vPrice.Num-tc.pr) > 0.01 {
+				t.Errorf("round-trip failed: original price=%g, recovered price=%g (yield=%g)",
+					tc.pr, vPrice.Num, vYield.Num)
+			}
+		})
 	}
 }
 

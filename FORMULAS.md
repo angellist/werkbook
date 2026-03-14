@@ -97,7 +97,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | CSCH | Returns the hyperbolic cosecant of a number. | Math & Trig | 28 |
 | CUMIPMT | Returns cumulative interest paid over a span of payment periods. | Financial | 33 |
 | CUMPRINC | Returns cumulative principal paid over a span of payment periods. | Financial | 29 |
-| DATE | Builds a date from year, month, and day numbers. | Date & Time | 50 |
+| DATE | Builds a date from year, month, and day numbers. | Date & Time | 72 |
 | DATEDIF | Returns the difference between two dates in requested units. | Date & Time | 18 |
 | DATEVALUE | Converts date text to a serial date number. | Date & Time | 39 |
 | DAVERAGE | Returns the average of matching records in a database range. | Db | 3 |
@@ -315,8 +315,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | POWER | Returns a number raised to a power. | Math & Trig | 49 |
 | PPMT | Returns the principal portion of a payment for a given period. | Financial | 2 |
 | PRICE | Returns the price per 100 face value of a coupon-paying security. | Financial | 24 |
-| PRICEDISC | Returns the price per 100 face value of a discounted security. | Financial | 3 |
-| PRICEMAT | Returns the price per 100 face value of a security that pays interest at maturity. | Financial | 3 |
+| PRICEDISC | Returns the price per 100 face value of a discounted security. | Financial | 31 |
+| PRICEMAT | Returns the price per 100 face value of a security that pays interest at maturity. | Financial | 32 |
 | PROB | Returns the probability that values fall within a range. | Statistical | 27 |
 | PRODUCT | Returns the product of supplied numbers. | Math & Trig | 36 |
 | PROPER | Capitalizes words in text. | Text | 25 |
@@ -447,8 +447,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | YEAR | Returns the year from a date. | Date & Time | 26 |
 | YEARFRAC | Returns the fraction of a year between two dates. | Date & Time | 38 |
 | YIELD | Returns the yield of a coupon-paying security. | Financial | 19 |
-| YIELDDISC | Returns the annual yield of a discounted security. | Financial | 3 |
-| YIELDMAT | Returns the annual yield of a security that pays interest at maturity. | Financial | 3 |
+| YIELDDISC | Returns the annual yield of a discounted security. | Financial | 23 |
+| YIELDMAT | Returns the annual yield of a security that pays interest at maturity. | Financial | 27 |
 | Z.TEST | Returns the one-tailed probability value of a z-test. | Statistical | 22 |
 
 # No Planned Support
