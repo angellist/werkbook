@@ -152,7 +152,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | FACT | Returns the factorial of a number. | Math & Trig | 28 |
 | FACTDOUBLE | Returns the double factorial of a number. | Math & Trig | 30 |
 | FALSE | Returns the logical value FALSE. | Logical | 11 |
-| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 32 |
+| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 58 |
 | FIND | Returns the position of one text value inside another, case-sensitive. | Text | 48 |
 | FISHER | Returns the Fisher transformation of a correlation coefficient. | Statistical | 15 |
 | FISHERINV | Returns the inverse Fisher transformation. | Statistical | 15 |
@@ -363,7 +363,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | SLN | Returns straight-line depreciation for one period. | Financial | 53 |
 | SLOPE | Returns the slope of a linear regression line. | Statistical | 16 |
 | SMALL | Returns the k-th smallest value in a data set. | Statistical | 28 |
-| SORT | Sorts an array by row or column order. | Logical | 26 |
+| SORT | Sorts an array by row or column order. | Logical | 50 |
 | SORTBY | Sorts an array by one or more companion arrays. | Logical | 4 |
 | SQRT | Returns the square root of a number. | Math & Trig | 29 |
 | SQRTPI | Returns the square root of a number multiplied by pi. | Math & Trig | 25 |
