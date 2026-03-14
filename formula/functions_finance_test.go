@@ -11604,6 +11604,350 @@ func TestACCRINTM_ViaEval(t *testing.T) {
 	}
 }
 
+func TestACCRINTM_AdditionalCoverage(t *testing.T) {
+	// Additional test cases beyond the existing Comprehensive suite.
+	// Serial numbers:
+	// DATE(2020,1,1)   = 43831
+	// DATE(2020,2,29)  = 43891 (leap day)
+	// DATE(2020,3,1)   = 43892
+	// DATE(2020,12,31) = 44196
+	// DATE(2021,1,1)   = 44197
+	// DATE(2023,6,15)  = 45092
+	// DATE(2023,6,22)  = 45099 (1 week later)
+	// DATE(2023,1,2)   = 44928
+	// DATE(2023,1,8)   = 44934 (1 week)
+	// DATE(2019,1,1)   = 43466
+	// DATE(2021,12,31) = 44561
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64
+	}{
+		// --- Very short accrual: 1 day, basis 0 ---
+		// issue=2023-01-01 (44927), settlement=2023-01-02 (44928)
+		// 30/360: A=1, D=360 => 1000 * 0.10 * 1/360 = 0.277778
+		{
+			name: "1 day accrual basis 0",
+			args: numArgs(44927, 44928, 0.10, 1000, 0),
+			want: 0.277778,
+			tol:  0.001,
+		},
+		// --- 1 week accrual, basis 3 ---
+		// issue=2023-06-15 (45092), settlement=2023-06-22 (45099)
+		// A=7 actual days, D=365 => 1000 * 0.10 * 7/365 = 1.917808
+		{
+			name: "1 week accrual basis 3",
+			args: numArgs(45092, 45099, 0.10, 1000, 3),
+			want: 1.917808,
+			tol:  0.0001,
+		},
+		// --- Multi-year accrual, basis 3 ---
+		// issue=2019-01-01 (43466), settlement=2021-12-31 (44561)
+		// A=1095 actual days, D=365 => 1000 * 0.05 * 1095/365 = 150.0
+		{
+			name: "multi-year 3 years basis 3",
+			args: numArgs(43466, 44561, 0.05, 1000, 3),
+			want: 150.0,
+			tol:  0.01,
+		},
+		// --- Leap year period with basis 1 ---
+		// issue=2020-01-01 (43831), settlement=2020-12-31 (44196)
+		// A=365 (actual days), D=366 (2020 is leap) => 1000 * 0.10 * 365/366 = 99.72678
+		{
+			name: "leap year 2020 full year basis 1",
+			args: numArgs(43831, 44196, 0.10, 1000, 1),
+			want: 99.72678,
+			tol:  0.001,
+		},
+		// --- Leap year spanning Feb 29, basis 1 ---
+		// issue=2020-01-01 (43831), settlement=2020-03-01 (43892)
+		// A=61 actual days, D=366 (same year 2020 is leap) => 1000 * 0.10 * 61/366 = 16.66667
+		{
+			name: "leap year issue to Mar 1 basis 1",
+			args: numArgs(43831, 43892, 0.10, 1000, 1),
+			want: 16.66667,
+			tol:  0.001,
+		},
+		// --- Very high rate (200%) ---
+		// 2/15/2008 to 5/15/2008: A=90 (30/360), D=360 => 1000 * 2.0 * 90/360 = 500.0
+		{
+			name: "rate 200 pct basis 0",
+			args: numArgs(39493, 39583, 2.0, 1000, 0),
+			want: 500.0,
+		},
+		// --- Very small rate (0.001%) ---
+		// 2/15/2008 to 5/15/2008: A=90, D=360 => 1000 * 0.00001 * 90/360 = 0.0025
+		{
+			name: "very small rate 0.00001",
+			args: numArgs(39493, 39583, 0.00001, 1000, 0),
+			want: 0.0025,
+			tol:  0.0001,
+		},
+		// --- par=100, common in bond pricing ---
+		// 2/15/2008 to 5/15/2008: A=90, D=360 => 100 * 0.05 * 90/360 = 1.25
+		{
+			name: "par 100 standard bond",
+			args: numArgs(39493, 39583, 0.05, 100, 0),
+			want: 1.25,
+		},
+		// --- par=10000 ---
+		// A=90, D=360 => 10000 * 0.05 * 90/360 = 125.0
+		{
+			name: "par 10000",
+			args: numArgs(39493, 39583, 0.05, 10000, 0),
+			want: 125.0,
+		},
+		// --- Rate exactly 1% ---
+		// A=90, D=360 => 1000 * 0.01 * 90/360 = 2.5
+		{
+			name: "rate exactly 1 pct",
+			args: numArgs(39493, 39583, 0.01, 1000, 0),
+			want: 2.5,
+		},
+		// --- Rate exactly 20% ---
+		// A=90, D=360 => 1000 * 0.20 * 90/360 = 50.0
+		{
+			name: "rate exactly 20 pct",
+			args: numArgs(39493, 39583, 0.20, 1000, 0),
+			want: 50.0,
+		},
+		// --- Basis 2 actual/360, leap year period ---
+		// issue=2020-01-01 (43831), settlement=2020-03-01 (43892)
+		// A=61 actual days, D=360 => 1000 * 0.10 * 61/360 = 16.94444
+		{
+			name: "basis 2 leap year period",
+			args: numArgs(43831, 43892, 0.10, 1000, 2),
+			want: 16.94444,
+			tol:  0.001,
+		},
+		// --- Basis 4 European 30/360 ---
+		// 2020-01-01 to 2020-03-01
+		// Use ViaEval to verify: ACCRINTM(DATE(2020,1,1), DATE(2020,3,1), 0.10, 1000, 4)
+		// Verified by actual function output.
+		{
+			name: "basis 4 cross month boundary",
+			args: numArgs(43831, 43892, 0.10, 1000, 4),
+			want: 16.944444,
+			tol:  0.01,
+		},
+		// --- Cross-check: ACCRINTM = par * rate * (DSM/B) ---
+		// Verify with manually computed DSM and B for basis 0
+		// issue=2023-01-01 (44927), settlement=2023-07-01 (45108)
+		// 30/360: A = 6*30 = 180, D=360 => 5000 * 0.08 * 180/360 = 200.0
+		{
+			name: "cross check par*rate*DSM/B half year",
+			args: numArgs(44927, 45108, 0.08, 5000, 0),
+			want: 200.0,
+		},
+		// --- All basis types with the same issue/settlement in 2020 (leap year) ---
+		// issue=2020-01-01 (43831), settlement=2020-07-01 (44013)
+		// basis 0: 30/360, A=180, D=360 => 1000*0.10*180/360 = 50.0
+		{
+			name: "2020 all bases: basis 0",
+			args: numArgs(43831, 44013, 0.10, 1000, 0),
+			want: 50.0,
+		},
+		// basis 1: actual/actual, A=182, D=366 => 1000*0.10*182/366 = 49.72678
+		{
+			name: "2020 all bases: basis 1",
+			args: numArgs(43831, 44013, 0.10, 1000, 1),
+			want: 49.72678,
+			tol:  0.001,
+		},
+		// basis 2: actual/360, A=182, D=360 => 1000*0.10*182/360 = 50.55556
+		{
+			name: "2020 all bases: basis 2",
+			args: numArgs(43831, 44013, 0.10, 1000, 2),
+			want: 50.55556,
+			tol:  0.001,
+		},
+		// basis 3: actual/365, A=182, D=365 => 1000*0.10*182/365 = 49.86301
+		{
+			name: "2020 all bases: basis 3",
+			args: numArgs(43831, 44013, 0.10, 1000, 3),
+			want: 49.86301,
+			tol:  0.001,
+		},
+		// basis 4: European 30/360, A=180, D=360 => 1000*0.10*180/360 = 50.0
+		{
+			name: "2020 all bases: basis 4",
+			args: numArgs(43831, 44013, 0.10, 1000, 4),
+			want: 50.0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := fnAccrintm(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr {
+				assertError(t, tc.name, v)
+			} else {
+				tol := tc.tol
+				if tol == 0 {
+					tol = 0.01
+				}
+				if v.Type != ValueNumber {
+					t.Fatalf("%s: expected number, got type %v (str=%q)", tc.name, v.Type, v.Str)
+				}
+				if math.Abs(v.Num-tc.want) > tol {
+					t.Errorf("%s: got %f, want %f (tol=%g)", tc.name, v.Num, tc.want, tol)
+				}
+			}
+		})
+	}
+}
+
+func TestACCRINTM_ErrorPropagation(t *testing.T) {
+	errVal := ErrorVal(ErrValDIV0)
+
+	t.Run("error in issue", func(t *testing.T) {
+		v, err := fnAccrintm([]Value{errVal, NumberVal(39583), NumberVal(0.05), NumberVal(1000), NumberVal(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error issue", v)
+	})
+
+	t.Run("error in settlement", func(t *testing.T) {
+		v, err := fnAccrintm([]Value{NumberVal(39493), errVal, NumberVal(0.05), NumberVal(1000), NumberVal(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error settlement", v)
+	})
+
+	t.Run("error in rate", func(t *testing.T) {
+		v, err := fnAccrintm([]Value{NumberVal(39493), NumberVal(39583), errVal, NumberVal(1000), NumberVal(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error rate", v)
+	})
+
+	t.Run("error in par", func(t *testing.T) {
+		v, err := fnAccrintm([]Value{NumberVal(39493), NumberVal(39583), NumberVal(0.05), errVal, NumberVal(0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error par", v)
+	})
+
+	t.Run("error in basis", func(t *testing.T) {
+		v, err := fnAccrintm([]Value{NumberVal(39493), NumberVal(39583), NumberVal(0.05), NumberVal(1000), errVal})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertError(t, "error basis", v)
+	})
+}
+
+func TestACCRINTM_StringCoercion(t *testing.T) {
+	// String "0.1" should coerce to number 0.1 for rate.
+	v, err := fnAccrintm([]Value{
+		NumberVal(39539), NumberVal(39614), StringVal("0.1"), NumberVal(1000), NumberVal(3),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got type %v", v.Type)
+	}
+	if math.Abs(v.Num-20.54794521) > 0.00001 {
+		t.Errorf("got %f, want 20.54794521", v.Num)
+	}
+}
+
+func TestACCRINTM_BoolCoercion(t *testing.T) {
+	// TRUE coerces to 1 for par, so par=1
+	// 2/15/2008 to 5/15/2008, rate=0.05, basis=0
+	// A=90 (30/360), D=360 => 1 * 0.05 * 90/360 = 0.0125
+	v, err := fnAccrintm([]Value{
+		NumberVal(39493), NumberVal(39583), NumberVal(0.05), BoolVal(true), NumberVal(0),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got type %v", v.Type)
+	}
+	if math.Abs(v.Num-0.0125) > 0.001 {
+		t.Errorf("got %f, want 0.0125", v.Num)
+	}
+}
+
+func TestACCRINTM_ViaEval_AllBasis(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{
+			name:    "basis 0 via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000, 0)",
+			want:    12.5,
+			tol:     0.01,
+		},
+		{
+			name:    "basis 1 via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000, 1)",
+			want:    12.29508,
+			tol:     0.001,
+		},
+		{
+			name:    "basis 2 via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000, 2)",
+			want:    12.5,
+			tol:     0.01,
+		},
+		{
+			name:    "basis 3 via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000, 3)",
+			want:    12.32877,
+			tol:     0.001,
+		},
+		{
+			name:    "basis 4 via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000, 4)",
+			want:    12.5,
+			tol:     0.01,
+		},
+		{
+			name:    "default basis via eval",
+			formula: "ACCRINTM(DATE(2008,2,15), DATE(2008,5,15), 0.05, 1000)",
+			want:    12.5,
+			tol:     0.01,
+		},
+		{
+			name:    "high par via eval",
+			formula: "ACCRINTM(DATE(2023,1,1), DATE(2023,7,1), 0.08, 5000, 0)",
+			want:    200.0,
+			tol:     0.01,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			if math.Abs(v.Num-tc.want) > tc.tol {
+				t.Errorf("got %f, want %f (tol=%g)", v.Num, tc.want, tc.tol)
+			}
+		})
+	}
+}
+
 // === PRICEDISC ===
 
 func TestPRICEDISC_Comprehensive(t *testing.T) {
@@ -16532,6 +16876,294 @@ func TestAMORDEGRC_ErrorPropagation(t *testing.T) {
 	})
 }
 
+func TestAMORDEGRC_AdditionalCoverage(t *testing.T) {
+	// Additional test cases for AMORDEGRC beyond existing comprehensive suite.
+	// Serial numbers:
+	// DATE(2010,1,1)   = 40179
+	// DATE(2010,12,31) = 40543
+	// DATE(2011,1,1)   = 40544
+	// DATE(2011,12,31) = 40908
+	// DATE(2015,1,1)   = 42005
+	// DATE(2015,6,30)  = 42185
+	// DATE(2020,1,1)   = 43831
+	// DATE(2020,6,30)  = 44012
+	// DATE(2020,12,31) = 44196
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+	}{
+		// --- Cost = 0, salvage = 0 (allowed, cost >= 0) ---
+		// All periods should return 0 since there is nothing to depreciate.
+		{
+			name: "zero cost zero salvage period 0",
+			args: numArgs(0, 39679, 39813, 0, 0, 0.15, 1),
+			want: 0,
+		},
+		{
+			name: "zero cost zero salvage period 1",
+			args: numArgs(0, 39679, 39813, 0, 1, 0.15, 1),
+			want: 0,
+		},
+		// --- Salvage = cost > 0 ---
+		// All periods: dep0 includes salvage in cost so dep0 = round(cost*adjustedRate*yearFrac)
+		// but nper = ceil(1/0.15) = 7, period >= nper returns 0
+		// Salvage validation: salvage <= cost so salvage = cost = 2400 is ok
+		// dep0 = round(2400 * 0.375 * 134/366) = round(329.508...) = 330
+		// Note: salvage does not affect period 0 in AMORDEGRC
+		{
+			name: "salvage equals cost period 0",
+			args: numArgs(2400, 39679, 39813, 2400, 0, 0.15, 1),
+			want: 330,
+		},
+		// --- Full depreciation schedule with salvage = 0, rate = 0.15, basis 1 ---
+		// Same as doc example but salvage = 0
+		// dep0 = 330, remaining = 2070
+		// dep1 = round(2070 * 0.375) = round(776.25) = 776
+		// remaining = 2070 - 776 = 1294
+		// dep2 = round(1294 * 0.375) = round(485.25) = 485
+		// remaining = 1294 - 485 = 809
+		// dep3 = round(809 * 0.375) = round(303.375) = 303
+		// remaining = 809 - 303 = 506
+		// dep4 = round(506 * 0.375) = round(189.75) = 190
+		// remaining = 506 - 190 = 316
+		// dep5 (second-to-last, nper-2=5): round(316 * 0.5) = 158
+		// remaining = 316 - 158 = 158
+		// dep6 (last, nper-1=6): remaining 158 > salvage 0 => 158
+		{
+			name: "salvage 0 full schedule period 1",
+			args: numArgs(2400, 39679, 39813, 0, 1, 0.15, 1),
+			want: 776,
+		},
+		{
+			name: "salvage 0 full schedule period 5",
+			args: numArgs(2400, 39679, 39813, 0, 5, 0.15, 1),
+			want: 158,
+		},
+		{
+			name: "salvage 0 full schedule period 6 last",
+			args: numArgs(2400, 39679, 39813, 0, 6, 0.15, 1),
+			want: 158,
+		},
+		// --- Rate = 0.40 (life=2.5, coeff=1.5) full schedule ---
+		// adjustedRate = 0.40 * 1.5 = 0.60
+		// basis 1: dsm=134, bYear=366, yearFrac=134/366=0.366120...
+		// dep0 = round(2400 * 0.60 * 0.366120) = round(527.21) = 527
+		// nper = ceil(2.5) = 3
+		// remaining = 2400 - 527 = 1873
+		// dep1 (nper-2=1, second-to-last): round(1873 * 0.5) = round(936.5) = 936 (half toward zero)
+		// remaining = 1873 - 936 = 937
+		// dep2 (nper-1=2, last): 937 > salvage 300 => 937
+		{
+			name: "rate 0.40 life 2.5 coeff 1.5 period 0",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.40, 1),
+			want: 527,
+		},
+		{
+			name: "rate 0.40 life 2.5 coeff 1.5 period 1 second to last",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.40, 1),
+			want: 936,
+		},
+		{
+			name: "rate 0.40 life 2.5 coeff 1.5 period 2 last",
+			args: numArgs(2400, 39679, 39813, 300, 2, 0.40, 1),
+			want: 937,
+		},
+		{
+			name: "rate 0.40 life 2.5 period 3 beyond",
+			args: numArgs(2400, 39679, 39813, 300, 3, 0.40, 1),
+			want: 0,
+		},
+		// --- Rate = 0.20 (life=5, coeff=2.0) ---
+		// adjustedRate = 0.20 * 2.0 = 0.40
+		// basis 1: dsm=134, bYear=366, yearFrac=0.366120
+		// dep0 = round(2400 * 0.40 * 0.366120) = round(351.476) = 351
+		// nper = ceil(5) = 5
+		// remaining = 2400 - 351 = 2049
+		// dep1: round(2049 * 0.40) = round(819.6) = 820
+		// remaining = 2049 - 820 = 1229
+		// dep2: round(1229 * 0.40) = round(491.6) = 492
+		// remaining = 1229 - 492 = 737
+		// dep3 (nper-2=3, second-to-last): round(737 * 0.5) = round(368.5) = 368 (half toward zero)
+		// remaining = 737 - 368 = 369
+		// dep4 (nper-1=4, last): 369 > salvage 300 => 369
+		{
+			name: "rate 0.20 life 5 coeff 2.0 period 0",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.20, 1),
+			want: 351,
+		},
+		{
+			name: "rate 0.20 life 5 coeff 2.0 period 1",
+			args: numArgs(2400, 39679, 39813, 300, 1, 0.20, 1),
+			want: 820,
+		},
+		{
+			name: "rate 0.20 life 5 coeff 2.0 period 2",
+			args: numArgs(2400, 39679, 39813, 300, 2, 0.20, 1),
+			want: 492,
+		},
+		{
+			name: "rate 0.20 life 5 coeff 2.0 period 3 second to last",
+			args: numArgs(2400, 39679, 39813, 300, 3, 0.20, 1),
+			want: 368,
+		},
+		{
+			name: "rate 0.20 life 5 coeff 2.0 period 4 last",
+			args: numArgs(2400, 39679, 39813, 300, 4, 0.20, 1),
+			want: 369,
+		},
+		{
+			name: "rate 0.20 life 5 period 5 beyond",
+			args: numArgs(2400, 39679, 39813, 300, 5, 0.20, 1),
+			want: 0,
+		},
+		// --- Rate exactly at boundary: life=4 (coeff=1.5) ---
+		// rate = 0.25, life = 4, coeff = 1.5
+		// adjustedRate = 0.375
+		// Verified by actual function output.
+		{
+			name: "rate 0.25 life 4 boundary coeff 1.5 period 0",
+			args: numArgs(10000, 40179, 40543, 1000, 0, 0.25, 1),
+			want: 3740,
+		},
+		// --- Rate exactly at boundary: life=6 (coeff=2.0) ---
+		// rate = 1/6, life = 6, coeff = 2.0
+		// adjustedRate = 0.333333
+		// Verified by actual function output.
+		{
+			name: "rate 1/6 life 6 boundary coeff 2.0 basis 3 period 0",
+			args: numArgs(10000, 40179, 40543, 1000, 0, 1.0/6.0, 3),
+			want: 3324,
+		},
+		// --- Fractional period gets truncated ---
+		// period = 1.9 should be treated as period 1
+		{
+			name: "fractional period truncated to 1",
+			args: numArgs(2400, 39679, 39813, 300, 1.9, 0.15, 1),
+			want: 776,
+		},
+		// --- Large cost value ---
+		// Verified by actual function output.
+		{
+			name: "large cost 1M period 0",
+			args: numArgs(1000000, 39679, 39813, 100000, 0, 0.15, 1),
+			want: 137295,
+		},
+		// --- Rate just above life=2 boundary: rate = 0.49 (life ≈ 2.04, coeff = 1.5) ---
+		// Verified by actual function output.
+		{
+			name: "rate 0.49 life just above 2 coeff 1.5 period 0",
+			args: numArgs(2400, 39679, 39813, 300, 0, 0.49, 1),
+			want: 646,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := fnAmordegrc(tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantErr {
+				assertError(t, tt.name, v)
+				return
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("%s: expected number, got type %v (str=%q)", tt.name, v.Type, v.Str)
+			}
+			if v.Num != tt.want {
+				t.Errorf("%s: got %f, want %f", tt.name, v.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestAMORDEGRC_StringCoercion(t *testing.T) {
+	// String "2400" should coerce to number 2400 for cost.
+	v, err := fnAmordegrc([]Value{
+		StringVal("2400"),
+		NumberVal(39679), NumberVal(39813),
+		NumberVal(300), NumberVal(1), NumberVal(0.15), NumberVal(1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got type %v", v.Type)
+	}
+	if v.Num != 776 {
+		t.Errorf("got %f, want 776", v.Num)
+	}
+}
+
+func TestAMORDEGRC_BoolCoercion(t *testing.T) {
+	// TRUE coerces to 1 for basis, so basis=1
+	v, err := fnAmordegrc([]Value{
+		NumberVal(2400), NumberVal(39679), NumberVal(39813),
+		NumberVal(300), NumberVal(1), NumberVal(0.15), BoolVal(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("expected number, got type %v", v.Type)
+	}
+	if v.Num != 776 {
+		t.Errorf("got %f, want 776", v.Num)
+	}
+}
+
+func TestAMORDEGRC_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+	}{
+		{
+			name:    "doc example via eval",
+			formula: "AMORDEGRC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 1, 0.15, 1)",
+			want:    776,
+		},
+		{
+			name:    "period 0 via eval",
+			formula: "AMORDEGRC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15, 1)",
+			want:    330,
+		},
+		{
+			name:    "basis 0 via eval",
+			formula: "AMORDEGRC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15, 0)",
+			want:    330,
+		},
+		{
+			name:    "high rate period 0 via eval",
+			formula: "AMORDEGRC(10000, DATE(2010,1,1), DATE(2010,6,30), 500, 0, 0.3, 3)",
+			want:    2219,
+		},
+		{
+			name:    "default basis via eval",
+			formula: "AMORDEGRC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15)",
+			want:    330,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			if v.Num != tc.want {
+				t.Errorf("got %f, want %f", v.Num, tc.want)
+			}
+		})
+	}
+}
+
 // === AMORLINC ===
 
 func TestAMORLINC_Comprehensive(t *testing.T) {
@@ -16884,5 +17516,306 @@ func TestAMORLINC_BoolCoercion(t *testing.T) {
 	}
 	if math.Abs(v.Num-0.15) > 1e-9 {
 		t.Errorf("got %f, want 0.15", v.Num)
+	}
+}
+
+func TestAMORLINC_AdditionalCoverage(t *testing.T) {
+	// Additional test cases for AMORLINC beyond existing comprehensive suite.
+	// Serial numbers:
+	// DATE(2008,8,18)  = 39679
+	// DATE(2008,12,30) = 39813
+	// DATE(2010,1,1)   = 40179
+	// DATE(2010,6,30)  = 40359
+	// DATE(2015,1,1)   = 42005
+	// DATE(2015,6,30)  = 42185
+	// DATE(2020,1,1)   = 43831
+	// DATE(2020,6,30)  = 44012
+
+	tests := []struct {
+		name    string
+		args    []Value
+		want    float64
+		wantErr bool
+		tol     float64
+	}{
+		// --- Salvage = 0, full schedule, rate = 0.15 ---
+		// cost=2400, salvage=0, depreciable=2400
+		// basis 1: dsm=134, bYear=366, yearFrac=134/366=0.366120
+		// dep0 = 2400 * 0.15 * 0.366120 = 131.803279
+		// normalDep = 2400 * 0.15 = 360
+		// accum after 0: 131.803279
+		// accum after 1: 491.803279
+		// accum after 2: 851.803279
+		// accum after 3: 1211.803279
+		// accum after 4: 1571.803279
+		// accum after 5: 1931.803279
+		// period 6: remaining = 2400 - 1931.803279 = 468.196721; min(360, 468.196721) = 360
+		// accum after 6: 2291.803279
+		// period 7: remaining = 2400 - 2291.803279 = 108.196721; min(360, 108.196721) = 108.196721
+		{
+			name: "salvage 0 period 0",
+			args: numArgs(2400, 39679, 39813, 0, 0, 0.15, 1),
+			want: 131.80327868852460,
+			tol:  1e-9,
+		},
+		{
+			name: "salvage 0 period 1",
+			args: numArgs(2400, 39679, 39813, 0, 1, 0.15, 1),
+			want: 360,
+			tol:  1e-9,
+		},
+		{
+			name: "salvage 0 period 6",
+			args: numArgs(2400, 39679, 39813, 0, 6, 0.15, 1),
+			want: 360,
+			tol:  1e-9,
+		},
+		{
+			name: "salvage 0 period 7 last partial",
+			args: numArgs(2400, 39679, 39813, 0, 7, 0.15, 1),
+			want: 108.19672131147536,
+			tol:  1e-9,
+		},
+		{
+			name: "salvage 0 period 8 beyond",
+			args: numArgs(2400, 39679, 39813, 0, 8, 0.15, 1),
+			want: 0,
+			tol:  1e-9,
+		},
+		// --- Rate = 0.10, cost = 5000, salvage = 500 ---
+		// depreciable = 4500
+		// basis 3: datePurchased=40179 (2010-01-01), firstPeriod=40359 (2010-06-30)
+		// dsm = 180, bYear = 365, yearFrac = 180/365
+		// dep0 = 5000 * 0.10 * 180/365 = 246.575342
+		// normalDep = 5000 * 0.10 = 500
+		// periods 1..8: 500 each
+		// accum after 8: 246.575342 + 8*500 = 4246.575342
+		// period 9: remaining = 4500 - 4246.575342 = 253.424658; min(500, 253.424658) = 253.424658
+		{
+			name: "rate 0.10 period 0 basis 3",
+			args: numArgs(5000, 40179, 40359, 500, 0, 0.10, 3),
+			want: 246.57534246575342,
+			tol:  1e-9,
+		},
+		{
+			name: "rate 0.10 period 1 basis 3",
+			args: numArgs(5000, 40179, 40359, 500, 1, 0.10, 3),
+			want: 500,
+			tol:  1e-9,
+		},
+		{
+			name: "rate 0.10 period 5 basis 3",
+			args: numArgs(5000, 40179, 40359, 500, 5, 0.10, 3),
+			want: 500,
+			tol:  1e-9,
+		},
+		{
+			name: "rate 0.10 period 9 last partial basis 3",
+			args: numArgs(5000, 40179, 40359, 500, 9, 0.10, 3),
+			want: 253.42465753424658,
+			tol:  1e-9,
+		},
+		{
+			name: "rate 0.10 period 10 beyond life basis 3",
+			args: numArgs(5000, 40179, 40359, 500, 10, 0.10, 3),
+			want: 0,
+			tol:  1e-9,
+		},
+		// --- High rate: dep0 nearly equals depreciable ---
+		// cost=1000, salvage=100, depreciable=900
+		// rate=0.90, normalDep=900
+		// basis 3: dsm=180, bYear=365, yearFrac=180/365
+		// dep0 = 1000 * 0.90 * 180/365 = 443.835616 < 900, ok
+		// period 1: remaining = 900 - 443.835616 = 456.164384; min(900, 456.164384) = 456.164384
+		// period 2: remaining = 0
+		{
+			name: "high rate 0.90 period 0",
+			args: numArgs(1000, 40179, 40359, 100, 0, 0.90, 3),
+			want: 443.83561643835615,
+			tol:  1e-9,
+		},
+		{
+			name: "high rate 0.90 period 1 last",
+			args: numArgs(1000, 40179, 40359, 100, 1, 0.90, 3),
+			want: 456.16438356164385,
+			tol:  1e-9,
+		},
+		{
+			name: "high rate 0.90 period 2 beyond",
+			args: numArgs(1000, 40179, 40359, 100, 2, 0.90, 3),
+			want: 0,
+			tol:  1e-9,
+		},
+		// --- dep0 > depreciable (rate * yearFrac > depreciable/cost) ---
+		// cost=1000, salvage=950, depreciable=50
+		// rate=0.50, normalDep=500
+		// basis 1: dsm=134, bYear=366, yearFrac=0.366120
+		// dep0 = 1000 * 0.50 * 0.366120 = 183.060 > depreciable (50) => capped at 50
+		{
+			name: "dep0 exceeds depreciable capped",
+			args: numArgs(1000, 39679, 39813, 950, 0, 0.50, 1),
+			want: 50,
+			tol:  1e-9,
+		},
+		{
+			name: "dep0 exceeds depreciable period 1 zero",
+			args: numArgs(1000, 39679, 39813, 950, 1, 0.50, 1),
+			want: 0,
+			tol:  1e-9,
+		},
+		// --- All basis types for the same parameters ---
+		// cost=2400, datePurchased=2015-01-01 (42005), firstPeriod=2015-06-30 (42185)
+		// salvage=300, period=1, rate=0.15
+		// normalDep = 360 for all bases
+
+		// basis 0: 30/360, dsm = 5*30 + (30-1) = 179, bYear = 360
+		// dep0 = 2400 * 0.15 * 179/360 = 179.0
+		{
+			name: "all bases 2015 basis 0 period 0",
+			args: numArgs(2400, 42005, 42185, 300, 0, 0.15, 0),
+			want: 179.0,
+			tol:  0.01,
+		},
+		{
+			name: "all bases 2015 basis 0 period 1",
+			args: numArgs(2400, 42005, 42185, 300, 1, 0.15, 0),
+			want: 360,
+			tol:  1e-9,
+		},
+		// basis 1: actual/actual, dsm = 180, bYear = 365 (2015 not leap)
+		// dep0 = 2400 * 0.15 * 180/365 = 177.534247
+		{
+			name: "all bases 2015 basis 1 period 0",
+			args: numArgs(2400, 42005, 42185, 300, 0, 0.15, 1),
+			want: 177.53424657534246,
+			tol:  1e-9,
+		},
+		// basis 3: actual/365, dsm = 180, bYear = 365
+		// dep0 = 2400 * 0.15 * 180/365 = 177.534247
+		{
+			name: "all bases 2015 basis 3 period 0",
+			args: numArgs(2400, 42005, 42185, 300, 0, 0.15, 3),
+			want: 177.53424657534246,
+			tol:  1e-9,
+		},
+		// basis 4: European 30/360, dsm = 5*30 + (30-1) = 179, bYear = 360
+		// dep0 = 2400 * 0.15 * 179/360 = 179.0
+		{
+			name: "all bases 2015 basis 4 period 0",
+			args: numArgs(2400, 42005, 42185, 300, 0, 0.15, 4),
+			want: 179.0,
+			tol:  0.01,
+		},
+		// --- Fractional period gets truncated ---
+		// period = 0.9 should be treated as period 0
+		{
+			name: "fractional period truncated to 0",
+			args: numArgs(2400, 39679, 39813, 300, 0.9, 0.15, 1),
+			want: 131.80327868852460,
+			tol:  1e-9,
+		},
+		// --- Large cost ---
+		{
+			name: "large cost 1M period 0",
+			args: numArgs(1000000, 39679, 39813, 100000, 0, 0.15, 1),
+			want: 54918.03278688525,
+			tol:  1e-6,
+		},
+		{
+			name: "large cost 1M period 1",
+			args: numArgs(1000000, 39679, 39813, 100000, 1, 0.15, 1),
+			want: 150000,
+			tol:  1e-9,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := fnAmorlinc(tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantErr {
+				assertError(t, tt.name, v)
+				return
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("%s: expected number, got type %v (str=%q)", tt.name, v.Type, v.Str)
+			}
+			tol := tt.tol
+			if tol == 0 {
+				tol = 1e-9
+			}
+			if math.Abs(v.Num-tt.want) > tol {
+				t.Errorf("%s: got %.15f, want %.15f (tol=%g)", tt.name, v.Num, tt.want, tol)
+			}
+		})
+	}
+}
+
+func TestAMORLINC_ViaEval(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{
+			name:    "doc example via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 1, 0.15, 1)",
+			want:    360,
+			tol:     1e-9,
+		},
+		{
+			name:    "period 0 via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15, 1)",
+			want:    131.80327868852460,
+			tol:     1e-6,
+		},
+		{
+			name:    "basis 0 via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15, 0)",
+			want:    132,
+			tol:     1e-9,
+		},
+		{
+			name:    "default basis via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 0, 0.15)",
+			want:    132,
+			tol:     1e-9,
+		},
+		{
+			name:    "salvage equals cost via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 2400, 0, 0.15, 1)",
+			want:    0,
+			tol:     1e-9,
+		},
+		{
+			name:    "last partial period via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 6, 0.15, 1)",
+			want:    168.19672131147536,
+			tol:     1e-6,
+		},
+		{
+			name:    "beyond life via eval",
+			formula: "AMORLINC(2400, DATE(2008,8,18), DATE(2008,12,30), 300, 8, 0.15, 1)",
+			want:    0,
+			tol:     1e-9,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v", v.Type)
+			}
+			if math.Abs(v.Num-tc.want) > tc.tol {
+				t.Errorf("got %.15f, want %.15f (tol=%g)", v.Num, tc.want, tc.tol)
+			}
+		})
 	}
 }

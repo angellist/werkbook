@@ -6,15 +6,15 @@ Werkbook supports **445** spreadsheet formula functions.
 |----------|-------------|----------|------:|
 | ABS | Returns the absolute value of a number. | Math & Trig | 26 |
 | ACCRINT | Returns accrued interest for a security that pays periodic interest. | Financial | 19 |
-| ACCRINTM | Returns accrued interest for a security that pays interest at maturity. | Financial | 3 |
+| ACCRINTM | Returns accrued interest for a security that pays interest at maturity. | Financial | 15 |
 | ACOS | Returns the arccosine of a number. | Math & Trig | 32 |
 | ACOSH | Returns the inverse hyperbolic cosine of a number. | Math & Trig | 32 |
 | ACOT | Returns the arccotangent of a number. | Math & Trig | 27 |
 | ACOTH | Returns the inverse hyperbolic cotangent of a number. | Math & Trig | 32 |
 | ADDRESS | Builds a cell reference from row and column numbers. | Lookup & Reference | 44 |
 | AGGREGATE | Applies an aggregate calculation with options to ignore selected values. | Statistical | 49 |
-| AMORDEGRC | Returns depreciation for each accounting period using a French declining balance method. | Financial | 3 |
-| AMORLINC | Returns depreciation for each accounting period using a linear method. | Financial | 5 |
+| AMORDEGRC | Returns depreciation for each accounting period using a French declining balance method. | Financial | 12 |
+| AMORLINC | Returns depreciation for each accounting period using a linear method. | Financial | 14 |
 | ANCHORARRAY | Returns the full spilled array produced by a dynamic array formula. | Lookup & Reference | 6 |
 | AND | Returns TRUE when every supplied condition is TRUE. | Logical | 31 |
 | ARABIC | Converts Roman numeral text to an Arabic number. | Math & Trig | 38 |
