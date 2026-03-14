@@ -350,6 +350,10 @@ func (p *Parser) parseFunc() (Node, error) {
 		return desugarREDUCE(args)
 	}
 
+	if isScanFuncName(name) {
+		return desugarSCAN(args)
+	}
+
 	return call, nil
 }
 
@@ -622,6 +626,60 @@ func desugarREDUCE(args []Node) (Node, error) {
 	}, nil
 }
 
+func isScanFuncName(name string) bool {
+	upper := strings.ToUpper(name)
+	return upper == "SCAN" || upper == "_XLFN.SCAN"
+}
+
+func desugarSCAN(args []Node) (Node, error) {
+	// SCAN(initial_value, array, lambda)
+	if len(args) != 3 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	initialValue := args[0]
+	arrayExpr := args[1]
+
+	// Last arg must be LAMBDA
+	lambdaCall, ok := args[2].(*FuncCall)
+	if !ok || !isLambdaFuncName(lambdaCall.Name) {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	lambdaArgs := lambdaCall.Args
+	if len(lambdaArgs) < 1 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	body := lambdaArgs[len(lambdaArgs)-1]
+	params := lambdaArgs[:len(lambdaArgs)-1]
+
+	// Must have exactly 2 params: accumulator and value
+	if len(params) != 2 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	paramNames := make([]string, 2)
+	subst := make(map[string]Node, 2)
+	for i, param := range params {
+		name, ok := lambdaParamName(param)
+		if !ok {
+			return &ErrorLit{Code: ErrVALUE}, nil
+		}
+		paramNames[i] = name
+		subst[name] = &ParamRef{Slot: i, Name: name}
+	}
+
+	transformedBody := substituteLambdaNames(body, subst)
+
+	return &ScanExpr{
+		InitialValue: initialValue,
+		Array:        arrayExpr,
+		ParamNames:   paramNames,
+		Body:         transformedBody,
+	}, nil
+}
+
 func lambdaParamName(n Node) (string, bool) {
 	ref, ok := n.(*CellRef)
 	if !ok || ref.Row != 0 || ref.Sheet != "" || ref.SheetEnd != "" || ref.AbsCol || ref.AbsRow || ref.DotNotation {
@@ -695,6 +753,13 @@ func substituteLambdaNames(n Node, subst map[string]Node) Node {
 			ParamNames:   append([]string(nil), v.ParamNames...),
 			Body:         substituteLambdaNames(v.Body, subst),
 		}
+	case *ScanExpr:
+		return &ScanExpr{
+			InitialValue: substituteLambdaNames(v.InitialValue, subst),
+			Array:        substituteLambdaNames(v.Array, subst),
+			ParamNames:   append([]string(nil), v.ParamNames...),
+			Body:         substituteLambdaNames(v.Body, subst),
+		}
 	default:
 		return cloneNode(v)
 	}
@@ -761,6 +826,13 @@ func cloneNode(n Node) Node {
 		}
 	case *ReduceExpr:
 		return &ReduceExpr{
+			InitialValue: cloneNode(v.InitialValue),
+			Array:        cloneNode(v.Array),
+			ParamNames:   append([]string(nil), v.ParamNames...),
+			Body:         cloneNode(v.Body),
+		}
+	case *ScanExpr:
+		return &ScanExpr{
 			InitialValue: cloneNode(v.InitialValue),
 			Array:        cloneNode(v.Array),
 			ParamNames:   append([]string(nil), v.ParamNames...),

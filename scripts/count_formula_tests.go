@@ -112,6 +112,7 @@ var parserSupported = map[string]string{
 	"LET":    "Logical",
 	"MAP":    "Logical",
 	"REDUCE": "Logical",
+	"SCAN":   "Logical",
 }
 
 // descriptionMap holds locally authored, concise descriptions for formulas

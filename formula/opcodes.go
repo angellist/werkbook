@@ -37,6 +37,7 @@ const (
 	OpLoadParam                     // operand: param slot index; push the bound parameter value
 	OpMap                           // operand: subFormulaIdx<<8 | numArrays; execute lambda body per element
 	OpReduce                        // operand: subFormulaIdx; pop array and initial value, fold with lambda body
+	OpScan                          // operand: subFormulaIdx; pop array and initial value, scan with lambda body returning array
 )
 
 var opNames = [...]string{
@@ -71,6 +72,7 @@ var opNames = [...]string{
 	OpLoadParam:       "LoadParam",
 	OpMap:             "Map",
 	OpReduce:          "Reduce",
+	OpScan:            "Scan",
 }
 
 func (op OpCode) String() string {

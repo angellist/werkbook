@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **439** spreadsheet formula functions.
+Werkbook supports **440** spreadsheet formula functions.
 
 | Function | Description | Category | Tests |
 |----------|-------------|----------|------:|
@@ -184,7 +184,7 @@ Werkbook supports **439** spreadsheet formula functions.
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 32 |
-| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 66 |
+| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 69 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
 | IMABS | Returns the absolute value of a complex number. | Engineering | 38 |
@@ -235,7 +235,7 @@ Werkbook supports **439** spreadsheet formula functions.
 | ISREF | Returns TRUE when a value is a reference. | Information | 24 |
 | ISTEXT | Returns TRUE when a value is text. | Information | 25 |
 | KURT | Returns the kurtosis of a data set. | Statistical | 22 |
-| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 8 |
+| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 9 |
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 30 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
@@ -343,6 +343,7 @@ Werkbook supports **439** spreadsheet formula functions.
 | ROWS | Returns the number of rows in a reference or array. | Information | 35 |
 | RRI | Returns an equivalent interest rate for investment growth. | Financial | 21 |
 | RSQ | Returns the square of the Pearson correlation coefficient. | Statistical | 23 |
+| SCAN | Returns the running accumulation produced by a lambda over an array. | Logical | 25 |
 | SEARCH | Returns the position of one text value inside another, case-insensitive. | Text | 15 |
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
@@ -470,7 +471,7 @@ effects, or require locale-specific behavior that cannot be reproduced in a serv
 
 # Not Yet Implemented
 
-The following **16** functions are not yet supported.
+The following **15** functions are not yet supported.
 
 | Function | Description | Category |
 |----------|-------------|----------|
@@ -486,6 +487,5 @@ The following **16** functions are not yet supported.
 | ODDFYIELD | Returns the yield of a security with an odd first period. | Financial |
 | ODDLPRICE | Returns the price of a security with an odd last period. | Financial |
 | ODDLYIELD | Returns the yield of a security with an odd last period. | Financial |
-| SCAN | Returns the running accumulation produced by a lambda over an array. | Logical |
 | SHEET | Returns the sheet index of a reference. | Information |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information |

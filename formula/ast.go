@@ -256,6 +256,19 @@ func (n *ReduceExpr) String() string {
 	return fmt.Sprintf("(REDUCE params=%v)", n.ParamNames)
 }
 
+// ScanExpr represents a SCAN(initial, array, LAMBDA(acc, val, body)) expression.
+type ScanExpr struct {
+	InitialValue Node     // initial accumulator value (may be *EmptyArg if omitted)
+	Array        Node     // array expression
+	ParamNames   []string // [accumulator_name, value_name]
+	Body         Node     // lambda body with param refs replaced by ParamRef nodes
+}
+
+func (n *ScanExpr) nodeMarker() {}
+func (n *ScanExpr) String() string {
+	return fmt.Sprintf("(SCAN params=%v)", n.ParamNames)
+}
+
 // needsQuoting returns true if a sheet name contains characters that require quoting.
 func needsQuoting(name string) bool {
 	for _, c := range name {

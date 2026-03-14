@@ -490,6 +490,87 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			}
 			push(acc)
 
+		case OpScan:
+			subIdx := int(inst.Operand)
+			if subIdx >= len(cf.SubFormulas) {
+				return Value{}, fmt.Errorf("sub-formula index %d out of range", subIdx)
+			}
+			subFormula := cf.SubFormulas[subIdx]
+
+			// Pop array, then initial value
+			arr, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			initialVal, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+
+			// Get array dimensions for output shape
+			var scanRows, scanCols int
+			if arr.Type == ValueArray {
+				scanRows = len(arr.Array)
+				if scanRows > 0 {
+					scanCols = len(arr.Array[0])
+				}
+			} else {
+				scanRows, scanCols = 1, 1
+			}
+
+			// Handle empty array
+			if scanRows == 0 || scanCols == 0 {
+				if initialVal.Type == ValueEmpty {
+					push(ErrorVal(ErrValCALC))
+				} else {
+					push(Value{Type: ValueArray, Array: nil})
+				}
+				continue
+			}
+
+			// Build output array with same shape as input
+			scanResult := newValueMatrix(scanRows, scanCols)
+			acc := initialVal
+			paramVals := make([]Value, 2)
+			first := true
+
+			for i := 0; i < scanRows; i++ {
+				for j := 0; j < scanCols; j++ {
+					var elem Value
+					if arr.Type == ValueArray {
+						elem = arr.Array[i][j]
+					} else {
+						elem = arr
+					}
+
+					if acc.Type == ValueEmpty && first {
+						// No initial value: first element becomes accumulator
+						acc = elem
+						scanResult[i][j] = acc
+						first = false
+						continue
+					}
+					first = false
+
+					// If accumulator is an error, propagate to remaining cells
+					if acc.Type == ValueError {
+						scanResult[i][j] = acc
+						continue
+					}
+
+					paramVals[0] = acc
+					paramVals[1] = elem
+					res, err := evalWithParams(subFormula, resolver, ctx, paramVals)
+					if err != nil {
+						return Value{}, err
+					}
+					acc = res
+					scanResult[i][j] = acc
+				}
+			}
+
+			push(Value{Type: ValueArray, Array: scanResult})
+
 		case OpMap:
 			subIdx := int(inst.Operand >> 8)
 			numArrays := int(inst.Operand & 0xFF)
