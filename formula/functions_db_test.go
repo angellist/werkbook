@@ -3228,6 +3228,288 @@ func TestDGET(t *testing.T) {
 			wantType: ValueString,
 			wantStr:  "Apple", // Apple Height=14, Age=15
 		},
+		// --- case-insensitive criteria value matching ---
+		{
+			name: "criteria value is case insensitive",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("cherry")}, // lowercase criteria for "Cherry"
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		{
+			name: "criteria value uppercase matches",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("CHERRY")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  13,
+		},
+		// --- case-insensitive criteria header matching ---
+		{
+			name: "criteria header is case insensitive",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("tree")}, // lowercase header
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		// --- error in database cell propagates ---
+		{
+			name: "error cell in matching record propagates",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Score")},
+				{StringVal("Alice"), NumberVal(100)},
+				{StringVal("Bob"), ErrorVal(ErrValNA)},
+			},
+			crit: [][]Value{
+				{StringVal("Name")},
+				{StringVal("Bob")},
+			},
+			field:    `"Score"`,
+			wantType: ValueError,
+			wantErr:  ErrValNA,
+		},
+		// --- not-equal zero operator ---
+		{
+			name: "not-equal zero criteria <>0",
+			db: [][]Value{
+				{StringVal("Item"), StringVal("Qty")},
+				{StringVal("A"), NumberVal(0)},
+				{StringVal("B"), NumberVal(5)},
+				{StringVal("C"), NumberVal(0)},
+			},
+			crit: [][]Value{
+				{StringVal("Qty")},
+				{StringVal("<>0")},
+			},
+			field:    `"Item"`,
+			wantType: ValueString,
+			wantStr:  "B", // only B has Qty != 0
+		},
+		// --- wildcard contains pattern *text* ---
+		{
+			name: "wildcard contains pattern *ear* matches single",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Age")},
+				{StringVal("*ear*"), StringVal("=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  96, // Pear with Age=12
+		},
+		{
+			name: "wildcard contains pattern *ppl* matches multiple → NUM error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("*ppl*")}, // matches all 3 Apples
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		// --- criteria with not-equal on text using <> ---
+		{
+			name: "not-equal text criteria with AND narrows to single",
+			db: [][]Value{
+				{StringVal("Color"), StringVal("Size")},
+				{StringVal("Red"), NumberVal(5)},
+				{StringVal("Blue"), NumberVal(10)},
+			},
+			crit: [][]Value{
+				{StringVal("Color")},
+				{StringVal("<>Red")},
+			},
+			field:    `"Size"`,
+			wantType: ValueNumber,
+			wantNum:  10,
+		},
+		// --- numeric criteria as actual number (not string) ---
+		{
+			name: "numeric criteria value matches exact number",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{NumberVal(13)}, // numeric 13 matches Cherry height=13
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Cherry",
+		},
+		// --- boolean criteria in criteria range ---
+		{
+			name: "boolean TRUE criteria matches boolean field",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Active"), StringVal("Name")},
+				{BoolVal(true), StringVal("Gamma")},
+			},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  30,
+		},
+		{
+			name: "boolean FALSE criteria matches boolean field",
+			db:   mixedDB,
+			crit: [][]Value{
+				{StringVal("Active"), StringVal("Name")},
+				{BoolVal(false), StringVal("Beta")},
+			},
+			field:    `"Value"`,
+			wantType: ValueString,
+			wantStr:  "hello",
+		},
+		// --- criteria header not in database → no match → VALUE error ---
+		{
+			name: "criteria header not in DB causes no match → VALUE error",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Color")}, // "Color" not in DB
+				{StringVal("Red")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE, // no records match → VALUE
+		},
+		// --- mixed types: string cell vs numeric criteria ---
+		{
+			name: "numeric criteria does not match string cell",
+			db: [][]Value{
+				{StringVal("Label"), StringVal("Val")},
+				{StringVal("X"), StringVal("hello")},
+				{StringVal("Y"), NumberVal(42)},
+			},
+			crit: [][]Value{
+				{StringVal("Val")},
+				{NumberVal(42)},
+			},
+			field:    `"Label"`,
+			wantType: ValueString,
+			wantStr:  "Y", // only Y has numeric 42
+		},
+		// --- field by column number 2 (middle column) ---
+		{
+			name: "field by column number 2 (Height)",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    "2",
+			wantType: ValueNumber,
+			wantNum:  13,
+		},
+		// --- three-column AND criteria narrowing to single match ---
+		{
+			name: "three-column AND criteria narrows to one record",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10"), StringVal("<16")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			wantNum:  10, // Apple, Height=14, Age=15 → Yield=10
+		},
+		// --- single record DB with no criteria rows → returns the single record ---
+		{
+			name: "single record DB no criteria rows returns value",
+			db:   singleDB,
+			crit: [][]Value{
+				{StringVal("Item")},
+			},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  9.99,
+		},
+		// --- decimal precision in matching ---
+		{
+			name: "decimal criteria exact match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Profit")},
+				{NumberVal(76.8)},
+			},
+			field:    `"Tree"`,
+			wantType: ValueString,
+			wantStr:  "Pear",
+		},
+		// --- less-equal string comparison operator ---
+		{
+			name: "less-equal on age narrows to single match",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Age")},
+				{StringVal("Apple"), StringVal("<=9")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  45, // Apple with Age=9, Profit=45
+		},
+		// --- wildcard with = prefix ---
+		{
+			name: "wildcard with = prefix matches pattern",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("=Ch*")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum:  13, // Cherry
+		},
+		// --- field index last column ---
+		{
+			name: "field index equals number of columns",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    "5", // last column (Profit)
+			wantType: ValueNumber,
+			wantNum:  105,
+		},
+		// --- database with all identical values in field, single match by other col ---
+		{
+			name: "identical field values returns matched record value",
+			db: [][]Value{
+				{StringVal("ID"), StringVal("Score")},
+				{NumberVal(1), NumberVal(100)},
+				{NumberVal(2), NumberVal(100)},
+				{NumberVal(3), NumberVal(100)},
+			},
+			crit: [][]Value{
+				{StringVal("ID")},
+				{NumberVal(2)},
+			},
+			field:    `"Score"`,
+			wantType: ValueNumber,
+			wantNum:  100,
+		},
+		// --- empty value in criteria with non-empty header still matches all ---
+		{
+			name: "empty criteria with EmptyVal matches all single-row DB",
+			db:   singleDB,
+			crit: [][]Value{
+				{StringVal("Item")},
+				{EmptyVal()},
+			},
+			field:    `"Price"`,
+			wantType: ValueNumber,
+			wantNum:  9.99,
+		},
 	}
 
 	runDBTests(t, "DGET", tests)
