@@ -8644,6 +8644,168 @@ func TestSLOPE(t *testing.T) {
 		},
 	}
 
+	// y = -3x + 10: y={7,4,1,-2}, x={1,2,3,4} → slope=-3
+	slopeNeg3Resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(7), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(1), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(-2), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// y = 2x + 3: y={5,7,9,11}, x={1,2,3,4} → slope=2
+	slopePos2Intercept3Resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(7), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(9), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(11), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// Scattered data: y={2,4,5,4,5}, x={1,2,3,4,5}
+	// meanX=3, meanY=4, cov=sum((xi-3)(yi-4))=(1-3)(2-4)+(2-3)(4-4)+(3-3)(5-4)+(4-3)(4-4)+(5-3)(5-4)=4+0+0+0+2=6
+	// ssqX = 4+1+0+1+4=10  slope=6/10=0.6
+	scatteredResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+			{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: NumberVal(5),
+		},
+	}
+
+	// Negative x and y: y={-10,-7,-4}, x={-3,-2,-1} → slope=3
+	negXYResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-10), {Col: 2, Row: 1}: NumberVal(-3),
+			{Col: 1, Row: 2}: NumberVal(-7), {Col: 2, Row: 2}: NumberVal(-2),
+			{Col: 1, Row: 3}: NumberVal(-4), {Col: 2, Row: 3}: NumberVal(-1),
+		},
+	}
+
+	// Mixed positive/negative: y={-2,1,4}, x={-1,0,1} → slope=3
+	mixedPosNegResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-2), {Col: 2, Row: 1}: NumberVal(-1),
+			{Col: 1, Row: 2}: NumberVal(1), {Col: 2, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: NumberVal(4), {Col: 2, Row: 3}: NumberVal(1),
+		},
+	}
+
+	// Large values (numerical stability): y={1e8+2, 1e8+4, 1e8+6}, x={1,2,3} → slope=2
+	largeValResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1e8 + 2), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(1e8 + 4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(1e8 + 6), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Zero x values: y={3,5,7}, x={0,1,2} → slope=2
+	zeroXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3), {Col: 2, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: NumberVal(1),
+			{Col: 1, Row: 3}: NumberVal(7), {Col: 2, Row: 3}: NumberVal(2),
+		},
+	}
+
+	// Fractional x: y={1.5, 3.0, 4.5}, x={0.5, 1.0, 1.5} → slope=3
+	fracXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1.5), {Col: 2, Row: 1}: NumberVal(0.5),
+			{Col: 1, Row: 2}: NumberVal(3.0), {Col: 2, Row: 2}: NumberVal(1.0),
+			{Col: 1, Row: 3}: NumberVal(4.5), {Col: 2, Row: 3}: NumberVal(1.5),
+		},
+	}
+
+	// Error in x array: x contains #DIV/0!
+	errXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Empty cells in middle of range: row2 has empty y and x → skipped
+	// effective pairs: (1,1),(3,3) → slope=1
+	emptyCellsResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			// row 2 intentionally empty
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Booleans in both arrays: all 4 pairs are non-numeric → #DIV/0!
+	boolBothResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: BoolVal(true), {Col: 2, Row: 1}: BoolVal(false),
+			{Col: 1, Row: 2}: BoolVal(false), {Col: 2, Row: 2}: BoolVal(true),
+		},
+	}
+
+	// Single numeric pair after skipping non-numerics → #DIV/0!
+	// row1: string,1 → skip; row2: 5,string → skip; row3: 3,3 → keep (only 1 pair)
+	singleAfterSkipResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("a"), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: StringVal("b"),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Steep slope: y={0,1000}, x={0,1} → slope=1000
+	steepResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0), {Col: 2, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(1000), {Col: 2, Row: 2}: NumberVal(1),
+		},
+	}
+
+	// Gentle slope: y={0,0.001}, x={0,1} → slope=0.001
+	gentleResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0), {Col: 2, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(0.001), {Col: 2, Row: 2}: NumberVal(1),
+		},
+	}
+
+	// Identity line: y={1,2,3,4,5}, x={1,2,3,4,5} → slope=1
+	identityResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+			{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: NumberVal(5),
+		},
+	}
+
+	// Reversed x: y={2,4,6}, x={3,2,1} → slope=-2
+	reversedXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(6), {Col: 2, Row: 3}: NumberVal(1),
+		},
+	}
+
+	// Non-contiguous x gaps: y={10,20,30}, x={1,5,9}
+	// meanX=5, meanY=20, cov=(1-5)(10-20)+(5-5)(20-20)+(9-5)(30-20)=40+0+40=80
+	// ssqX=(1-5)^2+(5-5)^2+(9-5)^2=16+0+16=32, slope=80/32=2.5
+	gappedXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(20), {Col: 2, Row: 2}: NumberVal(5),
+			{Col: 1, Row: 3}: NumberVal(30), {Col: 2, Row: 3}: NumberVal(9),
+		},
+	}
+
 	tol := 1e-6
 
 	tests := []struct {
@@ -8670,6 +8832,24 @@ func TestSLOPE(t *testing.T) {
 		{"negative_values", "SLOPE(A1:A3,B1:B3)", negValsResolver, 2.0, false, 0},
 		{"too_few_args", "SLOPE(A1:A3)", perfectResolver, 0, true, ErrValVALUE},
 		{"too_many_args", "SLOPE(A1:A3,B1:B3,A1:A3)", perfectResolver, 0, true, ErrValVALUE},
+		// --- new comprehensive tests ---
+		{"neg3_slope", "SLOPE(A1:A4,B1:B4)", slopeNeg3Resolver, -3.0, false, 0},
+		{"y_eq_2x_plus_3", "SLOPE(A1:A4,B1:B4)", slopePos2Intercept3Resolver, 2.0, false, 0},
+		{"scattered_data", "SLOPE(A1:A5,B1:B5)", scatteredResolver, 0.6, false, 0},
+		{"negative_x_and_y", "SLOPE(A1:A3,B1:B3)", negXYResolver, 3.0, false, 0},
+		{"mixed_pos_neg", "SLOPE(A1:A3,B1:B3)", mixedPosNegResolver, 3.0, false, 0},
+		{"large_values_stability", "SLOPE(A1:A3,B1:B3)", largeValResolver, 2.0, false, 0},
+		{"zero_x_values", "SLOPE(A1:A3,B1:B3)", zeroXResolver, 2.0, false, 0},
+		{"fractional_x", "SLOPE(A1:A3,B1:B3)", fracXResolver, 3.0, false, 0},
+		{"error_in_x_array", "SLOPE(A1:A3,B1:B3)", errXResolver, 0, true, ErrValDIV0},
+		{"empty_cells_in_range", "SLOPE(A1:A3,B1:B3)", emptyCellsResolver, 1.0, false, 0},
+		{"booleans_both_arrays", "SLOPE(A1:A2,B1:B2)", boolBothResolver, 0, true, ErrValDIV0},
+		{"single_pair_after_skip", "SLOPE(A1:A3,B1:B3)", singleAfterSkipResolver, 0, true, ErrValDIV0},
+		{"steep_slope", "SLOPE(A1:A2,B1:B2)", steepResolver, 1000.0, false, 0},
+		{"gentle_slope", "SLOPE(A1:A2,B1:B2)", gentleResolver, 0.001, false, 0},
+		{"identity_line", "SLOPE(A1:A5,B1:B5)", identityResolver, 1.0, false, 0},
+		{"reversed_x_order", "SLOPE(A1:A3,B1:B3)", reversedXResolver, -2.0, false, 0},
+		{"non_contiguous_x_gaps", "SLOPE(A1:A3,B1:B3)", gappedXResolver, 2.5, false, 0},
 	}
 
 	for _, tt := range tests {
@@ -8693,6 +8873,65 @@ func TestSLOPE(t *testing.T) {
 			}
 		})
 	}
+
+	// Cross-check: INTERCEPT = AVERAGE(y) - SLOPE * AVERAGE(x)
+	// Using perfectResolver: y={2,4,6}, x={1,2,3}
+	t.Run("cross_check_intercept_eq_avgy_minus_slope_times_avgx", func(t *testing.T) {
+		cfSlope := evalCompile(t, "SLOPE(A1:A3,B1:B3)")
+		cfAvgY := evalCompile(t, "AVERAGE(A1:A3)")
+		cfAvgX := evalCompile(t, "AVERAGE(B1:B3)")
+		cfIntercept := evalCompile(t, "INTERCEPT(A1:A3,B1:B3)")
+
+		slope, err := Eval(cfSlope, perfectResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval SLOPE: %v", err)
+		}
+		avgY, err := Eval(cfAvgY, perfectResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval AVERAGE(y): %v", err)
+		}
+		avgX, err := Eval(cfAvgX, perfectResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval AVERAGE(x): %v", err)
+		}
+		intercept, err := Eval(cfIntercept, perfectResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval INTERCEPT: %v", err)
+		}
+
+		// INTERCEPT should equal AVERAGE(y) - SLOPE * AVERAGE(x)
+		expected := avgY.Num - slope.Num*avgX.Num
+		if math.Abs(intercept.Num-expected) > tol {
+			t.Errorf("cross-check failed: INTERCEPT=%f, AVERAGE(y)-SLOPE*AVERAGE(x)=%f", intercept.Num, expected)
+		}
+	})
+
+	// Cross-check: FORECAST(x, y_arr, x_arr) == SLOPE*x + INTERCEPT
+	// Using scatteredResolver: y={2,4,5,4,5}, x={1,2,3,4,5}
+	t.Run("cross_check_forecast_eq_slope_x_plus_intercept", func(t *testing.T) {
+		cfSlope := evalCompile(t, "SLOPE(A1:A5,B1:B5)")
+		cfIntercept := evalCompile(t, "INTERCEPT(A1:A5,B1:B5)")
+		cfForecast := evalCompile(t, "FORECAST(6,A1:A5,B1:B5)")
+
+		slope, err := Eval(cfSlope, scatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval SLOPE: %v", err)
+		}
+		intercept, err := Eval(cfIntercept, scatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval INTERCEPT: %v", err)
+		}
+		forecast, err := Eval(cfForecast, scatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval FORECAST: %v", err)
+		}
+
+		// FORECAST(6) should equal SLOPE*6 + INTERCEPT
+		expected := slope.Num*6 + intercept.Num
+		if math.Abs(forecast.Num-expected) > tol {
+			t.Errorf("cross-check failed: FORECAST(6)=%f, SLOPE*6+INTERCEPT=%f", forecast.Num, expected)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -8821,6 +9060,157 @@ func TestINTERCEPT(t *testing.T) {
 		},
 	}
 
+	// y = -3x + 10: y={7,4,1,-2}, x={1,2,3,4} → intercept=10
+	intNeg3SlopeResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(7), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(1), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(-2), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// Horizontal line: all y=7, x={1,2,3,4} → slope=0, intercept=7
+	intHorizResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(7), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(7), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(7), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(7), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// Scattered data: y={2,4,5,4,5}, x={1,2,3,4,5}
+	// slope=0.6, intercept = meanY - slope*meanX = 4 - 0.6*3 = 2.2
+	intScatteredResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+			{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: NumberVal(5),
+		},
+	}
+
+	// Negative x and y: y={-10,-7,-4}, x={-3,-2,-1} → slope=3, intercept=-1
+	// meanX=-2, meanY=-7, intercept = -7 - 3*(-2) = -7+6 = -1
+	intNegXYResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-10), {Col: 2, Row: 1}: NumberVal(-3),
+			{Col: 1, Row: 2}: NumberVal(-7), {Col: 2, Row: 2}: NumberVal(-2),
+			{Col: 1, Row: 3}: NumberVal(-4), {Col: 2, Row: 3}: NumberVal(-1),
+		},
+	}
+
+	// Mixed positive/negative: y={-2,1,4}, x={-1,0,1} → slope=3, intercept=1
+	// meanX=0, meanY=1, intercept = 1 - 3*0 = 1
+	intMixedPosNegResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-2), {Col: 2, Row: 1}: NumberVal(-1),
+			{Col: 1, Row: 2}: NumberVal(1), {Col: 2, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: NumberVal(4), {Col: 2, Row: 3}: NumberVal(1),
+		},
+	}
+
+	// Large values: y={1e8+2, 1e8+4, 1e8+6}, x={1,2,3} → slope=2, intercept=1e8
+	intLargeValResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1e8 + 2), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(1e8 + 4), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(1e8 + 6), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Zero x values: y={3,5,7}, x={0,1,2} → slope=2, intercept=3
+	intZeroXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3), {Col: 2, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: NumberVal(1),
+			{Col: 1, Row: 3}: NumberVal(7), {Col: 2, Row: 3}: NumberVal(2),
+		},
+	}
+
+	// Fractional x: y={1.5, 3.0, 4.5}, x={0.5, 1.0, 1.5} → slope=3, intercept=0
+	intFracXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1.5), {Col: 2, Row: 1}: NumberVal(0.5),
+			{Col: 1, Row: 2}: NumberVal(3.0), {Col: 2, Row: 2}: NumberVal(1.0),
+			{Col: 1, Row: 3}: NumberVal(4.5), {Col: 2, Row: 3}: NumberVal(1.5),
+		},
+	}
+
+	// Error in x array: x contains #NUM!
+	intErrXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: ErrorVal(ErrValNUM),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Empty cells in middle: effective pairs (1,1),(3,3) → slope=1, intercept=0
+	intEmptyCellsResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			// row 2 intentionally empty
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Booleans in both arrays → #DIV/0!
+	intBoolBothResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: BoolVal(true), {Col: 2, Row: 1}: BoolVal(false),
+			{Col: 1, Row: 2}: BoolVal(false), {Col: 2, Row: 2}: BoolVal(true),
+		},
+	}
+
+	// Single numeric pair after skipping → #DIV/0!
+	intSingleAfterSkipResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("x"), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(5), {Col: 2, Row: 2}: StringVal("y"),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Identity line: y=x → slope=1, intercept=0
+	intIdentityResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+			{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+		},
+	}
+
+	// Non-contiguous x: y={10,20,30}, x={1,5,9} → slope=2.5, intercept=7.5
+	// meanX=5, meanY=20, intercept = 20 - 2.5*5 = 7.5
+	intGappedXResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(20), {Col: 2, Row: 2}: NumberVal(5),
+			{Col: 1, Row: 3}: NumberVal(30), {Col: 2, Row: 3}: NumberVal(9),
+		},
+	}
+
+	// Large negative intercept: y={-100,-98,-96}, x={1,2,3} → slope=2, intercept=-102
+	intLargeNegResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(-100), {Col: 2, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(-98), {Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(-96), {Col: 2, Row: 3}: NumberVal(3),
+		},
+	}
+
+	// Steep line through origin: y={0,1000}, x={0,1} → slope=1000, intercept=0
+	intSteepOriginResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0), {Col: 2, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(1000), {Col: 2, Row: 2}: NumberVal(1),
+		},
+	}
+
 	tol := 1e-6
 
 	tests := []struct {
@@ -8847,6 +9237,24 @@ func TestINTERCEPT(t *testing.T) {
 		{"negative_values", "INTERCEPT(A1:A3,B1:B3)", negValsResolver, -8.0, false, 0},
 		{"too_few_args", "INTERCEPT(A1:A3)", interceptResolver, 0, true, ErrValVALUE},
 		{"too_many_args", "INTERCEPT(A1:A3,B1:B3,A1:A3)", interceptResolver, 0, true, ErrValVALUE},
+		// --- new comprehensive tests ---
+		{"neg3_slope_intercept_10", "INTERCEPT(A1:A4,B1:B4)", intNeg3SlopeResolver, 10.0, false, 0},
+		{"horizontal_line", "INTERCEPT(A1:A4,B1:B4)", intHorizResolver, 7.0, false, 0},
+		{"scattered_data", "INTERCEPT(A1:A5,B1:B5)", intScatteredResolver, 2.2, false, 0},
+		{"negative_x_and_y", "INTERCEPT(A1:A3,B1:B3)", intNegXYResolver, -1.0, false, 0},
+		{"mixed_pos_neg", "INTERCEPT(A1:A3,B1:B3)", intMixedPosNegResolver, 1.0, false, 0},
+		{"large_values_stability", "INTERCEPT(A1:A3,B1:B3)", intLargeValResolver, 1e8, false, 0},
+		{"zero_x_values", "INTERCEPT(A1:A3,B1:B3)", intZeroXResolver, 3.0, false, 0},
+		{"fractional_x", "INTERCEPT(A1:A3,B1:B3)", intFracXResolver, 0.0, false, 0},
+		{"error_in_x_array", "INTERCEPT(A1:A3,B1:B3)", intErrXResolver, 0, true, ErrValNUM},
+		{"empty_cells_in_range", "INTERCEPT(A1:A3,B1:B3)", intEmptyCellsResolver, 0.0, false, 0},
+		{"booleans_both_arrays", "INTERCEPT(A1:A2,B1:B2)", intBoolBothResolver, 0, true, ErrValDIV0},
+		{"single_pair_after_skip", "INTERCEPT(A1:A3,B1:B3)", intSingleAfterSkipResolver, 0, true, ErrValDIV0},
+		{"identity_line", "INTERCEPT(A1:A4,B1:B4)", intIdentityResolver, 0.0, false, 0},
+		{"non_contiguous_x_gaps", "INTERCEPT(A1:A3,B1:B3)", intGappedXResolver, 7.5, false, 0},
+		{"large_negative_intercept", "INTERCEPT(A1:A3,B1:B3)", intLargeNegResolver, -102.0, false, 0},
+		{"steep_through_origin", "INTERCEPT(A1:A2,B1:B2)", intSteepOriginResolver, 0.0, false, 0},
+		{"y_intercept_via_avg_check", "INTERCEPT(A1:A3,B1:B3)", interceptResolver, 3.0, false, 0},
 	}
 
 	for _, tt := range tests {
@@ -8870,6 +9278,84 @@ func TestINTERCEPT(t *testing.T) {
 			}
 		})
 	}
+
+	// Cross-check: INTERCEPT = AVERAGE(y) - SLOPE * AVERAGE(x)
+	// Using intScatteredResolver: y={2,4,5,4,5}, x={1,2,3,4,5}
+	t.Run("cross_check_intercept_eq_avgy_minus_slope_times_avgx", func(t *testing.T) {
+		cfSlope := evalCompile(t, "SLOPE(A1:A5,B1:B5)")
+		cfAvgY := evalCompile(t, "AVERAGE(A1:A5)")
+		cfAvgX := evalCompile(t, "AVERAGE(B1:B5)")
+		cfIntercept := evalCompile(t, "INTERCEPT(A1:A5,B1:B5)")
+
+		slope, err := Eval(cfSlope, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval SLOPE: %v", err)
+		}
+		avgY, err := Eval(cfAvgY, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval AVERAGE(y): %v", err)
+		}
+		avgX, err := Eval(cfAvgX, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval AVERAGE(x): %v", err)
+		}
+		intercept, err := Eval(cfIntercept, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval INTERCEPT: %v", err)
+		}
+
+		expected := avgY.Num - slope.Num*avgX.Num
+		if math.Abs(intercept.Num-expected) > tol {
+			t.Errorf("cross-check failed: INTERCEPT=%f, AVERAGE(y)-SLOPE*AVERAGE(x)=%f", intercept.Num, expected)
+		}
+	})
+
+	// Cross-check: FORECAST(x, y_arr, x_arr) == SLOPE*x + INTERCEPT for scattered data
+	t.Run("cross_check_forecast_eq_slope_x_plus_intercept", func(t *testing.T) {
+		cfSlope := evalCompile(t, "SLOPE(A1:A5,B1:B5)")
+		cfIntercept := evalCompile(t, "INTERCEPT(A1:A5,B1:B5)")
+		cfForecast := evalCompile(t, "FORECAST(10,A1:A5,B1:B5)")
+
+		slope, err := Eval(cfSlope, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval SLOPE: %v", err)
+		}
+		intercept, err := Eval(cfIntercept, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval INTERCEPT: %v", err)
+		}
+		forecast, err := Eval(cfForecast, intScatteredResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval FORECAST: %v", err)
+		}
+
+		expected := slope.Num*10 + intercept.Num
+		if math.Abs(forecast.Num-expected) > tol {
+			t.Errorf("cross-check failed: FORECAST(10)=%f, SLOPE*10+INTERCEPT=%f", forecast.Num, expected)
+		}
+	})
+
+	// Cross-check: for identity line y=x, SLOPE=1 and INTERCEPT=0
+	t.Run("cross_check_identity_slope_and_intercept", func(t *testing.T) {
+		cfSlope := evalCompile(t, "SLOPE(A1:A4,B1:B4)")
+		cfIntercept := evalCompile(t, "INTERCEPT(A1:A4,B1:B4)")
+
+		slope, err := Eval(cfSlope, intIdentityResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval SLOPE: %v", err)
+		}
+		intercept, err := Eval(cfIntercept, intIdentityResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval INTERCEPT: %v", err)
+		}
+
+		if math.Abs(slope.Num-1.0) > tol {
+			t.Errorf("identity slope: got %f, want 1.0", slope.Num)
+		}
+		if math.Abs(intercept.Num-0.0) > tol {
+			t.Errorf("identity intercept: got %f, want 0.0", intercept.Num)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
