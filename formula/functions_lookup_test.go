@@ -15080,3 +15080,830 @@ func TestOFFSETBooleanCoercionForCols(t *testing.T) {
 		t.Errorf("OFFSET(A1,0,TRUE): got %v, want 20", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// INDEX — comprehensive additional tests
+// ---------------------------------------------------------------------------
+
+func TestINDEX_AdditionalComprehensive(t *testing.T) {
+	// Layout used for range-based tests:
+	//       A        B        C
+	// 1     10       20       30
+	// 2     40       50       60
+	// 3     70       80       90
+	// 4     "hello"  TRUE     #DIV/0!
+	// 5     ""       100      200
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(20),
+			{Col: 3, Row: 1}: NumberVal(30),
+			{Col: 1, Row: 2}: NumberVal(40),
+			{Col: 2, Row: 2}: NumberVal(50),
+			{Col: 3, Row: 2}: NumberVal(60),
+			{Col: 1, Row: 3}: NumberVal(70),
+			{Col: 2, Row: 3}: NumberVal(80),
+			{Col: 3, Row: 3}: NumberVal(90),
+			{Col: 1, Row: 4}: StringVal("hello"),
+			{Col: 2, Row: 4}: BoolVal(true),
+			{Col: 3, Row: 4}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 5}: StringVal(""),
+			{Col: 2, Row: 5}: NumberVal(100),
+			{Col: 3, Row: 5}: NumberVal(200),
+		},
+	}
+
+	type scalarTC struct {
+		name    string
+		formula string
+		want    Value
+	}
+
+	scalars := []scalarTC{
+		// -- basic positional lookups --
+		{"top_left", "INDEX(A1:C5,1,1)", NumberVal(10)},
+		{"top_right", "INDEX(A1:C5,1,3)", NumberVal(30)},
+		{"bottom_left", "INDEX(A1:C5,5,1)", StringVal("")},
+		{"bottom_right", "INDEX(A1:C5,5,3)", NumberVal(200)},
+		{"middle", "INDEX(A1:C5,2,2)", NumberVal(50)},
+
+		// -- single column array: 2-arg selects row --
+		{"single_col_first", "INDEX(A1:A5,1)", NumberVal(10)},
+		{"single_col_last", "INDEX(A1:A5,5)", StringVal("")},
+		{"single_col_3arg", "INDEX(A1:A5,3,1)", NumberVal(70)},
+
+		// -- single row array: 2-arg selects col --
+		{"single_row_first", "INDEX(A1:C1,1)", NumberVal(10)},
+		{"single_row_last", "INDEX(A1:C1,3)", NumberVal(30)},
+
+		// -- mixed types in array --
+		{"string_cell", "INDEX(A1:C5,4,1)", StringVal("hello")},
+		{"bool_cell", "INDEX(A1:C5,4,2)", BoolVal(true)},
+		{"empty_string_cell", "INDEX(A1:C5,5,1)", StringVal("")},
+
+		// -- error in selected cell is returned --
+		{"error_at_target_div0", "INDEX(A1:C5,4,3)", ErrorVal(ErrValDIV0)},
+
+		// -- out of bounds → #REF! --
+		{"row_oob_high", "INDEX(A1:C5,6,1)", ErrorVal(ErrValREF)},
+		{"col_oob_high", "INDEX(A1:C5,1,4)", ErrorVal(ErrValREF)},
+		{"row_oob_very_high", "INDEX(A1:C5,999,1)", ErrorVal(ErrValREF)},
+
+		// -- negative index → #VALUE! --
+		{"neg_row", "INDEX(A1:C5,-1,1)", ErrorVal(ErrValVALUE)},
+		{"neg_col", "INDEX(A1:C5,1,-2)", ErrorVal(ErrValVALUE)},
+		{"neg_both", "INDEX(A1:C5,-1,-1)", ErrorVal(ErrValVALUE)},
+
+		// -- string coercion for row/col (numeric strings) --
+		{"string_row_num", `INDEX({"a","b","c"},"2")`, StringVal("b")},
+		{"string_col_num", `INDEX({"a","b","c"},"3")`, StringVal("c")},
+
+		// -- boolean coercion: TRUE=1, FALSE=0 --
+		{"bool_true_row", `INDEX({"x","y","z"},TRUE)`, StringVal("x")}, // TRUE→1
+
+		// -- large array constant --
+		{"large_array", "INDEX({1,2,3,4,5,6,7,8,9,10},7)", NumberVal(7)},
+		{"large_array_last", "INDEX({1,2,3,4,5,6,7,8,9,10},10)", NumberVal(10)},
+
+		// -- array constant 2D --
+		{"array_2d_r2c2", "INDEX({1,2,3;4,5,6;7,8,9},3,3)", NumberVal(9)},
+		{"array_2d_r1c3", "INDEX({1,2,3;4,5,6;7,8,9},1,3)", NumberVal(3)},
+
+		// -- 2-arg on multi-col defaults col to 1 --
+		{"2arg_multicol_defaults_col1", "INDEX(A1:C3,2)", NumberVal(40)},
+
+		// -- omitted col_num (single-column default) --
+		{"single_col_range_default", "INDEX(B1:B5,3)", NumberVal(80)},
+
+		// -- INDEX/MATCH combination --
+		{"index_match_number", "INDEX(C1:C3,MATCH(50,B1:B3,0))", NumberVal(60)},
+	}
+
+	for _, tt := range scalars {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.want.Type {
+				t.Fatalf("Eval(%q): type=%v, want %v (got %v)", tt.formula, got.Type, tt.want.Type, got)
+			}
+			switch tt.want.Type {
+			case ValueNumber:
+				if got.Num != tt.want.Num {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want.Num)
+				}
+			case ValueString:
+				if got.Str != tt.want.Str {
+					t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tt.want.Bool {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Bool, tt.want.Bool)
+				}
+			case ValueError:
+				if got.Err != tt.want.Err {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Err, tt.want.Err)
+				}
+			case ValueEmpty:
+				// type match is enough
+			}
+		})
+	}
+
+	// -- array return tests --
+
+	t.Run("row0_full_column_B", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3,0,2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray || len(got.Array) != 3 {
+			t.Fatalf("expected 3-row array, got %v", got)
+		}
+		want := []float64{20, 50, 80}
+		for i, w := range want {
+			if got.Array[i][0].Num != w {
+				t.Errorf("row %d: got %g, want %g", i, got.Array[i][0].Num, w)
+			}
+		}
+	})
+
+	t.Run("col0_full_row_2", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3,2,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray || len(got.Array) != 1 || len(got.Array[0]) != 3 {
+			t.Fatalf("expected 1x3, got %v", got)
+		}
+		want := []float64{40, 50, 60}
+		for i, w := range want {
+			if got.Array[0][i].Num != w {
+				t.Errorf("col %d: got %g, want %g", i, got.Array[0][i].Num, w)
+			}
+		}
+	})
+
+	t.Run("both0_full_array", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3,0,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected ValueArray, got %v", got.Type)
+		}
+		if len(got.Array) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(got.Array))
+		}
+		// Spot-check corners
+		if got.Array[0][0].Num != 10 {
+			t.Errorf("top-left = %g, want 10", got.Array[0][0].Num)
+		}
+		if got.Array[2][2].Num != 90 {
+			t.Errorf("bottom-right = %g, want 90", got.Array[2][2].Num)
+		}
+	})
+
+	t.Run("row0_col_oob_ref", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3,0,5)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	t.Run("col0_row_oob_ref", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3,5,0)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("expected #REF!, got %v", got)
+		}
+	})
+
+	// -- wrong arg count --
+	t.Run("too_few_args", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:C3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("expected #VALUE!, got %v", got)
+		}
+	})
+
+	// -- SUM of INDEX subarray --
+	t.Run("sum_of_row0_column", func(t *testing.T) {
+		// SUM(INDEX(A1:C3,0,1)) = 10+40+70 = 120
+		cf := evalCompile(t, "SUM(INDEX(A1:C3,0,1))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 120 {
+			t.Errorf("got %v, want 120", got)
+		}
+	})
+
+	t.Run("sum_of_col0_row", func(t *testing.T) {
+		// SUM(INDEX(A1:C3,3,0)) = 70+80+90 = 240
+		cf := evalCompile(t, "SUM(INDEX(A1:C3,3,0))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 240 {
+			t.Errorf("got %v, want 240", got)
+		}
+	})
+
+	// -- INDEX with array constant: row 0 returns entire array --
+	t.Run("array_const_row0", func(t *testing.T) {
+		cf := evalCompile(t, `INDEX({10,20,30;40,50,60},0,0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueArray {
+			t.Fatalf("expected array, got %v", got.Type)
+		}
+		if len(got.Array) != 2 || len(got.Array[0]) != 3 {
+			t.Fatalf("expected 2x3, got %dx%d", len(got.Array), len(got.Array[0]))
+		}
+	})
+
+	// -- scalar input returns that scalar --
+	t.Run("scalar_input_returns_scalar", func(t *testing.T) {
+		got, err := fnINDEX([]Value{NumberVal(42), NumberVal(1)})
+		if err != nil {
+			t.Fatalf("fnINDEX: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 42 {
+			t.Errorf("got %v, want 42", got)
+		}
+	})
+
+	// -- INDEX on a single-element range --
+	t.Run("single_element_range", func(t *testing.T) {
+		cf := evalCompile(t, "INDEX(A1:A1,1,1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+
+	// -- INDEX/MATCH cross-check via range --
+	t.Run("index_match_cross_check", func(t *testing.T) {
+		// Use the same resolver. MATCH finds row of 80 in B1:B3, then INDEX returns C at that row.
+		cf := evalCompile(t, "INDEX(C1:C3,MATCH(80,B1:B3,0))")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 90 {
+			t.Errorf("got %v, want 90", got)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// MATCH — comprehensive additional tests
+// ---------------------------------------------------------------------------
+
+func TestMATCH_AdditionalComprehensive(t *testing.T) {
+	// Layout for range-based tests:
+	//   A column (sorted ascending): 5, 10, 20, 30, 50
+	//   B column (sorted descending): 100, 80, 60, 40, 20
+	//   C column (unsorted strings): "cherry", "apple", "banana", "date", "elderberry"
+	//   D column (with duplicates): 10, 20, 20, 30, 30
+	//   E column (booleans): FALSE, FALSE, TRUE, TRUE, FALSE
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			// A: sorted ascending
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(10),
+			{Col: 1, Row: 3}: NumberVal(20),
+			{Col: 1, Row: 4}: NumberVal(30),
+			{Col: 1, Row: 5}: NumberVal(50),
+			// B: sorted descending
+			{Col: 2, Row: 1}: NumberVal(100),
+			{Col: 2, Row: 2}: NumberVal(80),
+			{Col: 2, Row: 3}: NumberVal(60),
+			{Col: 2, Row: 4}: NumberVal(40),
+			{Col: 2, Row: 5}: NumberVal(20),
+			// C: unsorted strings
+			{Col: 3, Row: 1}: StringVal("cherry"),
+			{Col: 3, Row: 2}: StringVal("apple"),
+			{Col: 3, Row: 3}: StringVal("banana"),
+			{Col: 3, Row: 4}: StringVal("date"),
+			{Col: 3, Row: 5}: StringVal("elderberry"),
+			// D: with duplicates
+			{Col: 4, Row: 1}: NumberVal(10),
+			{Col: 4, Row: 2}: NumberVal(20),
+			{Col: 4, Row: 3}: NumberVal(20),
+			{Col: 4, Row: 4}: NumberVal(30),
+			{Col: 4, Row: 5}: NumberVal(30),
+			// E: booleans
+			{Col: 5, Row: 1}: BoolVal(false),
+			{Col: 5, Row: 2}: BoolVal(false),
+			{Col: 5, Row: 3}: BoolVal(true),
+			{Col: 5, Row: 4}: BoolVal(true),
+			{Col: 5, Row: 5}: BoolVal(false),
+		},
+	}
+
+	type matchTC struct {
+		name    string
+		formula string
+		want    Value
+	}
+
+	tests := []matchTC{
+		// -- exact match (match_type=0): found --
+		{"exact_found_first", "MATCH(5,A1:A5,0)", NumberVal(1)},
+		{"exact_found_middle", "MATCH(20,A1:A5,0)", NumberVal(3)},
+		{"exact_found_last", "MATCH(50,A1:A5,0)", NumberVal(5)},
+
+		// -- exact match: not found → #N/A --
+		{"exact_not_found", "MATCH(15,A1:A5,0)", ErrorVal(ErrValNA)},
+		{"exact_not_found_below", "MATCH(1,A1:A5,0)", ErrorVal(ErrValNA)},
+		{"exact_not_found_above", "MATCH(99,A1:A5,0)", ErrorVal(ErrValNA)},
+
+		// -- exact match: case-insensitive text --
+		{"exact_text_case_insensitive", `MATCH("APPLE",C1:C5,0)`, NumberVal(2)},
+		{"exact_text_mixed_case", `MATCH("Banana",C1:C5,0)`, NumberVal(3)},
+		{"exact_text_lower", `MATCH("date",C1:C5,0)`, NumberVal(4)},
+
+		// -- approximate ascending (match_type=1): exact hit --
+		{"asc_exact", "MATCH(20,A1:A5,1)", NumberVal(3)},
+
+		// -- approximate ascending: between values → last <= --
+		{"asc_between", "MATCH(25,A1:A5,1)", NumberVal(3)},   // 20 is last <=25
+		{"asc_between_low", "MATCH(7,A1:A5,1)", NumberVal(1)}, // 5 is last <=7
+
+		// -- approximate ascending: below minimum → #N/A --
+		{"asc_below_min", "MATCH(3,A1:A5,1)", ErrorVal(ErrValNA)},
+
+		// -- approximate ascending: above maximum → returns last --
+		{"asc_above_max", "MATCH(100,A1:A5,1)", NumberVal(5)},
+
+		// -- default match_type is 1 when omitted --
+		{"default_match_type", "MATCH(25,A1:A5)", NumberVal(3)},
+
+		// -- approximate descending (match_type=-1): exact hit --
+		{"desc_exact", "MATCH(60,B1:B5,-1)", NumberVal(3)},
+
+		// -- approximate descending: between values → nearest >= --
+		{"desc_between", "MATCH(50,B1:B5,-1)", NumberVal(3)}, // 60 is smallest >=50
+
+		// -- approximate descending: above max → #N/A --
+		{"desc_above_max", "MATCH(150,B1:B5,-1)", ErrorVal(ErrValNA)},
+
+		// -- duplicate values: returns first match (exact) --
+		{"dup_exact_first", "MATCH(20,D1:D5,0)", NumberVal(2)},
+		{"dup_exact_first_30", "MATCH(30,D1:D5,0)", NumberVal(4)},
+
+		// -- single element array --
+		{"single_element_found", "MATCH(5,A1:A1,0)", NumberVal(1)},
+		{"single_element_not_found", "MATCH(99,A1:A1,0)", ErrorVal(ErrValNA)},
+
+		// -- wrong arg count --
+		{"too_few_args", "MATCH(5)", ErrorVal(ErrValVALUE)},
+
+		// -- error propagation: lookup value is error --
+		// (CoerceNum on match_type with error propagates the error)
+
+		// -- empty lookup value (exact match finds empty cell) --
+		// With no empty cells in the range, an empty lookup should return #N/A.
+
+		// -- boolean lookup --
+		{"bool_true_exact", "MATCH(TRUE,E1:E5,0)", NumberVal(3)},
+		{"bool_false_exact", "MATCH(FALSE,E1:E5,0)", NumberVal(1)},
+
+		// -- large array constant --
+		{"large_array_const", "MATCH(7,{1,2,3,4,5,6,7,8,9,10},0)", NumberVal(7)},
+		{"large_array_const_last", "MATCH(10,{1,2,3,4,5,6,7,8,9,10},0)", NumberVal(10)},
+		{"large_array_const_not_found", "MATCH(11,{1,2,3,4,5,6,7,8,9,10},0)", ErrorVal(ErrValNA)},
+
+		// -- ascending with exact match on first/last --
+		{"asc_first_exact", "MATCH(5,A1:A5,1)", NumberVal(1)},
+		{"asc_last_exact", "MATCH(50,A1:A5,1)", NumberVal(5)},
+
+		// -- descending with exact on first/last --
+		{"desc_first_exact", "MATCH(100,B1:B5,-1)", NumberVal(1)},
+		{"desc_last_exact", "MATCH(20,B1:B5,-1)", NumberVal(5)},
+
+		// -- MATCH + INDEX cross-check --
+		{"match_index_cross", `INDEX(C1:C5,MATCH(20,A1:A5,0))`, StringVal("banana")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.want.Type {
+				t.Fatalf("Eval(%q): type=%v, want %v (got %v)", tt.formula, got.Type, tt.want.Type, got)
+			}
+			switch tt.want.Type {
+			case ValueNumber:
+				if got.Num != tt.want.Num {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want.Num)
+				}
+			case ValueString:
+				if got.Str != tt.want.Str {
+					t.Errorf("Eval(%q) = %q, want %q", tt.formula, got.Str, tt.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tt.want.Bool {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Bool, tt.want.Bool)
+				}
+			case ValueError:
+				if got.Err != tt.want.Err {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Err, tt.want.Err)
+				}
+			}
+		})
+	}
+}
+
+// TestMATCH_WildcardExactMode tests wildcard support in MATCH with match_type=0.
+// Excel's MATCH supports * and ? wildcards in exact match mode.
+func TestMATCH_WildcardExactMode(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("apple"),
+			{Col: 1, Row: 2}: StringVal("banana"),
+			{Col: 1, Row: 3}: StringVal("cherry"),
+			{Col: 1, Row: 4}: StringVal("date"),
+			{Col: 1, Row: 5}: StringVal("elderberry"),
+			{Col: 1, Row: 6}: StringVal("cat"),
+			{Col: 1, Row: 7}: StringVal("cup"),
+		},
+	}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    Value
+	}{
+		{"star_prefix", `MATCH("app*",A1:A7,0)`, NumberVal(1)},
+		{"star_suffix", `MATCH("*berry",A1:A7,0)`, NumberVal(5)},
+		{"star_middle", `MATCH("ch*ry",A1:A7,0)`, NumberVal(3)},
+		{"question_single", `MATCH("c?t",A1:A7,0)`, NumberVal(6)},
+		{"question_cup", `MATCH("c?p",A1:A7,0)`, NumberVal(7)},
+		{"star_all", `MATCH("*",A1:A7,0)`, NumberVal(1)},
+		{"no_match", `MATCH("zzz*",A1:A7,0)`, ErrorVal(ErrValNA)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.want.Type {
+				t.Fatalf("Eval(%q): type=%v, want %v (got %v)", tt.formula, got.Type, tt.want.Type, got)
+			}
+			switch tt.want.Type {
+			case ValueNumber:
+				if got.Num != tt.want.Num {
+					t.Errorf("Eval(%q) = %g, want %g", tt.formula, got.Num, tt.want.Num)
+				}
+			case ValueError:
+				if got.Err != tt.want.Err {
+					t.Errorf("Eval(%q) = %v, want %v", tt.formula, got.Err, tt.want.Err)
+				}
+			}
+		})
+	}
+}
+
+// TestMATCH_NumericStringVsNumber tests that MATCH distinguishes numeric
+// strings from actual numbers (they are different types in Excel).
+func TestMATCH_NumericStringVsNumber(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: StringVal("20"),
+			{Col: 1, Row: 3}: NumberVal(30),
+		},
+	}
+
+	// Exact match: looking for number 20 should NOT find string "20"
+	cf := evalCompile(t, "MATCH(20,A1:A3,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNA {
+		t.Errorf("MATCH(20) in [10,\"20\",30]: got %v, want #N/A", got)
+	}
+
+	// Exact match: looking for string "20" should find it
+	cf = evalCompile(t, `MATCH("20",A1:A3,0)`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf(`MATCH("20") in [10,"20",30]: got %v, want 2`, got)
+	}
+}
+
+// TestMATCH_EmptyLookupValue tests MATCH with an empty lookup value.
+func TestMATCH_EmptyLookupValue(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("a"),
+			{Col: 1, Row: 2}: StringVal("b"),
+			// Row 3 is empty
+			{Col: 1, Row: 4}: StringVal("c"),
+			// F1 is empty — will be the lookup value
+		},
+	}
+
+	// Empty lookup value with exact match. An empty cell compared to strings
+	// treats empty as "". Should find the empty cell (row 3).
+	cf := evalCompile(t, "MATCH(F1,A1:A4,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("MATCH(empty,A1:A4,0): got %v, want 3", got)
+	}
+}
+
+// TestMATCH_ErrorPropagation tests that errors in match_type propagate.
+func TestMATCH_ErrorPropagation(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+		},
+	}
+
+	// match_type argument is an error → should propagate
+	cf := evalCompile(t, "MATCH(10,A1:A2,1/0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("MATCH with error match_type: got %v, want #DIV/0!", got)
+	}
+}
+
+// TestINDEX_BooleanRowCol tests INDEX with boolean row/col arguments.
+func TestINDEX_BooleanRowCol(t *testing.T) {
+	// TRUE coerces to 1 via CoerceNum.
+	got, err := fnINDEX([]Value{
+		Value{Type: ValueArray, Array: [][]Value{{NumberVal(10), NumberVal(20)}, {NumberVal(30), NumberVal(40)}}},
+		BoolVal(true),  // row = TRUE → 1
+		BoolVal(true),  // col = TRUE → 1
+	})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("INDEX with bool args: got %v, want 10", got)
+	}
+}
+
+// TestINDEX_StringRowCol tests INDEX with numeric string row/col arguments.
+func TestINDEX_StringRowCol(t *testing.T) {
+	got, err := fnINDEX([]Value{
+		Value{Type: ValueArray, Array: [][]Value{{NumberVal(10), NumberVal(20)}, {NumberVal(30), NumberVal(40)}}},
+		StringVal("2"), // row = "2" → 2
+		StringVal("2"), // col = "2" → 2
+	})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 40 {
+		t.Errorf("INDEX with string args: got %v, want 40", got)
+	}
+}
+
+// TestINDEX_NonNumericStringArg tests INDEX with a non-numeric string → #VALUE!.
+func TestINDEX_NonNumericStringArg(t *testing.T) {
+	got, err := fnINDEX([]Value{
+		Value{Type: ValueArray, Array: [][]Value{{NumberVal(10)}}},
+		StringVal("abc"),
+	})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("INDEX with non-numeric string: got %v, want #VALUE!", got)
+	}
+}
+
+// TestINDEX_ErrorArgPropagation tests that an error argument to INDEX propagates.
+func TestINDEX_ErrorArgPropagation(t *testing.T) {
+	got, err := fnINDEX([]Value{
+		Value{Type: ValueArray, Array: [][]Value{{NumberVal(10)}}},
+		ErrorVal(ErrValNA),
+	})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNA {
+		t.Errorf("INDEX with error row: got %v, want #N/A", got)
+	}
+}
+
+// TestMATCH_AscendingDuplicates tests that ascending match with duplicates
+// returns the last occurrence of <= value.
+func TestMATCH_AscendingDuplicates(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(20),
+			{Col: 1, Row: 4}: NumberVal(20),
+			{Col: 1, Row: 5}: NumberVal(30),
+		},
+	}
+
+	// match_type=1 with duplicates: 20 appears at rows 2,3,4. Should return 4 (last <=20).
+	cf := evalCompile(t, "MATCH(20,A1:A5,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 4 {
+		t.Errorf("MATCH(20,dup_asc,1): got %v, want 4", got)
+	}
+}
+
+// TestMATCH_DescendingExactOnBoundary tests descending match at the boundaries.
+func TestMATCH_DescendingExactOnBoundary(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(50),
+			{Col: 1, Row: 2}: NumberVal(40),
+			{Col: 1, Row: 3}: NumberVal(30),
+			{Col: 1, Row: 4}: NumberVal(20),
+			{Col: 1, Row: 5}: NumberVal(10),
+		},
+	}
+
+	// Exact at first element
+	cf := evalCompile(t, "MATCH(50,A1:A5,-1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("MATCH(50,desc,-1): got %v, want 1", got)
+	}
+
+	// Exact at last element
+	cf = evalCompile(t, "MATCH(10,A1:A5,-1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 5 {
+		t.Errorf("MATCH(10,desc,-1): got %v, want 5", got)
+	}
+
+	// Below minimum in descending → returns last (smallest >= value)
+	cf = evalCompile(t, "MATCH(5,A1:A5,-1)")
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 5 {
+		t.Errorf("MATCH(5,desc,-1): got %v, want 5", got)
+	}
+}
+
+// TestMATCH_SingleScalarArg tests MATCH when the lookup_array is a scalar.
+func TestMATCH_SingleScalarArg(t *testing.T) {
+	// MATCH on a single value (non-array)
+	got, err := fnMATCH([]Value{NumberVal(42), NumberVal(42), NumberVal(0)})
+	if err != nil {
+		t.Fatalf("fnMATCH: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("MATCH scalar found: got %v, want 1", got)
+	}
+
+	got, err = fnMATCH([]Value{NumberVal(42), NumberVal(99), NumberVal(0)})
+	if err != nil {
+		t.Fatalf("fnMATCH: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNA {
+		t.Errorf("MATCH scalar not found: got %v, want #N/A", got)
+	}
+}
+
+// TestMATCH_InvalidMatchType tests MATCH with match_type values other than -1,0,1.
+func TestMATCH_InvalidMatchType(t *testing.T) {
+	// match_type=2 is not valid → #VALUE!
+	got, err := fnMATCH([]Value{NumberVal(1), NumberVal(1), NumberVal(2)})
+	if err != nil {
+		t.Fatalf("fnMATCH: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("MATCH invalid match_type: got %v, want #VALUE!", got)
+	}
+}
+
+// TestINDEX_MixedTypesArray tests INDEX accessing various types in an array constant.
+func TestINDEX_MixedTypesArray(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    Value
+	}{
+		{"number", "INDEX({1,2,3},1)", NumberVal(1)},
+		{"string", `INDEX({"a","b","c"},2)`, StringVal("b")},
+		{"bool_true", "INDEX({TRUE,FALSE},1)", BoolVal(true)},
+		{"bool_false", "INDEX({TRUE,FALSE},2)", BoolVal(false)},
+	}
+
+	resolver := &mockResolver{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			if got.Type != tt.want.Type {
+				t.Fatalf("Eval(%q): type=%v, want %v", tt.formula, got.Type, tt.want.Type)
+			}
+			switch tt.want.Type {
+			case ValueNumber:
+				if got.Num != tt.want.Num {
+					t.Errorf("got %g, want %g", got.Num, tt.want.Num)
+				}
+			case ValueString:
+				if got.Str != tt.want.Str {
+					t.Errorf("got %q, want %q", got.Str, tt.want.Str)
+				}
+			case ValueBool:
+				if got.Bool != tt.want.Bool {
+					t.Errorf("got %v, want %v", got.Bool, tt.want.Bool)
+				}
+			}
+		})
+	}
+}
+
+// TestINDEX_FourArgs tests that INDEX rejects >3 arguments.
+func TestINDEX_FourArgs(t *testing.T) {
+	got, err := fnINDEX([]Value{
+		Value{Type: ValueArray, Array: [][]Value{{NumberVal(1)}}},
+		NumberVal(1), NumberVal(1), NumberVal(1),
+	})
+	if err != nil {
+		t.Fatalf("fnINDEX: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("INDEX 4 args: got %v, want #VALUE!", got)
+	}
+}
+
+// TestMATCH_FourArgs tests that MATCH rejects >3 arguments.
+func TestMATCH_FourArgs(t *testing.T) {
+	got, err := fnMATCH([]Value{NumberVal(1), NumberVal(1), NumberVal(0), NumberVal(1)})
+	if err != nil {
+		t.Fatalf("fnMATCH: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("MATCH 4 args: got %v, want #VALUE!", got)
+	}
+}
+
+// TestMATCH_OneArg tests that MATCH rejects <2 arguments.
+func TestMATCH_OneArg(t *testing.T) {
+	got, err := fnMATCH([]Value{NumberVal(1)})
+	if err != nil {
+		t.Fatalf("fnMATCH: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("MATCH 1 arg: got %v, want #VALUE!", got)
+	}
+}

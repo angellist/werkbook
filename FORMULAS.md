@@ -214,7 +214,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | IMSUB | Subtracts one complex number from another. | Engineering | 34 |
 | IMSUM | Returns the sum of complex numbers. | Engineering | 37 |
 | IMTAN | Returns the tangent of a complex number. | Engineering | 28 |
-| INDEX | Returns a value or subrange at a row and column position. | Lookup & Reference | 81 |
+| INDEX | Returns a value or subrange at a row and column position. | Lookup & Reference | 132 |
 | INDIRECT | Turns text into a reference and returns its value. | Lookup & Reference | 61 |
 | INT | Rounds a number down to the nearest integer. | Math & Trig | 27 |
 | INTERCEPT | Returns the y-intercept of a linear regression line. | Statistical | 16 |
@@ -254,7 +254,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | LOWER | Converts text to lowercase. | Text | 23 |
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
-| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 16 |
+| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 74 |
 | MAX | Returns the largest numeric value. | Statistical | 37 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
@@ -377,7 +377,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 68 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 70 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 72 |
