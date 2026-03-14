@@ -18690,3 +18690,598 @@ func TestNPER_ArgCountErrors(t *testing.T) {
 		})
 	}
 }
+
+// === MIRR comprehensive evalCompile tests ===
+
+func TestMIRR_ViaEval_BasicMixedCashFlows(t *testing.T) {
+	// Basic investment: initial outlay + positive returns
+	cf := evalCompile(t, "MIRR({-50000,15000,20000,25000,10000}, 0.08, 0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR basic mixed: expected number, got %v", v.Type)
+	}
+	// Should be a reasonable positive rate
+	if v.Num < -1 || v.Num > 1 {
+		t.Errorf("MIRR basic mixed: got unreasonable rate %f", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_ExcelDocExample(t *testing.T) {
+	// From Excel docs: MIRR({-120000,39000,30000,21000,37000,46000}, 0.10, 0.12) ≈ 0.126094
+	cf := evalCompile(t, "MIRR({-120000,39000,30000,21000,37000,46000}, 0.10, 0.12)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR Excel doc: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.126094) > 0.0001 {
+		t.Errorf("MIRR Excel doc: got %f, want ~0.126094", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_ExcelDocExample3Years(t *testing.T) {
+	// From Excel docs: MIRR({-120000,39000,30000,21000}, 0.10, 0.12) ≈ -0.04802
+	cf := evalCompile(t, "MIRR({-120000,39000,30000,21000}, 0.10, 0.12)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR Excel doc 3 years: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-(-0.04802)) > 0.001 {
+		t.Errorf("MIRR Excel doc 3 years: got %f, want ~-0.04802", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_ExcelDocReinvest14Pct(t *testing.T) {
+	// From Excel docs: MIRR({-120000,39000,30000,21000,37000,46000}, 0.10, 0.14) ≈ 0.134759
+	cf := evalCompile(t, "MIRR({-120000,39000,30000,21000,37000,46000}, 0.10, 0.14)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR reinvest 14%%: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.134759) > 0.0001 {
+		t.Errorf("MIRR reinvest 14%%: got %f, want ~0.134759", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_AllPositive_Error(t *testing.T) {
+	// All positive cash flows → #DIV/0! (no negative flows)
+	cf := evalCompile(t, `IFERROR(MIRR({100,200,300}, 0.1, 0.1), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("MIRR all positive: expected error caught by IFERROR, got %#v", v)
+	}
+}
+
+func TestMIRR_ViaEval_AllNegative_ReturnsMinusOne(t *testing.T) {
+	// All negative → FV of positives is 0 → MIRR = -1
+	cf := evalCompile(t, "MIRR({-100,-200,-300}, 0.1, 0.1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "MIRR all negative via eval", v, -1.0)
+}
+
+func TestMIRR_ViaEval_SingleNegSinglePos(t *testing.T) {
+	// MIRR({-100, 120}, 0.05, 0.10) — simple two-flow case
+	// FV of positive at 0.10: 120 * (1+0.10)^0 = 120
+	// PV of negative at 0.05: -100 / (1+0.05)^0 = -100
+	// MIRR = (120/100)^(1/1) - 1 = 0.20
+	cf := evalCompile(t, "MIRR({-100,120}, 0.05, 0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "MIRR single neg/pos", v, 0.20)
+}
+
+func TestMIRR_ViaEval_LargePeriods(t *testing.T) {
+	// 20-period project
+	cf := evalCompile(t, "MIRR({-1000,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,200}, 0.06, 0.08)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR large periods: expected number, got %v", v.Type)
+	}
+	if v.Num < -1 || v.Num > 1 {
+		t.Errorf("MIRR large periods: got unreasonable rate %f", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_FinanceRateZero(t *testing.T) {
+	// finance_rate=0: PV of negatives discounted at 0% → just sum of negatives
+	cf := evalCompile(t, "MIRR({-100,50,60}, 0, 0.1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PV neg = -100, FV pos = 50*1.1 + 60 = 115, MIRR = (115/100)^(1/2) - 1 ≈ 0.07238
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR finance_rate=0: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.07238) > 0.001 {
+		t.Errorf("MIRR finance_rate=0: got %f, want ~0.07238", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_ReinvestRateZero(t *testing.T) {
+	// reinvest_rate=0: FV of positives not compounded → just sum
+	cf := evalCompile(t, "MIRR({-100,50,60}, 0.1, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// FV pos = 50 + 60 = 110, PV neg = -100, MIRR = (110/100)^(1/2) - 1 ≈ 0.04881
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR reinvest_rate=0: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.04881) > 0.001 {
+		t.Errorf("MIRR reinvest_rate=0: got %f, want ~0.04881", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_BothRatesZero(t *testing.T) {
+	cf := evalCompile(t, "MIRR({-100,50,60}, 0, 0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// FV pos = 50+60=110, PV neg = -100, MIRR = (110/100)^(1/2)-1 ≈ 0.04881
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR both rates zero: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.04881) > 0.001 {
+		t.Errorf("MIRR both rates zero: got %f, want ~0.04881", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_HighFinanceLowReinvest(t *testing.T) {
+	// High finance rate (20%) + low reinvest rate (2%)
+	cf := evalCompile(t, "MIRR({-100000,30000,40000,50000}, 0.20, 0.02)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR high fin/low rein: expected number, got %v", v.Type)
+	}
+	// With high finance rate, PV of negatives is larger in magnitude
+	// → should still compute a reasonable rate
+	if v.Num < -1 || v.Num > 2 {
+		t.Errorf("MIRR high fin/low rein: got unreasonable rate %f", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_NegativeRates(t *testing.T) {
+	cf := evalCompile(t, "MIRR({-100,50,60}, -0.05, -0.03)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR negative rates: expected number, got %v", v.Type)
+	}
+}
+
+func TestMIRR_ViaEval_LargeCashFlowMagnitudes(t *testing.T) {
+	cf := evalCompile(t, "MIRR({-10000000,3000000,4000000,5000000}, 0.05, 0.08)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR large magnitudes: expected number, got %v", v.Type)
+	}
+	if v.Num < -1 || v.Num > 1 {
+		t.Errorf("MIRR large magnitudes: got unreasonable rate %f", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_WrongArgCount_TooFew(t *testing.T) {
+	cf := evalCompile(t, `IFERROR(MIRR({-100,110}, 0.1), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("MIRR too few args: expected error, got %#v", v)
+	}
+}
+
+func TestMIRR_ViaEval_WrongArgCount_TooMany(t *testing.T) {
+	cf := evalCompile(t, `IFERROR(MIRR({-100,110}, 0.1, 0.1, 0.1), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("MIRR too many args: expected error, got %#v", v)
+	}
+}
+
+func TestMIRR_ViaEval_SingleValue_Error(t *testing.T) {
+	cf := evalCompile(t, `IFERROR(MIRR({-100}, 0.1, 0.1), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("MIRR single value: expected error, got %#v", v)
+	}
+}
+
+func TestMIRR_ViaEval_StringCoercion_Rates(t *testing.T) {
+	// String rates should be coerced to numbers
+	v, err := fnMirr([]Value{mirrArray(-100, 50, 60), StringVal("0.1"), StringVal("0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR string coercion rates: expected number, got %v", v.Type)
+	}
+}
+
+func TestMIRR_ViaEval_BoolCoercion_Rates(t *testing.T) {
+	// FALSE=0 as rate means 0% finance/reinvest rate
+	v, err := fnMirr([]Value{mirrArray(-100, 50, 60), boolArg(false), boolArg(false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// finance_rate=0, reinvest_rate=0 → should work like both zero
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR bool coercion rates: expected number, got %v", v.Type)
+	}
+	if math.Abs(v.Num-0.04881) > 0.001 {
+		t.Errorf("MIRR bool coercion rates: got %f, want ~0.04881", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_NonNumericString_Error(t *testing.T) {
+	// Non-numeric string in rates → error
+	v, _ := fnMirr([]Value{mirrArray(-100, 110), StringVal("abc"), NumberVal(0.1)})
+	assertError(t, "MIRR non-numeric finance_rate", v)
+
+	v2, _ := fnMirr([]Value{mirrArray(-100, 110), NumberVal(0.1), StringVal("xyz")})
+	assertError(t, "MIRR non-numeric reinvest_rate", v2)
+}
+
+func TestMIRR_ViaEval_StringInValues_Error(t *testing.T) {
+	// Non-numeric string in values array → error
+	arr := Value{
+		Type:  ValueArray,
+		Array: [][]Value{{NumberVal(-100), StringVal("abc"), NumberVal(50)}},
+	}
+	v, _ := fnMirr([]Value{arr, NumberVal(0.1), NumberVal(0.1)})
+	assertError(t, "MIRR non-numeric string in values", v)
+}
+
+func TestMIRR_ViaEval_ErrorPropagation_AllArgs(t *testing.T) {
+	// Error in values array
+	arrErr := Value{
+		Type:  ValueArray,
+		Array: [][]Value{{NumberVal(-100), ErrorVal(ErrValNUM), NumberVal(50)}},
+	}
+	v1, _ := fnMirr([]Value{arrErr, NumberVal(0.1), NumberVal(0.1)})
+	assertError(t, "MIRR error in values array", v1)
+
+	// Error in finance_rate
+	v2, _ := fnMirr([]Value{mirrArray(-100, 110), ErrorVal(ErrValDIV0), NumberVal(0.1)})
+	assertError(t, "MIRR error in finance_rate", v2)
+
+	// Error in reinvest_rate
+	v3, _ := fnMirr([]Value{mirrArray(-100, 110), NumberVal(0.1), ErrorVal(ErrValNUM)})
+	assertError(t, "MIRR error in reinvest_rate", v3)
+}
+
+func TestMIRR_ViaEval_MultipleNegativeCashFlows(t *testing.T) {
+	// Project with mid-stream additional investment
+	cf := evalCompile(t, "MIRR({-100000,40000,-20000,50000,60000}, 0.08, 0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR multi neg: expected number, got %v", v.Type)
+	}
+}
+
+func TestMIRR_ViaEval_ZeroCashFlowsInMiddle(t *testing.T) {
+	// Zero cash flows in middle (project with no income in some periods)
+	cf := evalCompile(t, "MIRR({-100,0,0,0,150}, 0.05, 0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR zeros middle: expected number, got %v", v.Type)
+	}
+	// FV pos = 150*(1.05)^0 = 150, PV neg = -100
+	// MIRR = (150/100)^(1/4) - 1 ≈ 0.10668
+	if math.Abs(v.Num-0.10668) > 0.001 {
+		t.Errorf("MIRR zeros middle: got %f, want ~0.10668", v.Num)
+	}
+}
+
+func TestMIRR_ViaEval_SymmetricCashFlows(t *testing.T) {
+	// Symmetric: -100, 50, 50 at equal rates → predictable
+	cf := evalCompile(t, "MIRR({-100,50,50}, 0.10, 0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueNumber {
+		t.Fatalf("MIRR symmetric: expected number, got %v", v.Type)
+	}
+	// FV pos = 50*1.1 + 50 = 105, PV neg = -100
+	// MIRR = (105/100)^(1/2) - 1 ≈ 0.02470
+	if math.Abs(v.Num-0.02470) > 0.001 {
+		t.Errorf("MIRR symmetric: got %f, want ~0.02470", v.Num)
+	}
+}
+
+// === SLN comprehensive evalCompile tests ===
+
+func TestSLN_ViaEval_BasicDepreciation(t *testing.T) {
+	// SLN(10000, 1000, 5) = (10000-1000)/5 = 1800
+	cf := evalCompile(t, "SLN(10000, 1000, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN basic via eval", v, 1800)
+}
+
+func TestSLN_ViaEval_CostEqualsSalvage(t *testing.T) {
+	// SLN(5000, 5000, 10) = 0
+	cf := evalCompile(t, "SLN(5000, 5000, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN cost=salvage", v, 0)
+}
+
+func TestSLN_ViaEval_SalvageZero(t *testing.T) {
+	// SLN(10000, 0, 5) = 2000
+	cf := evalCompile(t, "SLN(10000, 0, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN salvage=0", v, 2000)
+}
+
+func TestSLN_ViaEval_SalvageGreaterThanCost(t *testing.T) {
+	// SLN(5000, 8000, 10) = -300 (negative depreciation)
+	cf := evalCompile(t, "SLN(5000, 8000, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN salvage>cost", v, -300)
+}
+
+func TestSLN_ViaEval_LifeOne(t *testing.T) {
+	// SLN(10000, 2000, 1) = 8000 (all depreciation in one period)
+	cf := evalCompile(t, "SLN(10000, 2000, 1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN life=1", v, 8000)
+}
+
+func TestSLN_ViaEval_LargeValues(t *testing.T) {
+	// SLN(1000000, 100000, 10) = 90000
+	cf := evalCompile(t, "SLN(1000000, 100000, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN 1M cost", v, 90000)
+}
+
+func TestSLN_ViaEval_VeryLongLife(t *testing.T) {
+	// SLN(100000, 0, 50) = 2000
+	cf := evalCompile(t, "SLN(100000, 0, 50)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN 50 year life", v, 2000)
+}
+
+func TestSLN_ViaEval_FractionalLife(t *testing.T) {
+	// SLN(10000, 0, 2.5) = 4000
+	cf := evalCompile(t, "SLN(10000, 0, 2.5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN fractional life", v, 4000)
+}
+
+func TestSLN_ViaEval_ZeroCost(t *testing.T) {
+	// SLN(0, 5000, 10) = -500
+	cf := evalCompile(t, "SLN(0, 5000, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN zero cost", v, -500)
+}
+
+func TestSLN_ViaEval_ExcelDocExample(t *testing.T) {
+	// From Excel docs: SLN(30000, 7500, 10) = 2250
+	cf := evalCompile(t, "SLN(30000, 7500, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN Excel doc", v, 2250)
+}
+
+func TestSLN_ViaEval_LifeZero_DivByZero(t *testing.T) {
+	// SLN with life=0 → #DIV/0!
+	cf := evalCompile(t, `IFERROR(SLN(10000, 1000, 0), "div0")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "div0" {
+		t.Fatalf("SLN life=0: expected IFERROR to catch, got %#v", v)
+	}
+}
+
+func TestSLN_ViaEval_WrongArgCount_TooFew(t *testing.T) {
+	cf := evalCompile(t, `IFERROR(SLN(10000, 1000), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("SLN too few args: expected error, got %#v", v)
+	}
+}
+
+func TestSLN_ViaEval_WrongArgCount_TooMany(t *testing.T) {
+	cf := evalCompile(t, `IFERROR(SLN(10000, 1000, 5, 1), "err")`)
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != ValueString || v.Str != "err" {
+		t.Fatalf("SLN too many args: expected error, got %#v", v)
+	}
+}
+
+func TestSLN_ViaEval_StringCoercion_AllArgs(t *testing.T) {
+	// All string args that parse as numbers
+	v, err := fnSLN([]Value{StringVal("10000"), StringVal("1000"), StringVal("5")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN all string coercion", v, 1800)
+}
+
+func TestSLN_ViaEval_BoolCoercion_AllArgs(t *testing.T) {
+	// SLN(TRUE, FALSE, TRUE) = SLN(1, 0, 1) = 1
+	v, err := fnSLN([]Value{boolArg(true), boolArg(false), boolArg(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN bool coercion all", v, 1)
+}
+
+func TestSLN_ViaEval_ErrorPropagation_Cost(t *testing.T) {
+	v, _ := fnSLN([]Value{ErrorVal(ErrValVALUE), NumberVal(1000), NumberVal(5)})
+	assertError(t, "SLN error in cost", v)
+}
+
+func TestSLN_ViaEval_ErrorPropagation_Salvage(t *testing.T) {
+	v, _ := fnSLN([]Value{NumberVal(10000), ErrorVal(ErrValNUM), NumberVal(5)})
+	assertError(t, "SLN error in salvage", v)
+}
+
+func TestSLN_ViaEval_ErrorPropagation_Life(t *testing.T) {
+	v, _ := fnSLN([]Value{NumberVal(10000), NumberVal(1000), ErrorVal(ErrValDIV0)})
+	assertError(t, "SLN error in life", v)
+}
+
+func TestSLN_ViaEval_NegativeCost(t *testing.T) {
+	// SLN(-5000, 1000, 5) = (-5000 - 1000) / 5 = -1200
+	cf := evalCompile(t, "SLN(-5000, 1000, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN negative cost", v, -1200)
+}
+
+func TestSLN_ViaEval_NegativeSalvage(t *testing.T) {
+	// SLN(10000, -2000, 5) = (10000 - (-2000)) / 5 = 2400
+	cf := evalCompile(t, "SLN(10000, -2000, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN negative salvage", v, 2400)
+}
+
+func TestSLN_ViaEval_BothNegative(t *testing.T) {
+	// SLN(-10000, -2000, 5) = (-10000 - (-2000)) / 5 = -1600
+	cf := evalCompile(t, "SLN(-10000, -2000, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN both negative", v, -1600)
+}
+
+func TestSLN_ViaEval_VerySmallLife(t *testing.T) {
+	// SLN(1000, 0, 0.1) = 10000
+	cf := evalCompile(t, "SLN(1000, 0, 0.1)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN very small life", v, 10000)
+}
+
+func TestSLN_ViaEval_CarDepreciation(t *testing.T) {
+	// Typical car: cost=30000, salvage=5000, life=5
+	// (30000-5000)/5 = 5000
+	cf := evalCompile(t, "SLN(30000, 5000, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN car depreciation", v, 5000)
+}
+
+func TestSLN_ViaEval_BuildingDepreciation(t *testing.T) {
+	// Building: cost=500000, salvage=50000, life=30
+	// (500000-50000)/30 = 15000
+	cf := evalCompile(t, "SLN(500000, 50000, 30)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN building depreciation", v, 15000)
+}
+
+func TestSLN_ViaEval_SumOverLife(t *testing.T) {
+	// 5 * SLN(10000, 0, 5) should equal the cost
+	cf := evalCompile(t, "5 * SLN(10000, 0, 5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN sum over life", v, 10000)
+}
+
+func TestSLN_ViaEval_SumOverLifeWithSalvage(t *testing.T) {
+	// 10 * SLN(30000, 7500, 10) should equal cost - salvage = 22500
+	cf := evalCompile(t, "10 * SLN(30000, 7500, 10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "SLN sum over life with salvage", v, 22500)
+}
