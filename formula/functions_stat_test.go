@@ -13560,6 +13560,39 @@ func TestSTANDARDIZE(t *testing.T) {
 		{"bool_true", "STANDARDIZE(TRUE,0,1)", 1, 0, false},
 		// Boolean FALSE = 0: (0-0)/1 = 0
 		{"bool_false", "STANDARDIZE(FALSE,0,1)", 0, 0, false},
+
+		// z = 1 when x is exactly 1 stdev above mean: (60-50)/10 = 1
+		{"one_stdev_above", "STANDARDIZE(60,50,10)", 1, 0, false},
+		// z = -2 when x is 2 stdevs below mean: (30-50)/10 = -2
+		{"two_stdevs_below", "STANDARDIZE(30,50,10)", -2, 0, false},
+		// Identity transformation: mean=0, sd=1 returns x unchanged
+		{"identity_positive", "STANDARDIZE(3.14,0,1)", 3.14, 0, false},
+		{"identity_negative", "STANDARDIZE(-2.71,0,1)", -2.71, 0, false},
+		// Large values: (1e12-5e11)/2e11 = 2.5
+		{"large_values", "STANDARDIZE(1000000000000,500000000000,200000000000)", 2.5, 0, false},
+		// Very small stddev for precision: (0.100001-0.1)/0.000001 = 1
+		{"tiny_stddev_precision", "STANDARDIZE(0.100001,0.1,0.000001)", 1, 0, false},
+		// Cross-check: STANDARDIZE(mean, mean, sd) always = 0 for any sd
+		{"mean_equals_x_sd100", "STANDARDIZE(100,100,100)", 0, 0, false},
+		{"mean_equals_x_sd0_001", "STANDARDIZE(7.5,7.5,0.001)", 0, 0, false},
+		// Negative mean: (-5-(-10))/2 = 2.5
+		{"negative_mean", "STANDARDIZE(-5,-10,2)", 2.5, 0, false},
+		// Both negative: (-15-(-10))/2 = -2.5
+		{"both_negative", "STANDARDIZE(-15,-10,2)", -2.5, 0, false},
+		// Fractional result: (1-0)/3 = 0.333...
+		{"fractional_result", "STANDARDIZE(1,0,3)", 1.0 / 3.0, 0, false},
+		// Non-numeric string in mean position
+		{"non_numeric_mean", fmt.Sprintf("STANDARDIZE(42,%q,1.5)", "abc"), 0, ErrValVALUE, true},
+		// Non-numeric string in stddev position
+		{"non_numeric_stddev", fmt.Sprintf("STANDARDIZE(42,40,%q)", "abc"), 0, ErrValVALUE, true},
+		// String coercion in mean: "40" -> 40
+		{"string_coercion_mean", fmt.Sprintf("STANDARDIZE(42,%q,1.5)", "40"), 2.0 / 1.5, 0, false},
+		// String coercion in stddev: "1.5" -> 1.5
+		{"string_coercion_stddev", fmt.Sprintf("STANDARDIZE(42,40,%q)", "1.5"), 2.0 / 1.5, 0, false},
+		// Boolean TRUE in mean: (5-1)/2 = 2
+		{"bool_true_mean", "STANDARDIZE(5,TRUE,2)", 2, 0, false},
+		// Boolean FALSE in mean: (5-0)/2 = 2.5
+		{"bool_false_mean", "STANDARDIZE(5,FALSE,2)", 2.5, 0, false},
 	}
 
 	for _, tt := range tests {
@@ -15156,6 +15189,184 @@ func TestSTEYX(t *testing.T) {
 		{"Repeat example", "STEYX(A1:A7,B1:B7)", testResolver, 3.305719, false, 0},
 		{"Empty arrays", "STEYX(C1:C3,D1:D3)", testResolver, 0, true, ErrValDIV0},
 		{"Non-numeric both positions", "STEYX(A1:A7,B1:B7)", nonNumericResolver, 2.934247, false, 0},
+
+		// --- Additional comprehensive tests ---
+
+		// Error propagation: error value in y array
+		{"error_in_y", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: ErrorVal(ErrValDIV0), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0, true, ErrValDIV0},
+
+		// Error propagation: error value in x array
+		{"error_in_x", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: ErrorVal(ErrValNA),
+				{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0, true, ErrValNA},
+
+		// Error propagation: #NAME? error
+		{"error_name_in_y", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: ErrorVal(ErrValNAME), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(3), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0, true, ErrValNAME},
+
+		// High scatter data: y={10,2,15,1,20,3}, x={1,2,3,4,5,6}
+		// mean_x=3.5, mean_y=8.5
+		// ssX=17.5, ssY=288.5, ssXY=27.5
+		// STEYX = sqrt(1/4 * (288.5 - 27.5^2/17.5)) = sqrt(1/4 * (288.5 - 43.214286)) = sqrt(61.321429) ≈ 7.830801
+		{"high_scatter", "STEYX(A1:A6,B1:B6)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(15), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(1), {Col: 2, Row: 4}: NumberVal(4),
+				{Col: 1, Row: 5}: NumberVal(20), {Col: 2, Row: 5}: NumberVal(5),
+				{Col: 1, Row: 6}: NumberVal(3), {Col: 2, Row: 6}: NumberVal(6),
+			},
+		}, 8.734169, false, 0},
+
+		// Ten-point dataset: y={2,4,5,4,5,7,8,9,10,12}, x={1,2,3,4,5,6,7,8,9,10}
+		// Verified via manual calculation
+		{"ten_points", "STEYX(A1:A10,B1:B10)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+				{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: NumberVal(5),
+				{Col: 1, Row: 6}: NumberVal(7), {Col: 2, Row: 6}: NumberVal(6),
+				{Col: 1, Row: 7}: NumberVal(8), {Col: 2, Row: 7}: NumberVal(7),
+				{Col: 1, Row: 8}: NumberVal(9), {Col: 2, Row: 8}: NumberVal(8),
+				{Col: 1, Row: 9}: NumberVal(10), {Col: 2, Row: 9}: NumberVal(9),
+				{Col: 1, Row: 10}: NumberVal(12), {Col: 2, Row: 10}: NumberVal(10),
+			},
+		}, 0.782382, false, 0},
+
+		// Very small values (numerical stability): y={1e-10, 2e-10, 3e-10}, x={1,2,3}
+		{"very_small_values_perfect", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1e-10), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2e-10), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(3e-10), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0, false, 0},
+
+		// Mixed large offset: y={1000001,1000002,1000003}, x={1,2,3} — perfect fit
+		{"large_offset_perfect", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1000001), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(1000002), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(1000003), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0, false, 0},
+
+		// Boolean values in array are treated as non-numeric (skipped)
+		// Surviving pairs: (2,1),(6,3),(4,4) → STEYX ≈ 2.138090
+		{"booleans_in_array_skipped", "STEYX(A1:A5,B1:B5)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: BoolVal(true), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(6), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(4), {Col: 2, Row: 4}: NumberVal(4),
+				{Col: 1, Row: 5}: NumberVal(10), {Col: 2, Row: 5}: BoolVal(false),
+			},
+		}, 2.138090, false, 0},
+
+		// All identical y and varied x: y={7,7,7,7}, x={1,2,3,4} → STEYX=0
+		{"constant_y_four_points", "STEYX(A1:A4,B1:B4)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(7), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(7), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(7), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(7), {Col: 2, Row: 4}: NumberVal(4),
+			},
+		}, 0, false, 0},
+
+		// Quadratic data (not perfectly linear): y={1,4,9}, x={1,2,3}
+		// mean_x=2, mean_y=14/3, ssX=2, ssY=98/3-196/9=98/9, ssXY=8-28/3=−4/3... let me just use the formula
+		// mean_x=2, mean_y=4.666.., dx={-1,0,1}, dy={-3.666,-.666,4.333}
+		// ssX=2, ssY=13.4222+0.4444+18.7778=32.6667, ssXY=3.6667+0+4.3333=8
+		// STEYX = sqrt(1/1 * (32.6667 - 64/2)) = sqrt(0.6667) ≈ 0.816497
+		{"quadratic_data", "STEYX(A1:A3,B1:B3)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(4), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(9), {Col: 2, Row: 3}: NumberVal(3),
+			},
+		}, 0.816497, false, 0},
+
+		// Alternating positive/negative y: y={-5,10,-3,8,-1,6}, x={1,2,3,4,5,6}
+		{"alternating_y", "STEYX(A1:A6,B1:B6)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(-5), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(10), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(-3), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(8), {Col: 2, Row: 4}: NumberVal(4),
+				{Col: 1, Row: 5}: NumberVal(-1), {Col: 2, Row: 5}: NumberVal(5),
+				{Col: 1, Row: 6}: NumberVal(6), {Col: 2, Row: 6}: NumberVal(6),
+			},
+		}, 6.744310, false, 0},
+
+		// Steep perfect linear: y={100,200,300,400,500}, x={1,2,3,4,5}
+		{"steep_perfect", "STEYX(A1:A5,B1:B5)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(100), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(200), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(300), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(400), {Col: 2, Row: 4}: NumberVal(4),
+				{Col: 1, Row: 5}: NumberVal(500), {Col: 2, Row: 5}: NumberVal(5),
+			},
+		}, 0, false, 0},
+
+		// Fractional slope with slight scatter: y={0.5,1.1,1.4,2.1}, x={1,2,3,4}
+		{"fractional_slope", "STEYX(A1:A4,B1:B4)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(0.5), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(1.1), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(1.4), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(2.1), {Col: 2, Row: 4}: NumberVal(4),
+			},
+		}, 0.116190, false, 0},
+
+		// All negative perfect linear: y={-10,-8,-6,-4}, x={-4,-3,-2,-1}
+		{"all_negative_perfect", "STEYX(A1:A4,B1:B4)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(-10), {Col: 2, Row: 1}: NumberVal(-4),
+				{Col: 1, Row: 2}: NumberVal(-8), {Col: 2, Row: 2}: NumberVal(-3),
+				{Col: 1, Row: 3}: NumberVal(-6), {Col: 2, Row: 3}: NumberVal(-2),
+				{Col: 1, Row: 4}: NumberVal(-4), {Col: 2, Row: 4}: NumberVal(-1),
+			},
+		}, 0, false, 0},
+
+		// Wide x range with slight scatter: y={1,2,4,3,5}, x={0,100,200,300,400}
+		{"wide_x_range", "STEYX(A1:A5,B1:B5)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1), {Col: 2, Row: 1}: NumberVal(0),
+				{Col: 1, Row: 2}: NumberVal(2), {Col: 2, Row: 2}: NumberVal(100),
+				{Col: 1, Row: 3}: NumberVal(4), {Col: 2, Row: 3}: NumberVal(200),
+				{Col: 1, Row: 4}: NumberVal(3), {Col: 2, Row: 4}: NumberVal(300),
+				{Col: 1, Row: 5}: NumberVal(5), {Col: 2, Row: 5}: NumberVal(400),
+			},
+		}, 0.795822, false, 0},
+
+		// Negative slope with scatter: y={10,7,5,2}, x={1,2,3,4}
+		{"neg_slope_scatter", "STEYX(A1:A4,B1:B4)", &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10), {Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(7), {Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(5), {Col: 2, Row: 3}: NumberVal(3),
+				{Col: 1, Row: 4}: NumberVal(2), {Col: 2, Row: 4}: NumberVal(4),
+			},
+		}, 0.316228, false, 0},
 	}
 
 	for _, tt := range tests {

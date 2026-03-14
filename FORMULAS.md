@@ -367,14 +367,14 @@ Werkbook supports **446** spreadsheet formula functions.
 | SORTBY | Sorts an array by one or more companion arrays. | Logical | 4 |
 | SQRT | Returns the square root of a number. | Math & Trig | 29 |
 | SQRTPI | Returns the square root of a number multiplied by pi. | Math & Trig | 25 |
-| STANDARDIZE | Returns a normalized value from a mean and standard deviation. | Statistical | 17 |
+| STANDARDIZE | Returns a normalized value from a mean and standard deviation. | Statistical | 34 |
 | STDEV | Returns the sample standard deviation. | Statistical | 27 |
 | STDEV.P | Returns the population standard deviation. | Statistical | 32 |
 | STDEV.S | Returns the sample standard deviation. | Statistical | 45 |
 | STDEVA | Returns the sample standard deviation including logical values and text coercions. | Statistical | 28 |
 | STDEVP | Returns the population standard deviation. | Statistical | 11 |
 | STDEVPA | Returns the population standard deviation including logical values and text coercions. | Statistical | 29 |
-| STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
+| STEYX | Returns the standard error of predicted y values in regression. | Statistical | 41 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
 | SUM | Returns the sum of supplied numbers. | Statistical | 71 |
