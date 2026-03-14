@@ -101,7 +101,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | DATEDIF | Returns the difference between two dates in requested units. | Date & Time | 18 |
 | DATEVALUE | Converts date text to a serial date number. | Date & Time | 39 |
 | DAVERAGE | Returns the average of matching records in a database range. | Db | 5 |
-| DAY | Returns the day of the month from a date. | Date & Time | 7 |
+| DAY | Returns the day of the month from a date. | Date & Time | 28 |
 | DAYS | Returns the number of days between two dates. | Date & Time | 17 |
 | DAYS360 | Returns the number of days between two dates using a 360-day year. | Date & Time | 57 |
 | DB | Returns depreciation using the fixed-declining balance method. | Financial | 29 |
@@ -186,7 +186,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 32 |
-| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 69 |
+| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 76 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
 | IMABS | Returns the absolute value of a complex number. | Engineering | 38 |
@@ -267,7 +267,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | MINIFS | Returns the minimum value that matches all supplied conditions. | Statistical | 49 |
 | MINUTE | Returns the minute from a time or datetime value. | Date & Time | 16 |
 | MINVERSE | Returns the inverse of a matrix. | Math & Trig | 33 |
-| MIRR | Returns the modified internal rate of return. | Financial | 24 |
+| MIRR | Returns the modified internal rate of return. | Financial | 65 |
 | MMULT | Returns the matrix product of two arrays. | Math & Trig | 38 |
 | MOD | Returns the remainder after division. | Math & Trig | 16 |
 | MODE | Returns the most frequently occurring value. | Statistical | 19 |
@@ -327,7 +327,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | QUOTIENT | Returns the integer portion of a division. | Math & Trig | 43 |
 | RADIANS | Converts degrees to radians. | Math & Trig | 30 |
 | RAND | Returns a random number between 0 and 1. | Math & Trig | 13 |
-| RANDARRAY | Returns an array of random numbers. | Math & Trig | 50 |
+| RANDARRAY | Returns an array of random numbers. | Math & Trig | 51 |
 | RANDBETWEEN | Returns a random integer between two bounds. | Math & Trig | 26 |
 | RANK | Returns the rank of a number in a list. | Statistical | 34 |
 | RANK.AVG | Returns the average rank of a number in a list with ties. | Statistical | 21 |
@@ -351,7 +351,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
 | SECOND | Returns the second from a time or datetime value. | Date & Time | 16 |
-| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 46 |
+| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 47 |
 | SERIESSUM | Returns the sum of a power series. | Math & Trig | 27 |
 | SHEET | Returns the sheet index of a reference. | Information | 14 |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information | 8 |
@@ -360,7 +360,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | SINH | Returns the hyperbolic sine of a number. | Math & Trig | 23 |
 | SKEW | Returns the sample skewness of a data set. | Statistical | 23 |
 | SKEW.P | Returns the population skewness of a data set. | Statistical | 27 |
-| SLN | Returns straight-line depreciation for one period. | Financial | 9 |
+| SLN | Returns straight-line depreciation for one period. | Financial | 53 |
 | SLOPE | Returns the slope of a linear regression line. | Statistical | 16 |
 | SMALL | Returns the k-th smallest value in a data set. | Statistical | 28 |
 | SORT | Sorts an array by row or column order. | Logical | 26 |
@@ -377,7 +377,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 25 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 32 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 62 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 63 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 39 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 42 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 43 |
