@@ -2106,6 +2106,37 @@ func TestDOLLAR(t *testing.T) {
 		// Negative decimals rounding
 		{name: "neg_dec_round_up", formula: `DOLLAR(1250, -2)`, want: "$1,300"},
 		{name: "neg_dec_thousands", formula: `DOLLAR(12345, -3)`, want: "$12,000"},
+
+		// Very small number with 3 decimal places
+		{name: "very_small_3dec", formula: `DOLLAR(0.001, 3)`, want: "$0.001"},
+
+		// Many decimal places (10)
+		{name: "ten_decimals", formula: `DOLLAR(1.5, 10)`, want: "$1.5000000000"},
+
+		// Single digit, no comma needed
+		{name: "single_digit", formula: `DOLLAR(7, 2)`, want: "$7.00"},
+
+		// Exactly 1000 (comma boundary)
+		{name: "comma_boundary", formula: `DOLLAR(1000, 2)`, want: "$1,000.00"},
+
+		// Negative number with zero decimals rounding
+		{name: "neg_round_hundreds", formula: `DOLLAR(-1250, -2)`, want: "($1,300)"},
+
+		// One decimal place
+		{name: "one_decimal", formula: `DOLLAR(1234.567, 1)`, want: "$1,234.6"},
+
+		// String coercion with decimals
+		{name: "string_with_decimal", formula: `DOLLAR("99.999", 1)`, want: "$100.0"},
+
+		// Boolean coercion for decimals argument
+		{name: "bool_decimals_true", formula: `DOLLAR(1234.567, TRUE)`, want: "$1,234.6"},
+		{name: "bool_decimals_false", formula: `DOLLAR(1234.567, FALSE)`, want: "$1,235"},
+
+		// Fractional number rounds up
+		{name: "round_up_half", formula: `DOLLAR(2.5, 0)`, want: "$3"},
+
+		// Large negative number with commas
+		{name: "large_negative", formula: `DOLLAR(-9876543.21, 2)`, want: "($9,876,543.21)"},
 	}
 
 	for _, tt := range strTests {
@@ -2129,6 +2160,9 @@ func TestDOLLAR(t *testing.T) {
 		{name: "no_args", formula: `DOLLAR()`},
 		{name: "too_many_args", formula: `DOLLAR(1,2,3)`},
 		{name: "non_numeric_string", formula: `DOLLAR("abc")`},
+		{name: "non_numeric_decimals", formula: `DOLLAR(1234, "xyz")`},
+		{name: "error_propagation_num", formula: `DOLLAR(1/0)`},
+		{name: "error_propagation_dec", formula: `DOLLAR(1, 1/0)`},
 	}
 
 	for _, tt := range errTests {
@@ -5947,6 +5981,41 @@ func TestFIXED(t *testing.T) {
 		// Rounding up at boundary
 		{name: "round_up_boundary", formula: `FIXED(1250, -2)`, want: "1,300"},
 		{name: "round_down", formula: `FIXED(1249, -2)`, want: "1,200"},
+
+		// Very small number with 3 decimal places
+		{name: "very_small_3dec", formula: `FIXED(0.001, 3)`, want: "0.001"},
+
+		// Ten decimal places
+		{name: "ten_decimals", formula: `FIXED(1.5, 10)`, want: "1.5000000000"},
+
+		// Comma boundary at 1000
+		{name: "comma_boundary", formula: `FIXED(1000, 2)`, want: "1,000.00"},
+
+		// no_commas with negative decimals
+		{name: "neg_dec_no_commas_pos", formula: `FIXED(1234.567, -2, TRUE)`, want: "1200"},
+
+		// Boolean coercion for decimals
+		{name: "bool_decimals_true", formula: `FIXED(1234.567, TRUE)`, want: "1,234.6"},
+		{name: "bool_decimals_false", formula: `FIXED(1234.567, FALSE)`, want: "1,235"},
+
+		// no_commas with number coercion (1 is truthy)
+		{name: "no_commas_one", formula: `FIXED(1234.567, 2, 1)`, want: "1234.57"},
+		{name: "no_commas_zero", formula: `FIXED(1234.567, 2, 0)`, want: "1,234.57"},
+
+		// Large negative with commas
+		{name: "large_negative", formula: `FIXED(-9876543.21, 2)`, want: "-9,876,543.21"},
+
+		// Round up half
+		{name: "round_up_half", formula: `FIXED(2.5, 0)`, want: "3"},
+
+		// DOLLAR vs FIXED cross-check: DOLLAR wraps with $, FIXED does not
+		{name: "cross_check_positive", formula: `FIXED(1234.567, 2)`, want: "1,234.57"},
+
+		// One decimal with no_commas
+		{name: "one_dec_no_commas", formula: `FIXED(9999.95, 1, TRUE)`, want: "10000.0"},
+
+		// Negative number with no_commas
+		{name: "neg_no_commas", formula: `FIXED(-5678.1234, 3, TRUE)`, want: "-5678.123"},
 	}
 
 	for _, tt := range strTests {
@@ -5971,6 +6040,8 @@ func TestFIXED(t *testing.T) {
 		{name: "too_many_args", formula: `FIXED(1,2,TRUE,4)`},
 		{name: "non_numeric_string", formula: `FIXED("abc")`},
 		{name: "non_numeric_decimals", formula: `FIXED(1234, "abc")`},
+		{name: "error_propagation_num", formula: `FIXED(1/0)`},
+		{name: "error_propagation_dec", formula: `FIXED(1, 1/0)`},
 	}
 
 	for _, tt := range errTests {

@@ -119,7 +119,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | DISC | Returns the discount rate for a security. | Financial | 14 |
 | DMAX | Returns the maximum value from matching records in a database range. | Db | 6 |
 | DMIN | Returns the minimum value from matching records in a database range. | Db | 5 |
-| DOLLAR | Formats a number as currency text. | Text | 25 |
+| DOLLAR | Formats a number as currency text. | Text | 39 |
 | DOLLARDE | Converts a fractional dollar price to a decimal price. | Financial | 18 |
 | DOLLARFR | Converts a decimal dollar price to a fractional price. | Financial | 17 |
 | DPRODUCT | Returns the product of matching records in a database range. | Db | 67 |
@@ -156,7 +156,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | FIND | Returns the position of one text value inside another, case-sensitive. | Text | 48 |
 | FISHER | Returns the Fisher transformation of a correlation coefficient. | Statistical | 15 |
 | FISHERINV | Returns the inverse Fisher transformation. | Statistical | 15 |
-| FIXED | Formats a number as text with a fixed number of decimals. | Text | 32 |
+| FIXED | Formats a number as text with a fixed number of decimals. | Text | 47 |
 | FLOOR | Rounds a number down to the nearest multiple of a significance. | Math & Trig | 50 |
 | FLOOR.MATH | Rounds a number down using Excel's FLOOR.MATH rules. | Math & Trig | 37 |
 | FLOOR.PRECISE | Rounds a number down to the nearest significance, ignoring the sign of the significance. | Math & Trig | 36 |
