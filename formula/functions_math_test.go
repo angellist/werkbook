@@ -10746,6 +10746,1042 @@ func TestSUBTOTAL(t *testing.T) {
 	}
 }
 
+// subtotalMockResolver implements CellResolver, SubtotalChecker, and
+// HiddenRowChecker for comprehensive SUBTOTAL testing.
+type subtotalMockResolver struct {
+	cells          map[CellAddr]Value
+	subtotalCells  map[CellAddr]bool            // cells that contain SUBTOTAL formulas
+	hiddenRows     map[string]map[int]bool       // sheet -> row -> hidden
+	autoFilterRows map[string]map[int]bool       // sheet -> row -> filtered by autoFilter
+}
+
+func (m *subtotalMockResolver) GetCellValue(addr CellAddr) Value {
+	if v, ok := m.cells[addr]; ok {
+		return v
+	}
+	return EmptyVal()
+}
+
+func (m *subtotalMockResolver) GetRangeValues(addr RangeAddr) [][]Value {
+	rows := make([][]Value, addr.ToRow-addr.FromRow+1)
+	for r := addr.FromRow; r <= addr.ToRow; r++ {
+		row := make([]Value, addr.ToCol-addr.FromCol+1)
+		for c := addr.FromCol; c <= addr.ToCol; c++ {
+			ca := CellAddr{Sheet: addr.Sheet, Col: c, Row: r}
+			if v, ok := m.cells[ca]; ok {
+				row[c-addr.FromCol] = v
+			}
+		}
+		rows[r-addr.FromRow] = row
+	}
+	return rows
+}
+
+func (m *subtotalMockResolver) IsSubtotalCell(sheet string, col, row int) bool {
+	if m.subtotalCells == nil {
+		return false
+	}
+	return m.subtotalCells[CellAddr{Sheet: sheet, Col: col, Row: row}]
+}
+
+func (m *subtotalMockResolver) IsRowHidden(sheet string, row int) bool {
+	if m.hiddenRows == nil {
+		return false
+	}
+	if sheetMap, ok := m.hiddenRows[sheet]; ok {
+		return sheetMap[row]
+	}
+	return false
+}
+
+func (m *subtotalMockResolver) IsRowFilteredByAutoFilter(sheet string, row int) bool {
+	if m.autoFilterRows == nil {
+		return false
+	}
+	if sheetMap, ok := m.autoFilterRows[sheet]; ok {
+		return sheetMap[row]
+	}
+	return false
+}
+
+func TestSUBTOTALComprehensive(t *testing.T) {
+	// ---------------------------------------------------------------
+	// 1. Multiple ref arguments: SUBTOTAL(9, A1:A3, B1:B3)
+	// ---------------------------------------------------------------
+	t.Run("multiple_refs_sum", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: NumberVal(3),
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 3}: NumberVal(30),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3,B1:B3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 66 {
+			t.Errorf("got %v (%g), want 66", got.Type, got.Num)
+		}
+	})
+
+	t.Run("multiple_refs_count", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 2}: NumberVal(20),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A2,B1:B2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v (%g), want 4", got.Type, got.Num)
+		}
+	})
+
+	t.Run("multiple_refs_average", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 1}: NumberVal(30),
+				{Col: 2, Row: 2}: NumberVal(40),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(1,A1:A2,B1:B2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 25 {
+			t.Errorf("got %v (%g), want 25", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 2. Empty range — COUNT returns 0, SUM returns 0, AVERAGE returns #DIV/0!
+	// ---------------------------------------------------------------
+	t.Run("empty_range_sum", func(t *testing.T) {
+		resolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got type=%v num=%g, want 0", got.Type, got.Num)
+		}
+	})
+
+	t.Run("empty_range_count", func(t *testing.T) {
+		resolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got type=%v num=%g, want 0", got.Type, got.Num)
+		}
+	})
+
+	t.Run("empty_range_average_div0", func(t *testing.T) {
+		resolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "SUBTOTAL(1,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got type=%v err=%v, want #DIV/0!", got.Type, got.Err)
+		}
+	})
+
+	t.Run("empty_range_max", func(t *testing.T) {
+		resolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "SUBTOTAL(4,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// MAX of empty range = 0
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got type=%v num=%g, want 0", got.Type, got.Num)
+		}
+	})
+
+	t.Run("empty_range_min", func(t *testing.T) {
+		resolver := &mockResolver{cells: map[CellAddr]Value{}}
+		cf := evalCompile(t, "SUBTOTAL(5,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// MIN of empty range = 0
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got type=%v num=%g, want 0", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 3. Range with mixed types (text ignored for numeric modes)
+	// ---------------------------------------------------------------
+	t.Run("mixed_types_sum_ignores_text", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("hello"),
+				{Col: 1, Row: 3}: NumberVal(20),
+				{Col: 1, Row: 4}: BoolVal(true),
+				{Col: 1, Row: 5}: NumberVal(30),
+			},
+		}
+		// SUM ignores text and booleans in ranges
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A5)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 60 {
+			t.Errorf("got %v (%g), want 60", got.Type, got.Num)
+		}
+	})
+
+	t.Run("mixed_types_count_numbers_only", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("hello"),
+				{Col: 1, Row: 3}: NumberVal(20),
+				{Col: 1, Row: 4}: BoolVal(true),
+			},
+		}
+		// COUNT counts only numeric values (not strings, not bools in ranges)
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A4)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+		}
+	})
+
+	t.Run("mixed_types_counta", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("hello"),
+				{Col: 1, Row: 3}: NumberVal(20),
+				{Col: 1, Row: 4}: BoolVal(true),
+			},
+		}
+		// COUNTA counts all non-empty values
+		cf := evalCompile(t, "SUBTOTAL(3,A1:A4)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 4 {
+			t.Errorf("got %v (%g), want 4", got.Type, got.Num)
+		}
+	})
+
+	t.Run("mixed_types_max_ignores_text", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("zzz"),
+				{Col: 1, Row: 3}: NumberVal(5),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(4,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v (%g), want 10", got.Type, got.Num)
+		}
+	})
+
+	t.Run("mixed_types_min_ignores_text", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("aaa"),
+				{Col: 1, Row: 3}: NumberVal(5),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(5,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 5 {
+			t.Errorf("got %v (%g), want 5", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 4. Range with errors → propagate
+	// ---------------------------------------------------------------
+	t.Run("error_in_range_propagates_sum", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: ErrorVal(ErrValNA),
+				{Col: 1, Row: 3}: NumberVal(20),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got type=%v err=%v, want #N/A", got.Type, got.Err)
+		}
+	})
+
+	t.Run("error_in_range_propagates_average", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: ErrorVal(ErrValDIV0),
+				{Col: 1, Row: 3}: NumberVal(20),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(1,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got type=%v err=%v, want #DIV/0!", got.Type, got.Err)
+		}
+	})
+
+	t.Run("count_skips_errors_in_range", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: ErrorVal(ErrValREF),
+				{Col: 1, Row: 3}: NumberVal(20),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// COUNT only counts numeric values; errors are not numeric so they are skipped
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got type=%v num=%g, want 2", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 5. SUBTOTAL nested in another SUBTOTAL (inner should be ignored)
+	// ---------------------------------------------------------------
+	t.Run("nested_subtotal_ignored", func(t *testing.T) {
+		// A1=10, A2=20, A3=SUBTOTAL(9,...) which evaluates to 100.
+		// SUBTOTAL(9, A1:A3) should skip A3 and return 10+20=30.
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(100), // contains a SUBTOTAL formula
+			},
+			subtotalCells: map[CellAddr]bool{
+				{Col: 1, Row: 3}: true,
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 30 {
+			t.Errorf("got %v (%g), want 30", got.Type, got.Num)
+		}
+	})
+
+	t.Run("nested_subtotal_ignored_average", func(t *testing.T) {
+		// A1=10, A2=20, A3=SUBTOTAL (value 100, should be ignored)
+		// AVERAGE of {10, 20} = 15
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(100),
+			},
+			subtotalCells: map[CellAddr]bool{
+				{Col: 1, Row: 3}: true,
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(1,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 15 {
+			t.Errorf("got %v (%g), want 15", got.Type, got.Num)
+		}
+	})
+
+	t.Run("nested_subtotal_ignored_count", func(t *testing.T) {
+		// A1=10, A2=20, A3=SUBTOTAL (value 100, should be ignored)
+		// COUNT should be 2, not 3
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(100),
+			},
+			subtotalCells: map[CellAddr]bool{
+				{Col: 1, Row: 3}: true,
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 6. Hidden rows with 101-111 modes
+	// ---------------------------------------------------------------
+	t.Run("hidden_rows_sum_109", func(t *testing.T) {
+		// A1=10, A2=20 (hidden), A3=30
+		// SUBTOTAL(109, A1:A3) should skip row 2 → 10+30=40
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(109,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 40 {
+			t.Errorf("got %v (%g), want 40", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_not_skipped_mode_9", func(t *testing.T) {
+		// A1=10, A2=20 (hidden but NOT auto-filtered), A3=30
+		// SUBTOTAL(9, A1:A3) should include hidden rows → 10+20+30=60
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 60 {
+			t.Errorf("got %v (%g), want 60", got.Type, got.Num)
+		}
+	})
+
+	t.Run("autofilter_hidden_skipped_mode_9", func(t *testing.T) {
+		// A1=10, A2=20 (auto-filter hidden), A3=30
+		// SUBTOTAL(9, A1:A3) should skip auto-filtered rows → 10+30=40
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			autoFilterRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 40 {
+			t.Errorf("got %v (%g), want 40", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_average_101", func(t *testing.T) {
+		// A1=10, A2=20 (hidden), A3=30
+		// SUBTOTAL(101, A1:A3) should skip row 2 → AVERAGE(10,30)=20
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(101,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 20 {
+			t.Errorf("got %v (%g), want 20", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_max_104", func(t *testing.T) {
+		// A1=10, A2=50 (hidden), A3=30
+		// SUBTOTAL(104, A1:A3) should skip row 2 → MAX(10,30)=30
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(50),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(104,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 30 {
+			t.Errorf("got %v (%g), want 30", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_min_105", func(t *testing.T) {
+		// A1=10, A2=1 (hidden), A3=30
+		// SUBTOTAL(105, A1:A3) should skip row 2 → MIN(10,30)=10
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(105,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v (%g), want 10", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_product_106", func(t *testing.T) {
+		// A1=2, A2=100 (hidden), A3=3
+		// SUBTOTAL(106, A1:A3) should skip row 2 → PRODUCT(2,3)=6
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: NumberVal(100),
+				{Col: 1, Row: 3}: NumberVal(3),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(106,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 6 {
+			t.Errorf("got %v (%g), want 6", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_count_102", func(t *testing.T) {
+		// A1=10, A2=20 (hidden), A3=30
+		// SUBTOTAL(102, A1:A3) should skip row 2 → COUNT=2
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(102,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+		}
+	})
+
+	t.Run("hidden_rows_counta_103", func(t *testing.T) {
+		// A1=10, A2="text" (hidden), A3=30
+		// SUBTOTAL(103, A1:A3) should skip row 2 → COUNTA=2
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: StringVal("text"),
+				{Col: 1, Row: 3}: NumberVal(30),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(103,A1:A3)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 7. Boolean values in range
+	// ---------------------------------------------------------------
+	t.Run("bool_values_counta", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: BoolVal(false),
+				{Col: 1, Row: 3}: NumberVal(5),
+			},
+		}
+		// COUNTA counts all non-empty values including booleans
+		cf := evalCompile(t, "SUBTOTAL(3,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 3 {
+			t.Errorf("got %v (%g), want 3", got.Type, got.Num)
+		}
+	})
+
+	t.Run("bool_values_count_skips", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: BoolVal(false),
+				{Col: 1, Row: 3}: NumberVal(5),
+			},
+		}
+		// COUNT only counts numeric values (booleans in range are not counted)
+		cf := evalCompile(t, "SUBTOTAL(2,A1:A3)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v (%g), want 1", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 8. String function_num ("9" stored in cell)
+	// ---------------------------------------------------------------
+	t.Run("string_funcnum_coerced", func(t *testing.T) {
+		// Use "9" as a string that gets coerced to number by SUBTOTAL
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 2, Row: 1}: StringVal("9"),
+			},
+		}
+		// SUBTOTAL(B1, A1:A2) where B1="9"
+		cf := evalCompile(t, "SUBTOTAL(B1,A1:A2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 30 {
+			t.Errorf("got %v (%g), want 30", got.Type, got.Num)
+		}
+	})
+
+	t.Run("string_funcnum_non_numeric_error", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 2, Row: 1}: StringVal("abc"),
+			},
+		}
+		// SUBTOTAL("abc", A1:A1) → #VALUE!
+		cf := evalCompile(t, "SUBTOTAL(B1,A1:A1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got type=%v err=%v, want #VALUE!", got.Type, got.Err)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 9. Cross-check: SUBTOTAL(9, range) = SUM(range) for simple ranges
+	// ---------------------------------------------------------------
+	t.Run("crosscheck_sum", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(7),
+				{Col: 1, Row: 2}: NumberVal(13),
+				{Col: 1, Row: 3}: NumberVal(22),
+			},
+		}
+		cfSub := evalCompile(t, "SUBTOTAL(9,A1:A3)")
+		cfSum := evalCompile(t, "SUM(A1:A3)")
+		gotSub, err := Eval(cfSub, resolver, nil)
+		if err != nil {
+			t.Fatalf("SUBTOTAL error: %v", err)
+		}
+		gotSum, err := Eval(cfSum, resolver, nil)
+		if err != nil {
+			t.Fatalf("SUM error: %v", err)
+		}
+		if gotSub.Num != gotSum.Num {
+			t.Errorf("SUBTOTAL(9)=%g != SUM=%g", gotSub.Num, gotSum.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 10. Cross-check: SUBTOTAL(1, range) = AVERAGE(range) for simple ranges
+	// ---------------------------------------------------------------
+	t.Run("crosscheck_average", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(7),
+				{Col: 1, Row: 2}: NumberVal(13),
+				{Col: 1, Row: 3}: NumberVal(22),
+			},
+		}
+		cfSub := evalCompile(t, "SUBTOTAL(1,A1:A3)")
+		cfAvg := evalCompile(t, "AVERAGE(A1:A3)")
+		gotSub, err := Eval(cfSub, resolver, nil)
+		if err != nil {
+			t.Fatalf("SUBTOTAL error: %v", err)
+		}
+		gotAvg, err := Eval(cfAvg, resolver, nil)
+		if err != nil {
+			t.Fatalf("AVERAGE error: %v", err)
+		}
+		if gotSub.Num != gotAvg.Num {
+			t.Errorf("SUBTOTAL(1)=%g != AVERAGE=%g", gotSub.Num, gotAvg.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 11. Cross-check all 11 modes against their direct functions
+	// ---------------------------------------------------------------
+	t.Run("crosscheck_all_modes", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(4),
+				{Col: 1, Row: 2}: NumberVal(8),
+				{Col: 1, Row: 3}: NumberVal(15),
+				{Col: 1, Row: 4}: NumberVal(16),
+				{Col: 1, Row: 5}: NumberVal(23),
+			},
+		}
+		crossChecks := []struct {
+			mode    int
+			directF string
+		}{
+			{1, "AVERAGE(A1:A5)"},
+			{2, "COUNT(A1:A5)"},
+			{3, "COUNTA(A1:A5)"},
+			{4, "MAX(A1:A5)"},
+			{5, "MIN(A1:A5)"},
+			{6, "PRODUCT(A1:A5)"},
+			{7, "STDEV(A1:A5)"},
+			{8, "STDEVP(A1:A5)"},
+			{9, "SUM(A1:A5)"},
+			{10, "VAR(A1:A5)"},
+			{11, "VARP(A1:A5)"},
+		}
+		for _, cc := range crossChecks {
+			subtotalFormula := fmt.Sprintf("SUBTOTAL(%d,A1:A5)", cc.mode)
+			cfSub := evalCompile(t, subtotalFormula)
+			cfDirect := evalCompile(t, cc.directF)
+			gotSub, err := Eval(cfSub, resolver, nil)
+			if err != nil {
+				t.Fatalf("SUBTOTAL(%d) error: %v", cc.mode, err)
+			}
+			gotDirect, err := Eval(cfDirect, resolver, nil)
+			if err != nil {
+				t.Fatalf("%s error: %v", cc.directF, err)
+			}
+			if gotSub.Type != gotDirect.Type {
+				t.Errorf("SUBTOTAL(%d) type=%v != %s type=%v",
+					cc.mode, gotSub.Type, cc.directF, gotDirect.Type)
+				continue
+			}
+			if gotSub.Type == ValueNumber && math.Abs(gotSub.Num-gotDirect.Num) > 1e-10 {
+				t.Errorf("SUBTOTAL(%d)=%g != %s=%g",
+					cc.mode, gotSub.Num, cc.directF, gotDirect.Num)
+			}
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 12. Additional invalid function_num boundary tests
+	// ---------------------------------------------------------------
+	t.Run("invalid_funcnum_50", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(50,A1:A1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got type=%v err=%v, want #VALUE!", got.Type, got.Err)
+		}
+	})
+
+	t.Run("invalid_funcnum_float_truncated", func(t *testing.T) {
+		// 9.9 should be treated as 9 (truncated to int) → SUM
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(9.9,A1:A2)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 30 {
+			t.Errorf("got %v (%g), want 30", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 13. Combined: hidden rows + subtotal cells + 101-111 mode
+	// ---------------------------------------------------------------
+	t.Run("hidden_and_subtotal_combined", func(t *testing.T) {
+		// A1=10, A2=20 (hidden), A3=SUBTOTAL(value 100), A4=40
+		// SUBTOTAL(109, A1:A4) should skip row 2 (hidden) and A3 (subtotal) → 10+40=50
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+				{Col: 1, Row: 3}: NumberVal(100),
+				{Col: 1, Row: 4}: NumberVal(40),
+			},
+			subtotalCells: map[CellAddr]bool{
+				{Col: 1, Row: 3}: true,
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(109,A1:A4)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 50 {
+			t.Errorf("got %v (%g), want 50", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 14. Product of range with single value
+	// ---------------------------------------------------------------
+	t.Run("product_single_value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(6,A1:A1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 42 {
+			t.Errorf("got %v (%g), want 42", got.Type, got.Num)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 15. Large function_num (negative)
+	// ---------------------------------------------------------------
+	t.Run("large_negative_funcnum", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+			},
+		}
+		cf := evalCompile(t, "SUBTOTAL(-100,A1:A1)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got type=%v err=%v, want #VALUE!", got.Type, got.Err)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 16. All rows hidden → empty result behaviors
+	// ---------------------------------------------------------------
+	t.Run("all_rows_hidden_sum_109", func(t *testing.T) {
+		// All rows hidden, SUBTOTAL(109,...) → SUM of nothing = 0
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {1: true, 2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(109,A1:A2)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 0 {
+			t.Errorf("got %v (%g), want 0", got.Type, got.Num)
+		}
+	})
+
+	t.Run("all_rows_hidden_average_101_div0", func(t *testing.T) {
+		// All rows hidden, SUBTOTAL(101,...) → AVERAGE of nothing = #DIV/0!
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(10),
+				{Col: 1, Row: 2}: NumberVal(20),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {1: true, 2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(101,A1:A2)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got type=%v err=%v, want #DIV/0!", got.Type, got.Err)
+		}
+	})
+
+	// ---------------------------------------------------------------
+	// 17. Stdev/Var with hidden rows
+	// ---------------------------------------------------------------
+	t.Run("hidden_rows_stdev_107", func(t *testing.T) {
+		// A1=2, A2=4 (hidden), A3=6, A4=8
+		// SUBTOTAL(107, A1:A4) should skip row 2 → STDEV.S(2,6,8) = sqrt(((2-16/3)^2+(6-16/3)^2+(8-16/3)^2)/2)
+		// Mean=16/3, deviations: -10/3, 2/3, 8/3; sum_sq = 100/9+4/9+64/9 = 168/9; var = 168/18 = 28/3
+		// stdev = sqrt(28/3) ≈ 3.05505
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: NumberVal(4),
+				{Col: 1, Row: 3}: NumberVal(6),
+				{Col: 1, Row: 4}: NumberVal(8),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(107,A1:A4)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := math.Sqrt(28.0 / 3.0)
+		if got.Type != ValueNumber || math.Abs(got.Num-expected) > 1e-10 {
+			t.Errorf("got %v (%g), want %g", got.Type, got.Num, expected)
+		}
+	})
+
+	t.Run("hidden_rows_var_110", func(t *testing.T) {
+		// A1=2, A2=4 (hidden), A3=6, A4=8
+		// SUBTOTAL(110, A1:A4) should skip row 2 → VAR.S(2,6,8) = 28/3 ≈ 9.33333
+		resolver := &subtotalMockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: NumberVal(4),
+				{Col: 1, Row: 3}: NumberVal(6),
+				{Col: 1, Row: 4}: NumberVal(8),
+			},
+			hiddenRows: map[string]map[int]bool{
+				"": {2: true},
+			},
+		}
+		ctx := &EvalContext{Resolver: resolver}
+		cf := evalCompile(t, "SUBTOTAL(110,A1:A4)")
+		got, err := Eval(cf, resolver, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := 28.0 / 3.0
+		if got.Type != ValueNumber || math.Abs(got.Num-expected) > 1e-10 {
+			t.Errorf("got %v (%g), want %g", got.Type, got.Num, expected)
+		}
+	})
+}
+
 func TestISOCEILING(t *testing.T) {
 	resolver := &mockResolver{}
 

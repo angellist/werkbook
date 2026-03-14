@@ -26,7 +26,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | ATAN2 | Returns the arctangent from x and y coordinates. | Math & Trig | 30 |
 | ATANH | Returns the inverse hyperbolic tangent of a number. | Math & Trig | 31 |
 | AVEDEV | Returns the average absolute deviation from the mean. | Statistical | 22 |
-| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 32 |
+| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 34 |
 | AVERAGEA | Returns the average of supplied values, including logical values and text coercions. | Statistical | 24 |
 | AVERAGEIF | Returns the average of values that match one condition. | Statistical | 42 |
 | AVERAGEIFS | Returns the average of values that match all supplied conditions. | Statistical | 48 |
@@ -79,8 +79,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | COSH | Returns the hyperbolic cosine of a number. | Math & Trig | 26 |
 | COT | Returns the cotangent of an angle. | Math & Trig | 26 |
 | COTH | Returns the hyperbolic cotangent of a number. | Math & Trig | 26 |
-| COUNT | Counts numeric values. | Statistical | 26 |
-| COUNTA | Counts non-empty values. | Statistical | 18 |
+| COUNT | Counts numeric values. | Statistical | 27 |
+| COUNTA | Counts non-empty values. | Statistical | 19 |
 | COUNTBLANK | Counts blank cells in a range. | Statistical | 40 |
 | COUNTIF | Counts values that match one condition. | Statistical | 74 |
 | COUNTIFS | Counts values that match all supplied conditions. | Statistical | 49 |
@@ -255,14 +255,14 @@ Werkbook supports **445** spreadsheet formula functions.
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 16 |
-| MAX | Returns the largest numeric value. | Statistical | 35 |
+| MAX | Returns the largest numeric value. | Statistical | 36 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
 | MDURATION | Returns the modified duration of a security. | Financial | 22 |
 | MEDIAN | Returns the median of a data set. | Statistical | 27 |
 | MID | Returns characters from the middle of a text value. | Text | 50 |
-| MIN | Returns the smallest numeric value. | Statistical | 32 |
+| MIN | Returns the smallest numeric value. | Statistical | 33 |
 | MINA | Returns the smallest value, counting logical values and text coercions. | Statistical | 16 |
 | MINIFS | Returns the minimum value that matches all supplied conditions. | Statistical | 49 |
 | MINUTE | Returns the minute from a time or datetime value. | Date & Time | 16 |
@@ -318,7 +318,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | PRICEDISC | Returns the price per 100 face value of a discounted security. | Financial | 31 |
 | PRICEMAT | Returns the price per 100 face value of a security that pays interest at maturity. | Financial | 32 |
 | PROB | Returns the probability that values fall within a range. | Statistical | 27 |
-| PRODUCT | Returns the product of supplied numbers. | Math & Trig | 36 |
+| PRODUCT | Returns the product of supplied numbers. | Math & Trig | 37 |
 | PROPER | Capitalizes words in text. | Text | 25 |
 | PV | Returns the present value of an investment or loan. | Financial | 4 |
 | QUARTILE | Returns a quartile of a data set. | Statistical | 37 |
@@ -368,16 +368,16 @@ Werkbook supports **445** spreadsheet formula functions.
 | SQRT | Returns the square root of a number. | Math & Trig | 29 |
 | SQRTPI | Returns the square root of a number multiplied by pi. | Math & Trig | 25 |
 | STANDARDIZE | Returns a normalized value from a mean and standard deviation. | Statistical | 17 |
-| STDEV | Returns the sample standard deviation. | Statistical | 26 |
+| STDEV | Returns the sample standard deviation. | Statistical | 27 |
 | STDEV.P | Returns the population standard deviation. | Statistical | 32 |
 | STDEV.S | Returns the sample standard deviation. | Statistical | 45 |
 | STDEVA | Returns the sample standard deviation including logical values and text coercions. | Statistical | 28 |
-| STDEVP | Returns the population standard deviation. | Statistical | 10 |
+| STDEVP | Returns the population standard deviation. | Statistical | 11 |
 | STDEVPA | Returns the population standard deviation including logical values and text coercions. | Statistical | 29 |
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 25 |
-| SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 32 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 63 |
+| SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 65 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 43 |
@@ -423,11 +423,11 @@ Werkbook supports **445** spreadsheet formula functions.
 | UPPER | Converts text to uppercase. | Text | 27 |
 | VALUE | Converts text that looks like a number into a numeric value. | Text | 31 |
 | VALUETOTEXT | Converts a value to a text representation. | Text | 26 |
-| VAR | Returns the sample variance. | Statistical | 25 |
+| VAR | Returns the sample variance. | Statistical | 26 |
 | VAR.P | Returns the population variance. | Statistical | 25 |
 | VAR.S | Returns the sample variance. | Statistical | 31 |
 | VARA | Returns the sample variance including logical values and text coercions. | Statistical | 22 |
-| VARP | Returns the population variance. | Statistical | 29 |
+| VARP | Returns the population variance. | Statistical | 30 |
 | VARPA | Returns the population variance including logical values and text coercions. | Statistical | 22 |
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
 | VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 51 |
