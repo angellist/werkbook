@@ -60,12 +60,12 @@ Werkbook supports **445** spreadsheet formula functions.
 | CHISQ.INV.RT | Returns the inverse of the right-tailed chi-square distribution. | Statistical | 20 |
 | CHISQ.TEST | Returns the result of a chi-square test. | Statistical | 23 |
 | CHOOSE | Returns the value at a position from a supplied list of choices. | Text | 24 |
-| CHOOSECOLS | Returns selected columns from an array. | Lookup & Reference | 16 |
-| CHOOSEROWS | Returns selected rows from an array. | Lookup & Reference | 16 |
+| CHOOSECOLS | Returns selected columns from an array. | Lookup & Reference | 28 |
+| CHOOSEROWS | Returns selected rows from an array. | Lookup & Reference | 28 |
 | CLEAN | Removes non-printing characters from text. | Text | 25 |
 | CODE | Returns the numeric code for the first character in text. | Text | 13 |
 | COLUMN | Returns the column number of a reference. | Information | 25 |
-| COLUMNS | Returns the number of columns in a reference or array. | Information | 33 |
+| COLUMNS | Returns the number of columns in a reference or array. | Information | 35 |
 | COMBIN | Returns the number of combinations for a given number of items. | Math & Trig | 40 |
 | COMBINA | Returns the number of combinations with repetitions. | Math & Trig | 31 |
 | COMPLEX | Builds a complex number from real and imaginary parts. | Engineering | 51 |
@@ -185,7 +185,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | HSTACK | Stacks arrays horizontally. | Lookup & Reference | 18 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
-| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 32 |
+| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 34 |
 | IFERROR | Returns a fallback value when a formula returns an error. | Logical | 76 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
@@ -343,7 +343,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | ROUNDDOWN | Rounds a number toward zero. | Math & Trig | 36 |
 | ROUNDUP | Rounds a number away from zero. | Math & Trig | 36 |
 | ROW | Returns the row number of a reference. | Information | 41 |
-| ROWS | Returns the number of rows in a reference or array. | Information | 35 |
+| ROWS | Returns the number of rows in a reference or array. | Information | 37 |
 | RRI | Returns an equivalent interest rate for investment growth. | Financial | 21 |
 | RSQ | Returns the square of the Pearson correlation coefficient. | Statistical | 23 |
 | SCAN | Returns the running accumulation produced by a lambda over an array. | Logical | 25 |
@@ -377,7 +377,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 65 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 67 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 72 |
