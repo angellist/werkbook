@@ -251,7 +251,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | LOGNORM.DIST | Returns the lognormal distribution. | Statistical | 31 |
 | LOGNORM.INV | Returns the inverse of the lognormal cumulative distribution. | Statistical | 31 |
 | LOOKUP | Looks up a value in a one-dimensional range and returns the matching result. | Lookup & Reference | 24 |
-| LOWER | Converts text to lowercase. | Text | 23 |
+| LOWER | Converts text to lowercase. | Text | 48 |
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
@@ -319,7 +319,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | PRICEMAT | Returns the price per 100 face value of a security that pays interest at maturity. | Financial | 32 |
 | PROB | Returns the probability that values fall within a range. | Statistical | 27 |
 | PRODUCT | Returns the product of supplied numbers. | Math & Trig | 37 |
-| PROPER | Capitalizes words in text. | Text | 25 |
+| PROPER | Capitalizes words in text. | Text | 54 |
 | PV | Returns the present value of an investment or loan. | Financial | 4 |
 | QUARTILE | Returns a quartile of a data set. | Statistical | 37 |
 | QUARTILE.EXC | Returns the exclusive quartile of a data set. | Statistical | 27 |
@@ -420,7 +420,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | UNICHAR | Returns the Unicode character for a code point. | Text | 48 |
 | UNICODE | Returns the Unicode code point for the first character in text. | Text | 36 |
 | UNIQUE | Returns distinct rows or columns from an array. | Lookup & Reference | 29 |
-| UPPER | Converts text to uppercase. | Text | 27 |
+| UPPER | Converts text to uppercase. | Text | 62 |
 | VALUE | Converts text that looks like a number into a numeric value. | Text | 31 |
 | VALUETOTEXT | Converts a value to a text representation. | Text | 26 |
 | VAR | Returns the sample variance. | Statistical | 26 |

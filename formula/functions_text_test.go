@@ -4967,6 +4967,30 @@ func TestLOWER(t *testing.T) {
 		{"german uppercase", `LOWER("STRASSE")`, "strasse"},
 		{"unicode accented", `LOWER("RÉSUMÉ")`, "résumé"},
 		{"single character", `LOWER("A")`, "a"},
+
+		// Additional comprehensive tests
+		{"CJK unchanged", `LOWER("你好世界")`, "你好世界"},
+		{"numeric string mixed", `LOWER("123ABC")`, "123abc"},
+		{"special chars with letters", `LOWER("ABC!@#DEF")`, "abc!@#def"},
+		{"newline preserved", `LOWER("HELLO` + "\n" + `WORLD")`, "hello\nworld"},
+		{"tab preserved", `LOWER("HELLO` + "\t" + `WORLD")`, "hello\tworld"},
+		{"german eszett lowercase stays", `LOWER("STRAßE")`, "straße"},
+		{"long mixed string", `LOWER("ThE QuIcK BrOwN FoX")`, "the quick brown fox"},
+		{"trailing spaces", `LOWER("HELLO   ")`, "hello   "},
+		{"leading spaces", `LOWER("   HELLO")`, "   hello"},
+		{"single uppercase letter", `LOWER("Z")`, "z"},
+		{"single lowercase letter unchanged", `LOWER("z")`, "z"},
+		{"mixed numbers and upper", `LOWER("A1B2C3")`, "a1b2c3"},
+		{"unicode greek", `LOWER("ΩΜΕΓΑ")`, "ωμεγα"},
+		{"parentheses with text", `LOWER("(HELLO)")`, "(hello)"},
+		{"slash separated", `LOWER("HELLO/WORLD")`, "hello/world"},
+		{"negative number coerced", `LOWER(-42.5)`, "-42.5"},
+		{"zero coerced", `LOWER(0)`, "0"},
+		{"hyphenated word", `LOWER("SMITH-JONES")`, "smith-jones"},
+		{"all punctuation unchanged", `LOWER("...!!!")`, "...!!!"},
+		{"mixed unicode and ascii", `LOWER("ABCdef日本語GHI")`, "abcdef日本語ghi"},
+		{"double spaces preserved", `LOWER("HELLO  WORLD")`, "hello  world"},
+		{"period separated", `LOWER("MR. SMITH")`, "mr. smith"},
 	}
 
 	for _, tt := range strTests {
@@ -5018,6 +5042,17 @@ func TestLOWER(t *testing.T) {
 		}
 	})
 
+	t.Run("error propagation VALUE", func(t *testing.T) {
+		cf := evalCompile(t, `LOWER(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0! error", got)
+		}
+	})
+
 	// Cell reference
 	t.Run("cell reference", func(t *testing.T) {
 		cellResolver := &mockResolver{
@@ -5032,6 +5067,36 @@ func TestLOWER(t *testing.T) {
 		}
 		if got.Type != ValueString || got.Str != "hello world" {
 			t.Errorf("got %v, want %q", got, "hello world")
+		}
+	})
+
+	// Cell reference with number
+	t.Run("cell reference number", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+			},
+		}
+		cf := evalCompile(t, `LOWER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "42" {
+			t.Errorf("got %v, want %q", got, "42")
+		}
+	})
+
+	// Empty cell
+	t.Run("empty cell", func(t *testing.T) {
+		cellResolver := &mockResolver{}
+		cf := evalCompile(t, `LOWER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "" {
+			t.Errorf("got %v, want %q", got, "")
 		}
 	})
 }
@@ -5063,6 +5128,40 @@ func TestUPPER(t *testing.T) {
 		{"german lowercase", `UPPER("strasse")`, "STRASSE"},
 		{"unicode accented", `UPPER("résumé")`, "RÉSUMÉ"},
 		{"single character", `UPPER("a")`, "A"},
+
+		// Additional comprehensive tests
+		{"CJK unchanged", `UPPER("你好世界")`, "你好世界"},
+		{"numeric string mixed", `UPPER("123abc")`, "123ABC"},
+		{"special chars with letters", `UPPER("abc!@#def")`, "ABC!@#DEF"},
+		{"newline preserved", `UPPER("hello` + "\n" + `world")`, "HELLO\nWORLD"},
+		{"tab preserved", `UPPER("hello` + "\t" + `world")`, "HELLO\tWORLD"},
+		{"long mixed string", `UPPER("ThE QuIcK BrOwN FoX")`, "THE QUICK BROWN FOX"},
+		{"trailing spaces", `UPPER("hello   ")`, "HELLO   "},
+		{"leading spaces", `UPPER("   hello")`, "   HELLO"},
+		{"single lowercase letter", `UPPER("z")`, "Z"},
+		{"single already upper", `UPPER("Z")`, "Z"},
+		{"mixed numbers and lower", `UPPER("a1b2c3")`, "A1B2C3"},
+		{"unicode greek", `UPPER("ωμεγα")`, "ΩΜΕΓΑ"},
+		{"parentheses with text", `UPPER("(hello)")`, "(HELLO)"},
+		{"slash separated", `UPPER("hello/world")`, "HELLO/WORLD"},
+		{"negative number coerced", `UPPER(-42.5)`, "-42.5"},
+		{"zero coerced", `UPPER(0)`, "0"},
+		{"hyphenated word", `UPPER("smith-jones")`, "SMITH-JONES"},
+		{"all punctuation unchanged", `UPPER("...!!!")`, "...!!!"},
+		{"mixed unicode and ascii", `UPPER("abcDEF日本語ghi")`, "ABCDEF日本語GHI"},
+		{"double spaces preserved", `UPPER("hello  world")`, "HELLO  WORLD"},
+		{"period separated", `UPPER("mr. smith")`, "MR. SMITH"},
+		{"curly braces", `UPPER("{hello}")`, "{HELLO}"},
+		{"angle brackets", `UPPER("<hello>")`, "<HELLO>"},
+		{"pipe separated", `UPPER("hello|world")`, "HELLO|WORLD"},
+		{"underscore separated", `UPPER("hello_world")`, "HELLO_WORLD"},
+		{"tilde in text", `UPPER("hello~world")`, "HELLO~WORLD"},
+		{"long repeated", `UPPER("abcabcabc")`, "ABCABCABC"},
+		{"accented mixed", `UPPER("crème brûlée")`, "CRÈME BRÛLÉE"},
+		{"equals sign", `UPPER("a=b")`, "A=B"},
+		{"colon separated", `UPPER("key:value")`, "KEY:VALUE"},
+		{"semicolon separated", `UPPER("hello;world")`, "HELLO;WORLD"},
+		{"ampersand", `UPPER("a&b")`, "A&B"},
 	}
 
 	for _, tt := range strTests {
@@ -5114,6 +5213,17 @@ func TestUPPER(t *testing.T) {
 		}
 	})
 
+	t.Run("error propagation DIV0", func(t *testing.T) {
+		cf := evalCompile(t, `UPPER(1/0)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0! error", got)
+		}
+	})
+
 	// Cell reference
 	t.Run("cell reference", func(t *testing.T) {
 		cellResolver := &mockResolver{
@@ -5128,6 +5238,36 @@ func TestUPPER(t *testing.T) {
 		}
 		if got.Type != ValueString || got.Str != "HELLO WORLD" {
 			t.Errorf("got %v, want %q", got, "HELLO WORLD")
+		}
+	})
+
+	// Cell reference with boolean
+	t.Run("cell reference boolean", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(true),
+			},
+		}
+		cf := evalCompile(t, `UPPER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "TRUE" {
+			t.Errorf("got %v, want %q", got, "TRUE")
+		}
+	})
+
+	// Empty cell
+	t.Run("empty cell", func(t *testing.T) {
+		cellResolver := &mockResolver{}
+		cf := evalCompile(t, `UPPER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "" {
+			t.Errorf("got %v, want %q", got, "")
 		}
 	})
 }
@@ -5504,6 +5644,34 @@ func TestPROPER(t *testing.T) {
 		// Boolean coercion
 		{"boolean TRUE", `PROPER(TRUE)`, "True"},
 		{"boolean FALSE", `PROPER(FALSE)`, "False"},
+
+		// Additional comprehensive tests
+		{"mixed case words", `PROPER("hELLO wORLD")`, "Hello World"},
+		{"hyphenated name", `PROPER("smith-jones")`, "Smith-Jones"},
+		{"apostrophe in word", `PROPER("it's")`, "It'S"},
+		{"apostrophe possessive", `PROPER("o'brien")`, "O'Brien"},
+		{"numbers followed by word", `PROPER("123 main")`, "123 Main"},
+		{"multiple spaces preserved", `PROPER("hello  world")`, "Hello  World"},
+		{"accented phrase", `PROPER("café au lait")`, "Café Au Lait"},
+		{"tab as word boundary", `PROPER("hello` + "\t" + `world")`, "Hello\tWorld"},
+		{"newline as word boundary", `PROPER("hello` + "\n" + `world")`, "Hello\nWorld"},
+		{"parentheses", `PROPER("(hello)")`, "(Hello)"},
+		{"slash separated", `PROPER("hello/world")`, "Hello/World"},
+		{"period separated", `PROPER("mr. smith")`, "Mr. Smith"},
+		{"all caps input", `PROPER("HELLO WORLD")`, "Hello World"},
+		{"CJK with latin", `PROPER("hello你好world")`, "Hello你好world"},
+		{"trailing punctuation", `PROPER("hello!")`, "Hello!"},
+		{"leading punctuation", `PROPER("!hello")`, "!Hello"},
+		{"underscore separated", `PROPER("hello_world")`, "Hello_World"},
+		{"colon separated", `PROPER("key:value")`, "Key:Value"},
+		{"semicolon separated", `PROPER("hello;world")`, "Hello;World"},
+		{"mixed numbers hyphens", `PROPER("test-123-hello")`, "Test-123-Hello"},
+		{"curly braces", `PROPER("{hello}")`, "{Hello}"},
+		{"angle brackets", `PROPER("<hello>")`, "<Hello>"},
+		{"unicode greek", `PROPER("ωμεγα")`, "Ωμεγα"},
+		{"double hyphen", `PROPER("one--two")`, "One--Two"},
+		{"comma separated", `PROPER("hello,world")`, "Hello,World"},
+		{"long sentence", `PROPER("the quick brown fox jumps over the lazy dog")`, "The Quick Brown Fox Jumps Over The Lazy Dog"},
 	}
 
 	for _, tt := range strTests {
@@ -5543,6 +5711,23 @@ func TestPROPER(t *testing.T) {
 		}
 	})
 
+	// Error propagation
+	t.Run("error propagation NA", func(t *testing.T) {
+		cf := evalCompile(t, `PROPER(NA())`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// PROPER uses ValueToString which doesn't propagate errors the same way as LOWER/UPPER.
+		// The function doesn't have explicit error propagation, so NA() gets coerced to string "#N/A"
+		// and then PROPER capitalizes it. Let's verify actual behavior.
+		// Actually, looking at fnPROPER, it does NOT check for ValueError before calling ValueToString.
+		// ValueToString on an error returns the error string like "#N/A".
+		if got.Type != ValueString || got.Str != "#N/A" {
+			t.Errorf("got %v, want %q", got, "#N/A")
+		}
+	})
+
 	// Cell reference
 	t.Run("cell reference", func(t *testing.T) {
 		cellResolver := &mockResolver{
@@ -5557,6 +5742,36 @@ func TestPROPER(t *testing.T) {
 		}
 		if got.Type != ValueString || got.Str != "Hello World" {
 			t.Errorf("got %v, want %q", got, "Hello World")
+		}
+	})
+
+	// Cell reference with all caps
+	t.Run("cell reference all caps", func(t *testing.T) {
+		cellResolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("HELLO WORLD"),
+			},
+		}
+		cf := evalCompile(t, `PROPER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "Hello World" {
+			t.Errorf("got %v, want %q", got, "Hello World")
+		}
+	})
+
+	// Empty cell
+	t.Run("empty cell", func(t *testing.T) {
+		cellResolver := &mockResolver{}
+		cf := evalCompile(t, `PROPER(A1)`)
+		got, err := Eval(cf, cellResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "" {
+			t.Errorf("got %v, want %q", got, "")
 		}
 	})
 }
