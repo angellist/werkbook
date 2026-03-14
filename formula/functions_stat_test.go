@@ -13469,29 +13469,70 @@ func TestPERMUTATIONA(t *testing.T) {
 		wantErr ErrorValue
 		isErr   bool
 	}{
-		// Basic cases
+		// Basic cases: number^number_chosen
 		{"3_choose_2", "PERMUTATIONA(3,2)", 9, 0, false},
 		{"2_choose_3", "PERMUTATIONA(2,3)", 8, 0, false},
 		{"4_choose_3", "PERMUTATIONA(4,3)", 64, 0, false},
-		{"1_choose_5", "PERMUTATIONA(1,5)", 1, 0, false},
+		{"10_choose_3", "PERMUTATIONA(10,3)", 1000, 0, false},
+		{"6_choose_2", "PERMUTATIONA(6,2)", 36, 0, false},
+		{"7_choose_4", "PERMUTATIONA(7,4)", 2401, 0, false},
+
+		// Identity cases: n^1 = n
 		{"5_choose_1", "PERMUTATIONA(5,1)", 5, 0, false},
+		{"10_choose_1", "PERMUTATIONA(10,1)", 10, 0, false},
+		{"100_choose_1", "PERMUTATIONA(100,1)", 100, 0, false},
+
+		// Any n^0 = 1
 		{"5_choose_0", "PERMUTATIONA(5,0)", 1, 0, false},
+		{"1_choose_0", "PERMUTATIONA(1,0)", 1, 0, false},
+		{"100_choose_0", "PERMUTATIONA(100,0)", 1, 0, false},
+
+		// 1^n = 1 for any n
+		{"1_choose_5", "PERMUTATIONA(1,5)", 1, 0, false},
+		{"1_choose_10", "PERMUTATIONA(1,10)", 1, 0, false},
+		{"1_choose_0", "PERMUTATIONA(1,0)", 1, 0, false},
+
+		// 0^0 = 1
 		{"0_choose_0", "PERMUTATIONA(0,0)", 1, 0, false},
-		// Truncation
+
+		// Large values
+		{"2_choose_10", "PERMUTATIONA(2,10)", 1024, 0, false},
+		{"10_choose_5", "PERMUTATIONA(10,5)", 100000, 0, false},
+		{"5_choose_5", "PERMUTATIONA(5,5)", 3125, 0, false},
+
+		// Truncation — fractional args are truncated to integer
 		{"truncate_both", "PERMUTATIONA(3.9,2.1)", 9, 0, false},
+		{"truncate_number", "PERMUTATIONA(4.7,2)", 16, 0, false},
+		{"truncate_chosen", "PERMUTATIONA(3,2.9)", 9, 0, false},
+		{"truncate_to_zero_chosen", "PERMUTATIONA(5,0.9)", 1, 0, false},
+
 		// Error cases
 		{"0_choose_1", "PERMUTATIONA(0,1)", 0, ErrValNUM, true},
+		{"0_choose_5", "PERMUTATIONA(0,5)", 0, ErrValNUM, true},
 		{"negative_number", "PERMUTATIONA(-1,2)", 0, ErrValNUM, true},
 		{"negative_chosen", "PERMUTATIONA(3,-1)", 0, ErrValNUM, true},
+		{"both_negative", "PERMUTATIONA(-2,-3)", 0, ErrValNUM, true},
+		{"neg_truncated", "PERMUTATIONA(-0.5,2)", 0, ErrValNUM, true},
+
 		// Wrong arg count
+		{"no_args", "PERMUTATIONA()", 0, ErrValVALUE, true},
 		{"too_few_args", "PERMUTATIONA(3)", 0, ErrValVALUE, true},
 		{"too_many_args", "PERMUTATIONA(3,2,1)", 0, ErrValVALUE, true},
+
 		// String coercion
 		{"string_coercion", fmt.Sprintf("PERMUTATIONA(%q,2)", "3"), 9, 0, false},
+		{"string_coercion_both", fmt.Sprintf("PERMUTATIONA(%q,%q)", "2", "3"), 8, 0, false},
 		{"non_numeric_string", fmt.Sprintf("PERMUTATIONA(%q,2)", "abc"), 0, ErrValVALUE, true},
-		// Boolean coercion
+		{"non_numeric_string_second", fmt.Sprintf("PERMUTATIONA(3,%q)", "xyz"), 0, ErrValVALUE, true},
+
+		// Boolean coercion: TRUE=1, FALSE=0
 		{"bool_true", "PERMUTATIONA(TRUE,5)", 1, 0, false},
 		{"bool_false_zero", "PERMUTATIONA(FALSE,0)", 1, 0, false},
+		{"bool_true_true", "PERMUTATIONA(TRUE,TRUE)", 1, 0, false},
+		{"bool_false_chosen_pos", "PERMUTATIONA(FALSE,1)", 0, ErrValNUM, true},
+
+		// 2^2 = 4
+		{"2_choose_2", "PERMUTATIONA(2,2)", 4, 0, false},
 	}
 
 	for _, tt := range tests {
@@ -22195,6 +22236,7 @@ func TestPHI(t *testing.T) {
 		want    float64
 		isErr   bool
 	}{
+		// Basic values
 		{"basic", "PHI(0.75)", 0.301137432, false},
 		{"zero", "PHI(0)", 0.398942280, false},
 		{"one", "PHI(1)", 0.241970725, false},
@@ -22205,7 +22247,44 @@ func TestPHI(t *testing.T) {
 		{"large", "PHI(10)", 0, false},
 		{"half", "PHI(0.5)", 0.352065327, false},
 		{"neg_half", "PHI(-0.5)", 0.352065327, false},
+
+		// Additional sigma points
+		{"neg_three", "PHI(-3)", 0.004431848, false},
+		{"four", "PHI(4)", 0.000133830, false},
+		{"neg_four", "PHI(-4)", 0.000133830, false},
+
+		// Large positive and negative (effectively zero)
+		{"large_pos_10", "PHI(10)", 0, false},
+		{"large_neg_10", "PHI(-10)", 0, false},
+		{"large_pos_20", "PHI(20)", 0, false},
+		{"large_neg_20", "PHI(-20)", 0, false},
+
+		// Small fractional values
+		{"quarter", "PHI(0.25)", 0.386668, false},
+		{"neg_quarter", "PHI(-0.25)", 0.386668, false},
+		{"tenth", "PHI(0.1)", 0.396953, false},
+		{"neg_tenth", "PHI(-0.1)", 0.396953, false},
+
+		// PHI(0) is maximum — 1/sqrt(2*pi)
+		{"zero_is_max", "PHI(0)", 0.398942280, false},
+
+		// Symmetry via formula: PHI(1.5) = PHI(-1.5)
+		{"sym_1_5", "PHI(1.5)", 0.129518, false},
+		{"sym_neg_1_5", "PHI(-1.5)", 0.129518, false},
+
+		// String coercion (numeric string)
+		{"string_num", `PHI("2")`, 0.053990967, false},
+
+		// Boolean coercion: TRUE = 1, FALSE = 0
+		{"bool_true", "PHI(TRUE)", 0.241970725, false},
+		{"bool_false", "PHI(FALSE)", 0.398942280, false},
+
+		// Error propagation
 		{"err_text", `PHI("abc")`, 0, true},
+
+		// Wrong arg count
+		{"no_args", "PHI()", 0, true},
+		{"too_many_args", "PHI(1,2)", 0, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -22228,6 +22307,46 @@ func TestPHI(t *testing.T) {
 			}
 		})
 	}
+
+	// PHI is always positive
+	t.Run("always_positive", func(t *testing.T) {
+		for _, x := range []string{"-5", "-2", "-1", "0", "1", "2", "5"} {
+			cf := evalCompile(t, "PHI("+x+")")
+			got, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatalf("Eval PHI(%s): %v", x, err)
+			}
+			if got.Type != ValueNumber || got.Num < 0 {
+				t.Errorf("PHI(%s) = %v, want positive number", x, got)
+			}
+		}
+	})
+
+	// PHI(0) >= PHI(x) for all x — maximum at zero
+	t.Run("zero_is_global_max", func(t *testing.T) {
+		cf0 := evalCompile(t, "PHI(0)")
+		got0, _ := Eval(cf0, nil, nil)
+		for _, x := range []string{"-3", "-1", "0.5", "1", "3"} {
+			cf := evalCompile(t, "PHI("+x+")")
+			got, _ := Eval(cf, nil, nil)
+			if got.Num > got0.Num+tol {
+				t.Errorf("PHI(%s) = %g > PHI(0) = %g", x, got.Num, got0.Num)
+			}
+		}
+	})
+
+	// Symmetry cross-check: PHI(x) = PHI(-x)
+	t.Run("symmetry_cross_check", func(t *testing.T) {
+		for _, x := range []string{"0.3", "1.7", "2.5", "4"} {
+			cfPos := evalCompile(t, "PHI("+x+")")
+			cfNeg := evalCompile(t, "PHI(-"+x+")")
+			pos, _ := Eval(cfPos, nil, nil)
+			neg, _ := Eval(cfNeg, nil, nil)
+			if math.Abs(pos.Num-neg.Num) > tol {
+				t.Errorf("PHI(%s) = %g != PHI(-%s) = %g", x, pos.Num, x, neg.Num)
+			}
+		}
+	})
 }
 
 func TestGAUSS(t *testing.T) {

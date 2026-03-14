@@ -307,8 +307,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | PERCENTRANK.EXC | Returns the exclusive percentage rank of a value in a data set. | Statistical | 29 |
 | PERCENTRANK.INC | Returns the inclusive percentage rank of a value in a data set. | Statistical | 52 |
 | PERMUT | Returns the number of permutations for a number of objects. | Math & Trig | 39 |
-| PERMUTATIONA | Returns the number of permutations with repetitions. | Statistical | 17 |
-| PHI | Returns the standard normal density at a value. | Statistical | 11 |
+| PERMUTATIONA | Returns the number of permutations with repetitions. | Statistical | 41 |
+| PHI | Returns the standard normal density at a value. | Statistical | 35 |
 | PI | Returns the value of pi. | Math & Trig | 13 |
 | PMT | Returns the periodic payment for a loan or annuity. | Financial | 5 |
 | POISSON.DIST | Returns the Poisson distribution. | Statistical | 26 |
