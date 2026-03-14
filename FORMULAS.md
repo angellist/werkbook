@@ -100,7 +100,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | DATE | Builds a date from year, month, and day numbers. | Date & Time | 72 |
 | DATEDIF | Returns the difference between two dates in requested units. | Date & Time | 18 |
 | DATEVALUE | Converts date text to a serial date number. | Date & Time | 39 |
-| DAVERAGE | Returns the average of matching records in a database range. | Db | 3 |
+| DAVERAGE | Returns the average of matching records in a database range. | Db | 5 |
 | DAY | Returns the day of the month from a date. | Date & Time | 7 |
 | DAYS | Returns the number of days between two dates. | Date & Time | 17 |
 | DAYS360 | Returns the number of days between two dates using a 360-day year. | Date & Time | 57 |
@@ -124,12 +124,12 @@ Werkbook supports **445** spreadsheet formula functions.
 | DOLLARFR | Converts a decimal dollar price to a fractional price. | Financial | 17 |
 | DPRODUCT | Returns the product of matching records in a database range. | Db | 7 |
 | DROP | Drops rows or columns from the start or end of an array. | Lookup & Reference | 26 |
-| DSTDEV | Returns the sample standard deviation of matching database records. | Db | 2 |
-| DSTDEVP | Returns the population standard deviation of matching database records. | Db | 1 |
+| DSTDEV | Returns the sample standard deviation of matching database records. | Db | 3 |
+| DSTDEVP | Returns the population standard deviation of matching database records. | Db | 2 |
 | DSUM | Returns the sum of matching records in a database range. | Db | 7 |
 | DURATION | Returns the Macauley duration of a security. | Financial | 27 |
-| DVAR | Returns the sample variance of matching database records. | Db | 1 |
-| DVARP | Returns the population variance of matching database records. | Db | 1 |
+| DVAR | Returns the sample variance of matching database records. | Db | 3 |
+| DVARP | Returns the population variance of matching database records. | Db | 3 |
 | EDATE | Shifts a date by a number of whole months. | Date & Time | 19 |
 | EFFECT | Returns the effective annual interest rate for a nominal rate. | Financial | 18 |
 | ENCODEURL | Encodes text so it can be safely used in a URL. | Text | 44 |

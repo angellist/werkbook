@@ -5808,6 +5808,7 @@ func TestDSTDEVP(t *testing.T) {
 	db := standardDB()
 
 	tests := []dbTestCase{
+		// --- Basic tests ---
 		{
 			name: "stdevp Apple profit",
 			db:   db,
@@ -5863,6 +5864,356 @@ func TestDSTDEVP(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  0,
 		},
+		// --- Field by column number ---
+		{
+			name: "stdevp field by column number",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "5", // Profit
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(600),
+		},
+		{
+			name: "stdevp field by column number 4 yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "4", // Yield
+			wantType: ValueNumber,
+			// Apple yields: 14, 10, 6. mean=10, ss=32, var=32/3, stdevp=sqrt(32/3)
+			wantNum: math.Sqrt(32.0 / 3.0),
+		},
+		// --- All records match (blank criteria) ---
+		{
+			name: "stdevp blank criteria matches all records",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// All profits: 105, 96, 105, 75, 76.8, 45. mean=502.8/6=83.8
+			// ss=2679.6, var=2679.6/6=446.6, stdevp=sqrt(446.6)
+			wantNum: math.Sqrt(2679.6 / 6),
+		},
+		{
+			name: "stdevp no criteria rows matches all",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(2679.6 / 6),
+		},
+		// --- Multiple criteria rows (OR logic) ---
+		{
+			name: "stdevp OR criteria Apple or Pear yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Pear")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			// Apple+Pear yields: 14, 10, 6, 10, 8. mean=9.6
+			// ss=35.2, var=35.2/5=7.04, stdevp=sqrt(7.04)
+			wantNum: math.Sqrt(7.04),
+		},
+		{
+			name: "stdevp OR criteria Apple or Cherry profit",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// 105, 105, 75, 45. mean=82.5, ss=2475, var=2475/4=618.75
+			wantNum: math.Sqrt(618.75),
+		},
+		// --- Multiple criteria columns (AND logic) ---
+		{
+			name: "stdevp AND criteria Apple with Height>10",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105 (h=18), 75 (h=14). mean=90, ss=450, var=450/2=225
+			wantNum: math.Sqrt(225),
+		},
+		// --- Numeric criteria operators ---
+		{
+			name: "stdevp numeric criteria greater than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>12: 18→105, 13→105, 14→75. mean=95, ss=600, var=200
+			wantNum: math.Sqrt(200),
+		},
+		{
+			name: "stdevp numeric criteria less than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<12: 9→76.8, 8→45. mean=60.9, ss=505.62, var=252.81
+			wantNum: math.Sqrt(252.81),
+		},
+		{
+			name: "stdevp numeric criteria >=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>=13: 105, 105, 75. mean=95, ss=600, var=200
+			wantNum: math.Sqrt(200),
+		},
+		{
+			name: "stdevp numeric criteria <=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<=12: 96, 76.8, 45. mean=72.6, ss=1326.96, var=442.32
+			wantNum: math.Sqrt(1326.96 / 3),
+		},
+		{
+			name: "stdevp numeric criteria <>",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<>13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<>13: 105, 96, 75, 76.8, 45. mean=79.56, ss=2140.272, var=428.0544
+			wantNum: math.Sqrt(2140.272 / 5),
+		},
+		// --- Wildcard criteria ---
+		{
+			name: "stdevp wildcard star criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("A*")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(600), // same as Apple
+		},
+		{
+			name: "stdevp wildcard question mark criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(92.16),
+		},
+		// --- Case insensitive matching ---
+		{
+			name: "stdevp case insensitive criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(600),
+		},
+		{
+			name: "stdevp case insensitive field name",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    `"profit"`,
+			wantType: ValueNumber,
+			wantNum:  math.Sqrt(600),
+		},
+		// --- Error propagation ---
+		{
+			name: "stdevp error in field column propagates",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), ErrorVal(ErrValDIV0)},
+				{StringVal("C"), NumberVal(20)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Mixed types: only numbers used ---
+		{
+			name: "stdevp mixed types only uses numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), StringVal("text")},
+				{StringVal("C"), NumberVal(20)},
+				{StringVal("D"), BoolVal(true)},
+				{StringVal("E"), NumberVal(30)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// 10, 20, 30. mean=20, ss=200, var=200/3
+			wantNum: math.Sqrt(200.0 / 3.0),
+		},
+		// --- Text column returns DIV/0 ---
+		{
+			name: "stdevp text column returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Label")},
+				{StringVal("A"), StringVal("foo")},
+				{StringVal("B"), StringVal("bar")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Label"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- All same values returns 0 ---
+		{
+			name: "stdevp all same values returns 0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(5)},
+				{StringVal("B"), NumberVal(5)},
+				{StringVal("C"), NumberVal(5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- Negative numbers ---
+		{
+			name: "stdevp negative numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(-10)},
+				{StringVal("B"), NumberVal(-20)},
+				{StringVal("C"), NumberVal(-5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=-35/3, ss=350/3, var=350/9, stdevp=sqrt(350/9)
+			wantNum: math.Sqrt(350.0 / 9.0),
+		},
+		// --- Decimal values ---
+		{
+			name: "stdevp decimal values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.5)},
+				{StringVal("C"), NumberVal(3.5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=2.5, ss=2, var=2/3, stdevp=sqrt(2/3)
+			wantNum: math.Sqrt(2.0 / 3.0),
+		},
+		// --- Empty database ---
+		{
+			name: "stdevp empty database returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Large spread ---
+		{
+			name: "stdevp large spread values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1)},
+				{StringVal("B"), NumberVal(1000)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=500.5, ss=499000.5, var=499000.5/2=249500.25
+			wantNum: math.Sqrt(249500.25),
+		},
+		// --- Cross-column OR with AND ---
+		{
+			name: "stdevp cross-column OR with AND",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Pear"), StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105, 75. Pear h<10: 76.8. values: 105, 75, 76.8
+			// mean=85.6, ss=566.16, var=566.16/3=188.72
+			wantNum: math.Sqrt(566.16 / 3),
+		},
+		// --- Field name not found ---
+		{
+			name:     "stdevp field name not found",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    `"NonExistent"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		// --- Field index out of range ---
+		{
+			name:     "stdevp field index out of range",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "99",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "stdevp field index 0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "0",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
 	}
 
 	runDBTests(t, "DSTDEVP", tests)
@@ -5886,6 +6237,7 @@ func TestDVAR(t *testing.T) {
 	db := standardDB()
 
 	tests := []dbTestCase{
+		// --- Basic tests ---
 		{
 			name: "var Apple profit",
 			db:   db,
@@ -5898,22 +6250,6 @@ func TestDVAR(t *testing.T) {
 			wantNum:  900, // sample var: (30^2+0+30^2)/2 = 900
 		},
 		{
-			name:     "var single value returns DIV/0",
-			db:       db,
-			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
-			field:    `"Profit"`,
-			wantType: ValueError,
-			wantErr:  ErrValDIV0,
-		},
-		{
-			name:     "var no matches returns DIV/0",
-			db:       db,
-			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
-			field:    `"Profit"`,
-			wantType: ValueError,
-			wantErr:  ErrValDIV0,
-		},
-		{
 			name: "var Pear profit",
 			db:   db,
 			crit: [][]Value{
@@ -5924,6 +6260,25 @@ func TestDVAR(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  184.32, // (9.6^2+9.6^2)/1
 		},
+		// --- Single value returns DIV/0 (sample needs n>=2) ---
+		{
+			name:     "var single value returns DIV/0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- No matching records ---
+		{
+			name:     "var no matches returns DIV/0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Equal values ---
 		{
 			name: "var equal values returns 0",
 			db: [][]Value{
@@ -5936,6 +6291,394 @@ func TestDVAR(t *testing.T) {
 			field:    `"Value"`,
 			wantType: ValueNumber,
 			wantNum:  0,
+		},
+		// --- Field by column number ---
+		{
+			name: "var field by column number",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "5", // Profit
+			wantType: ValueNumber,
+			wantNum:  900,
+		},
+		{
+			name: "var field by column number 4 yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "4", // Yield
+			wantType: ValueNumber,
+			// Apple yields: 14, 10, 6. mean=10, ss=32, var=32/2=16
+			wantNum: 16,
+		},
+		// --- All records match (blank criteria) ---
+		{
+			name: "var blank criteria matches all records",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// All profits: 105, 96, 105, 75, 76.8, 45. mean=83.8
+			// ss=2679.6, var=2679.6/5=535.92
+			wantNum: 2679.6 / 5,
+		},
+		{
+			name: "var no criteria rows matches all",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  2679.6 / 5,
+		},
+		// --- Multiple criteria rows (OR logic) ---
+		{
+			name: "var OR criteria Apple or Pear yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Pear")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			// Apple+Pear yields: 14, 10, 6, 10, 8. mean=9.6
+			// ss=35.2, var=35.2/4=8.8
+			wantNum: 8.8,
+		},
+		{
+			name: "var OR criteria Apple or Cherry profit",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// 105, 105, 75, 45. mean=82.5, ss=2475, var=2475/3=825
+			wantNum: 825,
+		},
+		// --- Multiple criteria columns (AND logic) ---
+		{
+			name: "var AND criteria Apple with Height>10",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105, 75. mean=90, ss=450, var=450/1=450
+			wantNum: 450,
+		},
+		{
+			name: "var AND criteria Apple with Age>10",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Age")},
+				{StringVal("Apple"), StringVal(">10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple age>10: 105 (age=20), 75 (age=15). var=450
+			wantNum: 450,
+		},
+		// --- Numeric criteria operators ---
+		{
+			name: "var numeric criteria greater than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>12: 105, 105, 75. mean=95, ss=600, var=300
+			wantNum: 300,
+		},
+		{
+			name: "var numeric criteria less than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<12: 76.8, 45. mean=60.9, ss=505.62, var=505.62
+			wantNum: 505.62,
+		},
+		{
+			name: "var numeric criteria >=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>=13: 105, 105, 75. mean=95, ss=600, var=300
+			wantNum: 300,
+		},
+		{
+			name: "var numeric criteria <=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<=12: 96, 76.8, 45. mean=72.6, ss=1326.96, var=663.48
+			wantNum: 1326.96 / 2,
+		},
+		{
+			name: "var numeric criteria <>",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<>13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<>13: 105, 96, 75, 76.8, 45. mean=79.56, ss=2140.272, var=535.068
+			wantNum: 2140.272 / 4,
+		},
+		// --- Wildcard criteria ---
+		{
+			name: "var wildcard star criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("A*")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  900, // same as Apple
+		},
+		{
+			name: "var wildcard question mark criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  184.32,
+		},
+		// --- Case insensitive matching ---
+		{
+			name: "var case insensitive criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  900,
+		},
+		{
+			name: "var case insensitive field name",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    `"profit"`,
+			wantType: ValueNumber,
+			wantNum:  900,
+		},
+		// --- Error propagation ---
+		{
+			name: "var error in field column propagates",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), ErrorVal(ErrValNUM)},
+				{StringVal("C"), NumberVal(20)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValNUM,
+		},
+		// --- Mixed types: only numbers used ---
+		{
+			name: "var mixed types only uses numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), StringVal("text")},
+				{StringVal("C"), NumberVal(20)},
+				{StringVal("D"), BoolVal(true)},
+				{StringVal("E"), NumberVal(30)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// 10, 20, 30. mean=20, ss=200, var=100
+			wantNum: 100,
+		},
+		// --- Text column returns DIV/0 ---
+		{
+			name: "var text column returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Label")},
+				{StringVal("A"), StringVal("foo")},
+				{StringVal("B"), StringVal("bar")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Label"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Negative numbers ---
+		{
+			name: "var negative numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(-10)},
+				{StringVal("B"), NumberVal(-20)},
+				{StringVal("C"), NumberVal(-5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=-35/3, ss=350/3, var=350/6
+			wantNum: 350.0 / 6.0,
+		},
+		// --- Decimal values ---
+		{
+			name: "var decimal values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.5)},
+				{StringVal("C"), NumberVal(3.5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=2.5, ss=2, var=1
+			wantNum: 1,
+		},
+		// --- Empty database ---
+		{
+			name: "var empty database returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Large spread ---
+		{
+			name: "var large spread values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1)},
+				{StringVal("B"), NumberVal(1000)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=500.5, ss=499000.5, var=499000.5
+			wantNum: 499000.5,
+		},
+		// --- Cross-column OR with AND ---
+		{
+			name: "var cross-column OR with AND",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Pear"), StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105, 75. Pear h<10: 76.8. values: 105, 75, 76.8
+			// mean=85.6, ss=566.16, var=566.16/2=283.08
+			wantNum: 283.08,
+		},
+		// --- Field errors ---
+		{
+			name:     "var field name not found",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    `"NonExistent"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "var field index out of range",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "99",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "var field index 0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "0",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		// --- Two equal values ---
+		{
+			name: "var two equal values returns 0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(42)},
+				{StringVal("B"), NumberVal(42)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- Known cross-check with Excel ---
+		{
+			name: "var all profits sample variance",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			// Heights: 18, 12, 13, 14, 9, 8. mean=74/6=12.333...
+			// ss = 32.111+0.111+0.444+2.778+11.111+18.778 = 65.333
+			// var = 65.333/5 = 13.0667
+			wantNum: func() float64 {
+				vals := []float64{18, 12, 13, 14, 9, 8}
+				mean := 0.0
+				for _, v := range vals {
+					mean += v
+				}
+				mean /= float64(len(vals))
+				ss := 0.0
+				for _, v := range vals {
+					d := v - mean
+					ss += d * d
+				}
+				return ss / float64(len(vals)-1)
+			}(),
 		},
 	}
 
@@ -5960,6 +6703,7 @@ func TestDVARP(t *testing.T) {
 	db := standardDB()
 
 	tests := []dbTestCase{
+		// --- Basic tests ---
 		{
 			name: "varp Apple profit",
 			db:   db,
@@ -5972,25 +6716,6 @@ func TestDVARP(t *testing.T) {
 			wantNum:  600, // population var: (30^2+0+30^2)/3 = 600
 		},
 		{
-			name: "varp single value returns 0",
-			db:   db,
-			crit: [][]Value{
-				{StringVal("Tree")},
-				{StringVal("Cherry")},
-			},
-			field:    `"Profit"`,
-			wantType: ValueNumber,
-			wantNum:  0,
-		},
-		{
-			name:     "varp no matches returns DIV/0",
-			db:       db,
-			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
-			field:    `"Profit"`,
-			wantType: ValueError,
-			wantErr:  ErrValDIV0,
-		},
-		{
 			name: "varp Pear profit",
 			db:   db,
 			crit: [][]Value{
@@ -6001,6 +6726,28 @@ func TestDVARP(t *testing.T) {
 			wantType: ValueNumber,
 			wantNum:  92.16, // (9.6^2+9.6^2)/2
 		},
+		// --- Single value returns 0 (population with n=1 is 0) ---
+		{
+			name: "varp single value returns 0",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- No matching records ---
+		{
+			name:     "varp no matches returns DIV/0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Orange")}},
+			field:    `"Profit"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Equal values ---
 		{
 			name: "varp equal values returns 0",
 			db: [][]Value{
@@ -6012,6 +6759,378 @@ func TestDVARP(t *testing.T) {
 			field:    `"Value"`,
 			wantType: ValueNumber,
 			wantNum:  0,
+		},
+		// --- Field by column number ---
+		{
+			name: "varp field by column number",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "5", // Profit
+			wantType: ValueNumber,
+			wantNum:  600,
+		},
+		{
+			name: "varp field by column number 4 yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    "4", // Yield
+			wantType: ValueNumber,
+			// Apple yields: 14, 10, 6. mean=10, ss=32, var=32/3
+			wantNum: 32.0 / 3.0,
+		},
+		// --- All records match (blank criteria) ---
+		{
+			name: "varp blank criteria matches all records",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// All profits: 105, 96, 105, 75, 76.8, 45. ss=2679.6, var=2679.6/6=446.6
+			wantNum: 2679.6 / 6,
+		},
+		{
+			name: "varp no criteria rows matches all",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  2679.6 / 6,
+		},
+		// --- Multiple criteria rows (OR logic) ---
+		{
+			name: "varp OR criteria Apple or Pear yield",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Pear")},
+			},
+			field:    `"Yield"`,
+			wantType: ValueNumber,
+			// Apple+Pear yields: 14, 10, 6, 10, 8. mean=9.6
+			// ss=35.2, var=35.2/5=7.04
+			wantNum: 7.04,
+		},
+		{
+			name: "varp OR criteria Apple or Cherry profit",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+				{StringVal("Cherry")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// 105, 105, 75, 45. mean=82.5, ss=2475, var=2475/4=618.75
+			wantNum: 618.75,
+		},
+		// --- Multiple criteria columns (AND logic) ---
+		{
+			name: "varp AND criteria Apple with Height>10",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105, 75. mean=90, ss=450, var=450/2=225
+			wantNum: 225,
+		},
+		// --- Numeric criteria operators ---
+		{
+			name: "varp numeric criteria greater than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>12: 105, 105, 75. mean=95, ss=600, var=200
+			wantNum: 200,
+		},
+		{
+			name: "varp numeric criteria less than",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<12: 76.8, 45. mean=60.9, ss=505.62, var=252.81
+			wantNum: 252.81,
+		},
+		{
+			name: "varp numeric criteria >=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal(">=13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h>=13: 105, 105, 75. mean=95, ss=600, var=200
+			wantNum: 200,
+		},
+		{
+			name: "varp numeric criteria <=",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<=12")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<=12: 96, 76.8, 45. mean=72.6, ss=1326.96, var=442.32
+			wantNum: 1326.96 / 3,
+		},
+		{
+			name: "varp numeric criteria <>",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Height")},
+				{StringVal("<>13")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// h<>13: 105, 96, 75, 76.8, 45. mean=79.56, ss=2140.272, var=428.0544
+			wantNum: 2140.272 / 5,
+		},
+		// --- Wildcard criteria ---
+		{
+			name: "varp wildcard star criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("A*")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  600, // same as Apple
+		},
+		{
+			name: "varp wildcard question mark criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Pea?")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  92.16,
+		},
+		// --- Case insensitive matching ---
+		{
+			name: "varp case insensitive criteria",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("apple")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			wantNum:  600,
+		},
+		{
+			name: "varp case insensitive field name",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("Apple")},
+			},
+			field:    `"profit"`,
+			wantType: ValueNumber,
+			wantNum:  600,
+		},
+		// --- Error propagation ---
+		{
+			name: "varp error in field column propagates",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), ErrorVal(ErrValNAME)},
+				{StringVal("C"), NumberVal(20)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValNAME,
+		},
+		// --- Mixed types: only numbers used ---
+		{
+			name: "varp mixed types only uses numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(10)},
+				{StringVal("B"), StringVal("text")},
+				{StringVal("C"), NumberVal(20)},
+				{StringVal("D"), BoolVal(true)},
+				{StringVal("E"), NumberVal(30)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// 10, 20, 30. mean=20, ss=200, var=200/3
+			wantNum: 200.0 / 3.0,
+		},
+		// --- Text column returns DIV/0 ---
+		{
+			name: "varp text column returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Label")},
+				{StringVal("A"), StringVal("foo")},
+				{StringVal("B"), StringVal("bar")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Label"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Negative numbers ---
+		{
+			name: "varp negative numbers",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(-10)},
+				{StringVal("B"), NumberVal(-20)},
+				{StringVal("C"), NumberVal(-5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=-35/3, ss=350/3, var=350/9
+			wantNum: 350.0 / 9.0,
+		},
+		// --- Decimal values ---
+		{
+			name: "varp decimal values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1.5)},
+				{StringVal("B"), NumberVal(2.5)},
+				{StringVal("C"), NumberVal(3.5)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=2.5, ss=2, var=2/3
+			wantNum: 2.0 / 3.0,
+		},
+		// --- Empty database ---
+		{
+			name: "varp empty database returns DIV/0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueError,
+			wantErr:  ErrValDIV0,
+		},
+		// --- Large spread ---
+		{
+			name: "varp large spread values",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(1)},
+				{StringVal("B"), NumberVal(1000)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			// mean=500.5, ss=499000.5, var=249500.25
+			wantNum: 249500.25,
+		},
+		// --- Cross-column OR with AND ---
+		{
+			name: "varp cross-column OR with AND",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree"), StringVal("Height")},
+				{StringVal("Apple"), StringVal(">10")},
+				{StringVal("Pear"), StringVal("<10")},
+			},
+			field:    `"Profit"`,
+			wantType: ValueNumber,
+			// Apple h>10: 105, 75. Pear h<10: 76.8. mean=85.6, ss=566.16, var=188.72
+			wantNum: 566.16 / 3,
+		},
+		// --- Field errors ---
+		{
+			name:     "varp field name not found",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    `"NonExistent"`,
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "varp field index out of range",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "99",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		{
+			name:     "varp field index 0",
+			db:       db,
+			crit:     [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+			field:    "0",
+			wantType: ValueError,
+			wantErr:  ErrValVALUE,
+		},
+		// --- Three equal values ---
+		{
+			name: "varp three equal values returns 0",
+			db: [][]Value{
+				{StringVal("Name"), StringVal("Value")},
+				{StringVal("A"), NumberVal(42)},
+				{StringVal("B"), NumberVal(42)},
+				{StringVal("C"), NumberVal(42)},
+			},
+			crit:     [][]Value{{StringVal("Name")}, {StringVal("")}},
+			field:    `"Value"`,
+			wantType: ValueNumber,
+			wantNum:  0,
+		},
+		// --- Known cross-check: all heights ---
+		{
+			name: "varp all heights population variance",
+			db:   db,
+			crit: [][]Value{
+				{StringVal("Tree")},
+				{StringVal("")},
+			},
+			field:    `"Height"`,
+			wantType: ValueNumber,
+			wantNum: func() float64 {
+				vals := []float64{18, 12, 13, 14, 9, 8}
+				mean := 0.0
+				for _, v := range vals {
+					mean += v
+				}
+				mean /= float64(len(vals))
+				ss := 0.0
+				for _, v := range vals {
+					d := v - mean
+					ss += d * d
+				}
+				return ss / float64(len(vals))
+			}(),
 		},
 	}
 
@@ -6025,6 +7144,457 @@ func TestDVARP_WrongArgCount(t *testing.T) {
 	}
 	if result.Type != ValueError || result.Err != ErrValVALUE {
 		t.Errorf("fnDVarP(nil) = %+v, want #VALUE!", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Cross-verification tests: relationships between DVAR/DVARP/DSTDEV/DSTDEVP
+// ---------------------------------------------------------------------------
+
+// TestDVAR_Equals_DSTDEV_Squared verifies that DVAR = DSTDEV^2 for the same data.
+func TestDVAR_Equals_DSTDEV_Squared(t *testing.T) {
+	scenarios := []struct {
+		name string
+		crit [][]Value
+	}{
+		{
+			name: "Apple profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+		},
+		{
+			name: "Pear profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Pear")}},
+		},
+		{
+			name: "all records",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("")}},
+		},
+		{
+			name: "Height > 10",
+			crit: [][]Value{{StringVal("Height")}, {StringVal(">10")}},
+		},
+		{
+			name: "Apple or Cherry",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Apple")}, {StringVal("Cherry")}},
+		},
+	}
+
+	db := standardDB()
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			resolver := makeDBResolver(db, 1, 1, sc.crit, 7, 1)
+			critRange := dbRange(7, 1, len(sc.crit[0]), len(sc.crit))
+
+			varFormula := `DVAR(A1:E7,"Profit",` + critRange + `)`
+			stdevFormula := `DSTDEV(A1:E7,"Profit",` + critRange + `)`
+
+			cfV := evalCompile(t, varFormula)
+			gotV, err := Eval(cfV, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DVAR: %v", err)
+			}
+
+			cfS := evalCompile(t, stdevFormula)
+			gotS, err := Eval(cfS, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DSTDEV: %v", err)
+			}
+
+			if gotV.Type != ValueNumber || gotS.Type != ValueNumber {
+				// Both might be errors (e.g., single value). Skip.
+				return
+			}
+
+			stdevSquared := gotS.Num * gotS.Num
+			diff := gotV.Num - stdevSquared
+			if diff > 1e-6 || diff < -1e-6 {
+				t.Errorf("DVAR (%g) != DSTDEV^2 (%g), diff=%g", gotV.Num, stdevSquared, diff)
+			}
+		})
+	}
+}
+
+// TestDVARP_Equals_DSTDEVP_Squared verifies that DVARP = DSTDEVP^2 for the same data.
+func TestDVARP_Equals_DSTDEVP_Squared(t *testing.T) {
+	scenarios := []struct {
+		name string
+		crit [][]Value
+	}{
+		{
+			name: "Apple profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+		},
+		{
+			name: "Pear profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Pear")}},
+		},
+		{
+			name: "all records",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("")}},
+		},
+		{
+			name: "Cherry single",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Cherry")}},
+		},
+		{
+			name: "Height <= 12",
+			crit: [][]Value{{StringVal("Height")}, {StringVal("<=12")}},
+		},
+	}
+
+	db := standardDB()
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			resolver := makeDBResolver(db, 1, 1, sc.crit, 7, 1)
+			critRange := dbRange(7, 1, len(sc.crit[0]), len(sc.crit))
+
+			varpFormula := `DVARP(A1:E7,"Profit",` + critRange + `)`
+			stdevpFormula := `DSTDEVP(A1:E7,"Profit",` + critRange + `)`
+
+			cfV := evalCompile(t, varpFormula)
+			gotV, err := Eval(cfV, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DVARP: %v", err)
+			}
+
+			cfP := evalCompile(t, stdevpFormula)
+			gotP, err := Eval(cfP, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DSTDEVP: %v", err)
+			}
+
+			if gotV.Type != ValueNumber || gotP.Type != ValueNumber {
+				return
+			}
+
+			stdevpSquared := gotP.Num * gotP.Num
+			diff := gotV.Num - stdevpSquared
+			if diff > 1e-6 || diff < -1e-6 {
+				t.Errorf("DVARP (%g) != DSTDEVP^2 (%g), diff=%g", gotV.Num, stdevpSquared, diff)
+			}
+		})
+	}
+}
+
+// TestDSTDEVP_LessOrEqual_DSTDEV verifies that DSTDEVP <= DSTDEV for the same data.
+// Population stdev (n denominator) is always <= sample stdev (n-1 denominator).
+func TestDSTDEVP_LessOrEqual_DSTDEV(t *testing.T) {
+	scenarios := []struct {
+		name string
+		crit [][]Value
+	}{
+		{
+			name: "Apple profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+		},
+		{
+			name: "Pear profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Pear")}},
+		},
+		{
+			name: "all records profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("")}},
+		},
+		{
+			name: "Height > 10",
+			crit: [][]Value{{StringVal("Height")}, {StringVal(">10")}},
+		},
+	}
+
+	db := standardDB()
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			resolver := makeDBResolver(db, 1, 1, sc.crit, 7, 1)
+			critRange := dbRange(7, 1, len(sc.crit[0]), len(sc.crit))
+
+			stdevFormula := `DSTDEV(A1:E7,"Profit",` + critRange + `)`
+			stdevpFormula := `DSTDEVP(A1:E7,"Profit",` + critRange + `)`
+
+			cfS := evalCompile(t, stdevFormula)
+			gotS, err := Eval(cfS, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DSTDEV: %v", err)
+			}
+
+			cfP := evalCompile(t, stdevpFormula)
+			gotP, err := Eval(cfP, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DSTDEVP: %v", err)
+			}
+
+			if gotS.Type != ValueNumber || gotP.Type != ValueNumber {
+				return
+			}
+
+			if gotP.Num > gotS.Num+1e-9 {
+				t.Errorf("DSTDEVP (%g) > DSTDEV (%g), expected DSTDEVP <= DSTDEV", gotP.Num, gotS.Num)
+			}
+		})
+	}
+}
+
+// TestDVARP_LessOrEqual_DVAR verifies that DVARP <= DVAR for the same data.
+func TestDVARP_LessOrEqual_DVAR(t *testing.T) {
+	scenarios := []struct {
+		name string
+		crit [][]Value
+	}{
+		{
+			name: "Apple profit",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("Apple")}},
+		},
+		{
+			name: "all records",
+			crit: [][]Value{{StringVal("Tree")}, {StringVal("")}},
+		},
+		{
+			name: "Height < 15",
+			crit: [][]Value{{StringVal("Height")}, {StringVal("<15")}},
+		},
+	}
+
+	db := standardDB()
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			resolver := makeDBResolver(db, 1, 1, sc.crit, 7, 1)
+			critRange := dbRange(7, 1, len(sc.crit[0]), len(sc.crit))
+
+			varFormula := `DVAR(A1:E7,"Profit",` + critRange + `)`
+			varpFormula := `DVARP(A1:E7,"Profit",` + critRange + `)`
+
+			cfV := evalCompile(t, varFormula)
+			gotV, err := Eval(cfV, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DVAR: %v", err)
+			}
+
+			cfP := evalCompile(t, varpFormula)
+			gotP, err := Eval(cfP, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval DVARP: %v", err)
+			}
+
+			if gotV.Type != ValueNumber || gotP.Type != ValueNumber {
+				return
+			}
+
+			if gotP.Num > gotV.Num+1e-9 {
+				t.Errorf("DVARP (%g) > DVAR (%g), expected DVARP <= DVAR", gotP.Num, gotV.Num)
+			}
+		})
+	}
+}
+
+// TestDAVERAGE_DVAR_Consistency verifies that for data with known mean and variance,
+// the DAVERAGE and DVAR results are consistent.
+func TestDAVERAGE_DVAR_Consistency(t *testing.T) {
+	// Database: values 2, 4, 4, 4, 5, 5, 7, 9
+	// Known: mean=5, population variance=4, sample variance=4.571...
+	db := [][]Value{
+		{StringVal("Name"), StringVal("Value")},
+		{StringVal("A"), NumberVal(2)},
+		{StringVal("B"), NumberVal(4)},
+		{StringVal("C"), NumberVal(4)},
+		{StringVal("D"), NumberVal(4)},
+		{StringVal("E"), NumberVal(5)},
+		{StringVal("F"), NumberVal(5)},
+		{StringVal("G"), NumberVal(7)},
+		{StringVal("H"), NumberVal(9)},
+	}
+	crit := [][]Value{
+		{StringVal("Name")},
+		{StringVal("")},
+	}
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+
+	// Check DAVERAGE = 5
+	avgFormula := `DAVERAGE(A1:B9,"Value",G1:G2)`
+	cfA := evalCompile(t, avgFormula)
+	gotA, err := Eval(cfA, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DAVERAGE: %v", err)
+	}
+	if gotA.Type != ValueNumber {
+		t.Fatalf("DAVERAGE type = %v, want number", gotA.Type)
+	}
+	if diff := gotA.Num - 5.0; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("DAVERAGE = %g, want 5", gotA.Num)
+	}
+
+	// Check DVARP = 4
+	varpFormula := `DVARP(A1:B9,"Value",G1:G2)`
+	cfVP := evalCompile(t, varpFormula)
+	gotVP, err := Eval(cfVP, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DVARP: %v", err)
+	}
+	if gotVP.Type != ValueNumber {
+		t.Fatalf("DVARP type = %v, want number", gotVP.Type)
+	}
+	if diff := gotVP.Num - 4.0; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("DVARP = %g, want 4", gotVP.Num)
+	}
+
+	// Check DVAR = 32/7 = 4.571428...
+	varFormula := `DVAR(A1:B9,"Value",G1:G2)`
+	cfV := evalCompile(t, varFormula)
+	gotV, err := Eval(cfV, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DVAR: %v", err)
+	}
+	if gotV.Type != ValueNumber {
+		t.Fatalf("DVAR type = %v, want number", gotV.Type)
+	}
+	expected := 32.0 / 7.0
+	if diff := gotV.Num - expected; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("DVAR = %g, want %g", gotV.Num, expected)
+	}
+
+	// Check DSTDEVP = 2
+	stdevpFormula := `DSTDEVP(A1:B9,"Value",G1:G2)`
+	cfSP := evalCompile(t, stdevpFormula)
+	gotSP, err := Eval(cfSP, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DSTDEVP: %v", err)
+	}
+	if gotSP.Type != ValueNumber {
+		t.Fatalf("DSTDEVP type = %v, want number", gotSP.Type)
+	}
+	if diff := gotSP.Num - 2.0; diff > 1e-9 || diff < -1e-9 {
+		t.Errorf("DSTDEVP = %g, want 2", gotSP.Num)
+	}
+}
+
+// TestDSTDEV_DSTDEVP_SingleMatch_Diverge tests that DSTDEV returns #DIV/0!
+// for a single match while DSTDEVP returns 0.
+func TestDSTDEV_DSTDEVP_SingleMatch_Diverge(t *testing.T) {
+	db := standardDB()
+	crit := [][]Value{
+		{StringVal("Tree")},
+		{StringVal("Cherry")},
+	}
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+
+	// DSTDEV should return #DIV/0! (sample needs n>=2)
+	stdevFormula := `DSTDEV(A1:E7,"Profit",G1:G2)`
+	cfS := evalCompile(t, stdevFormula)
+	gotS, err := Eval(cfS, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DSTDEV: %v", err)
+	}
+	if gotS.Type != ValueError || gotS.Err != ErrValDIV0 {
+		t.Errorf("DSTDEV single match = %+v, want #DIV/0!", gotS)
+	}
+
+	// DSTDEVP should return 0
+	stdevpFormula := `DSTDEVP(A1:E7,"Profit",G1:G2)`
+	cfP := evalCompile(t, stdevpFormula)
+	gotP, err := Eval(cfP, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DSTDEVP: %v", err)
+	}
+	if gotP.Type != ValueNumber || gotP.Num != 0 {
+		t.Errorf("DSTDEVP single match = %+v, want 0", gotP)
+	}
+}
+
+// TestDVAR_DVARP_SingleMatch_Diverge tests that DVAR returns #DIV/0!
+// for a single match while DVARP returns 0.
+func TestDVAR_DVARP_SingleMatch_Diverge(t *testing.T) {
+	db := standardDB()
+	crit := [][]Value{
+		{StringVal("Tree")},
+		{StringVal("Cherry")},
+	}
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+
+	// DVAR should return #DIV/0!
+	varFormula := `DVAR(A1:E7,"Profit",G1:G2)`
+	cfV := evalCompile(t, varFormula)
+	gotV, err := Eval(cfV, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DVAR: %v", err)
+	}
+	if gotV.Type != ValueError || gotV.Err != ErrValDIV0 {
+		t.Errorf("DVAR single match = %+v, want #DIV/0!", gotV)
+	}
+
+	// DVARP should return 0
+	varpFormula := `DVARP(A1:E7,"Profit",G1:G2)`
+	cfP := evalCompile(t, varpFormula)
+	gotP, err := Eval(cfP, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval DVARP: %v", err)
+	}
+	if gotP.Type != ValueNumber || gotP.Num != 0 {
+		t.Errorf("DVARP single match = %+v, want 0", gotP)
+	}
+}
+
+// TestDAVERAGE_ZeroDivide_Vs_DSTDEV tests that both functions return #DIV/0!
+// when there are no numeric matching values.
+func TestDAVERAGE_ZeroDivide_Vs_DSTDEV(t *testing.T) {
+	db := [][]Value{
+		{StringVal("Name"), StringVal("Value")},
+		{StringVal("A"), StringVal("text")},
+		{StringVal("B"), StringVal("text2")},
+	}
+	crit := [][]Value{
+		{StringVal("Name")},
+		{StringVal("")},
+	}
+	resolver := makeDBResolver(db, 1, 1, crit, 7, 1)
+
+	for _, fn := range []string{"DAVERAGE", "DSTDEV", "DSTDEVP", "DVAR", "DVARP"} {
+		t.Run(fn, func(t *testing.T) {
+			formula := fn + `(A1:B3,"Value",G1:G2)`
+			cf := evalCompile(t, formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", formula, err)
+			}
+			if got.Type != ValueError || got.Err != ErrValDIV0 {
+				t.Errorf("%s with all text = %+v, want #DIV/0!", fn, got)
+			}
+		})
+	}
+}
+
+// TestDStatFunctions_WrongArgCount_All tests wrong arg count for all five stat functions.
+func TestDStatFunctions_WrongArgCount_All(t *testing.T) {
+	type fnType func([]Value) (Value, error)
+	funcs := []struct {
+		name string
+		fn   fnType
+	}{
+		{"DAVERAGE", fnDAverage},
+		{"DSTDEV", fnDStdev},
+		{"DSTDEVP", fnDStdevP},
+		{"DVAR", fnDVar},
+		{"DVARP", fnDVarP},
+	}
+	argSets := []struct {
+		label string
+		args  []Value
+	}{
+		{"zero args", nil},
+		{"one arg", []Value{NumberVal(1)}},
+		{"two args", []Value{NumberVal(1), NumberVal(2)}},
+		{"four args", []Value{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(4)}},
+	}
+
+	for _, fn := range funcs {
+		for _, as := range argSets {
+			t.Run(fn.name+"/"+as.label, func(t *testing.T) {
+				result, err := fn.fn(as.args)
+				if err != nil {
+					t.Fatalf("%s error: %v", fn.name, err)
+				}
+				if result.Type != ValueError || result.Err != ErrValVALUE {
+					t.Errorf("%s(%s) = %+v, want #VALUE!", fn.name, as.label, result)
+				}
+			})
+		}
 	}
 }
 
