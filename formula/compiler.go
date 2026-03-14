@@ -371,6 +371,38 @@ func (c *compiler) compileNode(node Node) error {
 		// OpMap: subFormulaIdx << 8 | numArrays
 		c.emit(OpMap, uint32(subIdx)<<8|uint32(len(n.Arrays)))
 
+	case *ReduceExpr:
+		// Push initial value
+		if err := c.compileNode(n.InitialValue); err != nil {
+			return err
+		}
+		// Push array in array context
+		c.emit(OpEnterArrayCtx, 0)
+		if err := c.compileNode(n.Array); err != nil {
+			return err
+		}
+		c.emit(OpLeaveArrayCtx, 0)
+		// Compile the lambda body as a sub-formula
+		subCompiler := &compiler{
+			numIdx: make(map[float64]uint32),
+			strIdx: make(map[string]uint32),
+			refIdx: make(map[CellAddr]uint32),
+			rngIdx: make(map[RangeAddr]uint32),
+		}
+		if err := subCompiler.compileNode(n.Body); err != nil {
+			return err
+		}
+		subFormula := &CompiledFormula{
+			Code:        subCompiler.code,
+			Consts:      subCompiler.consts,
+			Refs:        subCompiler.refs,
+			Ranges:      subCompiler.ranges,
+			SubFormulas: subCompiler.subFormulas,
+		}
+		subIdx := len(c.subFormulas)
+		c.subFormulas = append(c.subFormulas, subFormula)
+		c.emit(OpReduce, uint32(subIdx))
+
 	case *ParamRef:
 		c.emit(OpLoadParam, uint32(n.Slot))
 

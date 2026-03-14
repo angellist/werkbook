@@ -427,6 +427,69 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			}
 			push(params[inst.Operand])
 
+		case OpReduce:
+			subIdx := int(inst.Operand)
+			if subIdx >= len(cf.SubFormulas) {
+				return Value{}, fmt.Errorf("sub-formula index %d out of range", subIdx)
+			}
+			subFormula := cf.SubFormulas[subIdx]
+
+			// Pop array, then initial value
+			arr, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			initialVal, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+
+			// Flatten array to a 1D list (row by row, left to right)
+			var elements []Value
+			if arr.Type == ValueArray {
+				for _, row := range arr.Array {
+					elements = append(elements, row...)
+				}
+			} else {
+				elements = []Value{arr}
+			}
+
+			// Determine starting accumulator
+			acc := initialVal
+			startIdx := 0
+			if acc.Type == ValueEmpty {
+				if len(elements) == 0 {
+					push(ErrorVal(ErrValCALC))
+					continue
+				}
+				acc = elements[0]
+				startIdx = 1
+			}
+
+			// If array is empty and we have initial value, return it
+			if len(elements) == 0 {
+				push(acc)
+				continue
+			}
+
+			// Fold: for each element, call lambda(accumulator, element)
+			paramVals := make([]Value, 2)
+			for i := startIdx; i < len(elements); i++ {
+				paramVals[0] = acc
+				paramVals[1] = elements[i]
+				result, err := evalWithParams(subFormula, resolver, ctx, paramVals)
+				if err != nil {
+					return Value{}, err
+				}
+				// If lambda returns an error, propagate immediately
+				if result.Type == ValueError {
+					acc = result
+					break
+				}
+				acc = result
+			}
+			push(acc)
+
 		case OpMap:
 			subIdx := int(inst.Operand >> 8)
 			numArrays := int(inst.Operand & 0xFF)

@@ -243,6 +243,19 @@ func (n *MapExpr) String() string {
 	return fmt.Sprintf("(MAP arrays=%d params=%v)", len(n.Arrays), n.ParamNames)
 }
 
+// ReduceExpr represents a REDUCE(initial, array, LAMBDA(acc, val, body)) expression.
+type ReduceExpr struct {
+	InitialValue Node     // initial accumulator value (may be *EmptyArg if omitted)
+	Array        Node     // array expression
+	ParamNames   []string // [accumulator_name, value_name]
+	Body         Node     // lambda body with param refs replaced by ParamRef nodes
+}
+
+func (n *ReduceExpr) nodeMarker() {}
+func (n *ReduceExpr) String() string {
+	return fmt.Sprintf("(REDUCE params=%v)", n.ParamNames)
+}
+
 // needsQuoting returns true if a sheet name contains characters that require quoting.
 func needsQuoting(name string) bool {
 	for _, c := range name {

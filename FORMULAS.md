@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **438** spreadsheet formula functions.
+Werkbook supports **439** spreadsheet formula functions.
 
 | Function | Description | Category | Tests |
 |----------|-------------|----------|------:|
@@ -184,7 +184,7 @@ Werkbook supports **438** spreadsheet formula functions.
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 37 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 32 |
-| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 63 |
+| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 66 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
 | IMABS | Returns the absolute value of a complex number. | Engineering | 38 |
@@ -235,7 +235,7 @@ Werkbook supports **438** spreadsheet formula functions.
 | ISREF | Returns TRUE when a value is a reference. | Information | 24 |
 | ISTEXT | Returns TRUE when a value is text. | Information | 25 |
 | KURT | Returns the kurtosis of a data set. | Statistical | 22 |
-| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 7 |
+| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 8 |
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 30 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
@@ -331,6 +331,7 @@ Werkbook supports **438** spreadsheet formula functions.
 | RANK.EQ | Returns the rank of a number in a list with ties sharing the same rank. | Statistical | 46 |
 | RATE | Returns the interest rate per period for an annuity. | Financial | 6 |
 | RECEIVED | Returns the amount received at maturity for a fully invested security. | Financial | 3 |
+| REDUCE | Folds an array to a single result by repeatedly applying a lambda. | Logical | 25 |
 | REPLACE | Replaces characters within text at a given position. | Text | 38 |
 | REPT | Repeats text a specified number of times. | Text | 26 |
 | RIGHT | Returns characters from the right side of a text value. | Text | 41 |
@@ -469,7 +470,7 @@ effects, or require locale-specific behavior that cannot be reproduced in a serv
 
 # Not Yet Implemented
 
-The following **17** functions are not yet supported.
+The following **16** functions are not yet supported.
 
 | Function | Description | Category |
 |----------|-------------|----------|
@@ -485,7 +486,6 @@ The following **17** functions are not yet supported.
 | ODDFYIELD | Returns the yield of a security with an odd first period. | Financial |
 | ODDLPRICE | Returns the price of a security with an odd last period. | Financial |
 | ODDLYIELD | Returns the yield of a security with an odd last period. | Financial |
-| REDUCE | Folds an array to a single result by repeatedly applying a lambda. | Logical |
 | SCAN | Returns the running accumulation produced by a lambda over an array. | Logical |
 | SHEET | Returns the sheet index of a reference. | Information |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information |

@@ -36,6 +36,7 @@ const (
 	OpRefResultToBool               // operand: unused; pops value, pushes TRUE if non-error (for ISREF wrapping ref-returning funcs)
 	OpLoadParam                     // operand: param slot index; push the bound parameter value
 	OpMap                           // operand: subFormulaIdx<<8 | numArrays; execute lambda body per element
+	OpReduce                        // operand: subFormulaIdx; pop array and initial value, fold with lambda body
 )
 
 var opNames = [...]string{
@@ -69,6 +70,7 @@ var opNames = [...]string{
 	OpRefResultToBool: "RefResultToBool",
 	OpLoadParam:       "LoadParam",
 	OpMap:             "Map",
+	OpReduce:          "Reduce",
 }
 
 func (op OpCode) String() string {
