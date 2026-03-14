@@ -40,6 +40,7 @@ const (
 	OpScan                          // operand: subFormulaIdx; pop array and initial value, scan with lambda body returning array
 	OpByRow                         // operand: subFormulaIdx; pop array, apply lambda to each row, return column vector
 	OpByCol                         // operand: subFormulaIdx; pop array, apply lambda to each column, return row vector
+	OpMakeArrayLambda               // operand: subFormulaIdx; pop rows and cols, build array by calling lambda(row, col)
 )
 
 var opNames = [...]string{
@@ -77,6 +78,7 @@ var opNames = [...]string{
 	OpScan:            "Scan",
 	OpByRow:           "ByRow",
 	OpByCol:           "ByCol",
+	OpMakeArrayLambda: "MakeArrayLambda",
 }
 
 func (op OpCode) String() string {

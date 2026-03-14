@@ -362,6 +362,10 @@ func (p *Parser) parseFunc() (Node, error) {
 		return desugarBYCOL(args)
 	}
 
+	if isMakeArrayFuncName(name) {
+		return desugarMAKEARRAY(args)
+	}
+
 	return call, nil
 }
 
@@ -782,6 +786,58 @@ func desugarBYCOL(args []Node) (Node, error) {
 	}, nil
 }
 
+func isMakeArrayFuncName(name string) bool {
+	upper := strings.ToUpper(name)
+	return upper == "MAKEARRAY" || upper == "_XLFN.MAKEARRAY"
+}
+
+func desugarMAKEARRAY(args []Node) (Node, error) {
+	if len(args) != 3 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	rowsExpr := args[0]
+	colsExpr := args[1]
+
+	lambdaCall, ok := args[2].(*FuncCall)
+	if !ok || !isLambdaFuncName(lambdaCall.Name) {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	lambdaArgs := lambdaCall.Args
+	if len(lambdaArgs) < 1 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	body := lambdaArgs[len(lambdaArgs)-1]
+	params := lambdaArgs[:len(lambdaArgs)-1]
+
+	// Must have exactly 2 params
+	if len(params) != 2 {
+		return &ErrorLit{Code: ErrVALUE}, nil
+	}
+
+	paramNames := make([]string, 2)
+	subst := make(map[string]Node, 2)
+	for i, param := range params {
+		name, ok := lambdaParamName(param)
+		if !ok {
+			return &ErrorLit{Code: ErrVALUE}, nil
+		}
+		paramNames[i] = name
+		subst[name] = &ParamRef{Slot: i, Name: name}
+	}
+
+	transformedBody := substituteLambdaNames(body, subst)
+
+	return &MakeArrayExpr{
+		Rows:       rowsExpr,
+		Cols:       colsExpr,
+		ParamNames: paramNames,
+		Body:       transformedBody,
+	}, nil
+}
+
 func lambdaParamName(n Node) (string, bool) {
 	ref, ok := n.(*CellRef)
 	if !ok || ref.Row != 0 || ref.Sheet != "" || ref.SheetEnd != "" || ref.AbsCol || ref.AbsRow || ref.DotNotation {
@@ -874,6 +930,13 @@ func substituteLambdaNames(n Node, subst map[string]Node) Node {
 			ParamNames: append([]string(nil), v.ParamNames...),
 			Body:       substituteLambdaNames(v.Body, subst),
 		}
+	case *MakeArrayExpr:
+		return &MakeArrayExpr{
+			Rows:       substituteLambdaNames(v.Rows, subst),
+			Cols:       substituteLambdaNames(v.Cols, subst),
+			ParamNames: append([]string(nil), v.ParamNames...),
+			Body:       substituteLambdaNames(v.Body, subst),
+		}
 	default:
 		return cloneNode(v)
 	}
@@ -961,6 +1024,13 @@ func cloneNode(n Node) Node {
 	case *ByColExpr:
 		return &ByColExpr{
 			Array:      cloneNode(v.Array),
+			ParamNames: append([]string(nil), v.ParamNames...),
+			Body:       cloneNode(v.Body),
+		}
+	case *MakeArrayExpr:
+		return &MakeArrayExpr{
+			Rows:       cloneNode(v.Rows),
+			Cols:       cloneNode(v.Cols),
 			ParamNames: append([]string(nil), v.ParamNames...),
 			Body:       cloneNode(v.Body),
 		}

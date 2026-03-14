@@ -293,6 +293,19 @@ func (n *ByColExpr) String() string {
 	return fmt.Sprintf("(BYCOL params=%v)", n.ParamNames)
 }
 
+// MakeArrayExpr represents a MAKEARRAY(rows, cols, LAMBDA(r, c, body)) expression.
+type MakeArrayExpr struct {
+	Rows       Node     // rows expression
+	Cols       Node     // cols expression
+	ParamNames []string // [row_name, col_name]
+	Body       Node     // lambda body
+}
+
+func (n *MakeArrayExpr) nodeMarker() {}
+func (n *MakeArrayExpr) String() string {
+	return fmt.Sprintf("(MAKEARRAY params=%v)", n.ParamNames)
+}
+
 // needsQuoting returns true if a sheet name contains characters that require quoting.
 func needsQuoting(name string) bool {
 	for _, c := range name {

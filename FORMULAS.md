@@ -1,6 +1,6 @@
 # Supported Formulas
 
-Werkbook supports **442** spreadsheet formula functions.
+Werkbook supports **443** spreadsheet formula functions.
 
 | Function | Description | Category | Tests |
 |----------|-------------|----------|------:|
@@ -237,7 +237,7 @@ Werkbook supports **442** spreadsheet formula functions.
 | ISREF | Returns TRUE when a value is a reference. | Information | 24 |
 | ISTEXT | Returns TRUE when a value is text. | Information | 25 |
 | KURT | Returns the kurtosis of a data set. | Statistical | 22 |
-| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 11 |
+| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 12 |
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 30 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
@@ -252,6 +252,7 @@ Werkbook supports **442** spreadsheet formula functions.
 | LOGNORM.INV | Returns the inverse of the lognormal cumulative distribution. | Statistical | 31 |
 | LOOKUP | Looks up a value in a one-dimensional range and returns the matching result. | Lookup & Reference | 24 |
 | LOWER | Converts text to lowercase. | Text | 23 |
+| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 16 |
 | MAX | Returns the largest numeric value. | Statistical | 35 |
@@ -473,7 +474,7 @@ effects, or require locale-specific behavior that cannot be reproduced in a serv
 
 # Not Yet Implemented
 
-The following **13** functions are not yet supported.
+The following **12** functions are not yet supported.
 
 | Function | Description | Category |
 |----------|-------------|----------|
@@ -483,7 +484,6 @@ The following **13** functions are not yet supported.
 | FORECAST.ETS.SEASONALITY | Returns the detected seasonality length for exponential smoothing. | Statistical |
 | FORECAST.ETS.STAT | Returns forecast statistics from exponential smoothing. | Statistical |
 | GETPIVOTDATA | Returns a value from a pivot table by field and item labels. | Lookup & Reference |
-| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical |
 | ODDFPRICE | Returns the price of a security with an odd first period. | Financial |
 | ODDFYIELD | Returns the yield of a security with an odd first period. | Financial |
 | ODDLPRICE | Returns the price of a security with an odd last period. | Financial |

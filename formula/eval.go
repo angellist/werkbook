@@ -680,6 +680,60 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 
 			push(Value{Type: ValueArray, Array: byrowResult})
 
+		case OpMakeArrayLambda:
+			subIdx := int(inst.Operand)
+			if subIdx >= len(cf.SubFormulas) {
+				return Value{}, fmt.Errorf("sub-formula index %d out of range", subIdx)
+			}
+			subFormula := cf.SubFormulas[subIdx]
+
+			// Pop cols, then rows
+			colsVal, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			rowsVal, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+
+			// Coerce to numbers
+			rowsNum, re := CoerceNum(rowsVal)
+			if re != nil {
+				push(*re)
+				continue
+			}
+			colsNum, ce := CoerceNum(colsVal)
+			if ce != nil {
+				push(*ce)
+				continue
+			}
+
+			// Must be positive integers
+			maRows := int(rowsNum)
+			maCols := int(colsNum)
+			if maRows < 1 || maCols < 1 {
+				push(ErrorVal(ErrValVALUE))
+				continue
+			}
+
+			// Build array by calling lambda(row, col) with 1-based indices
+			maResult := newValueMatrix(maRows, maCols)
+			maParamVals := make([]Value, 2)
+			for i := 0; i < maRows; i++ {
+				for j := 0; j < maCols; j++ {
+					maParamVals[0] = NumberVal(float64(i + 1)) // 1-based row
+					maParamVals[1] = NumberVal(float64(j + 1)) // 1-based col
+					res, evalErr := evalWithParams(subFormula, resolver, ctx, maParamVals)
+					if evalErr != nil {
+						return Value{}, evalErr
+					}
+					maResult[i][j] = res
+				}
+			}
+
+			push(Value{Type: ValueArray, Array: maResult})
+
 		case OpByCol:
 			subIdx := int(inst.Operand)
 			if subIdx >= len(cf.SubFormulas) {

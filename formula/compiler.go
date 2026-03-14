@@ -491,6 +491,35 @@ func (c *compiler) compileNode(node Node) error {
 		c.subFormulas = append(c.subFormulas, subFormula)
 		c.emit(OpByCol, uint32(subIdx))
 
+	case *MakeArrayExpr:
+		// Compile rows and cols expressions
+		if err := c.compileNode(n.Rows); err != nil {
+			return err
+		}
+		if err := c.compileNode(n.Cols); err != nil {
+			return err
+		}
+		// Compile lambda body as sub-formula
+		subCompiler := &compiler{
+			numIdx: make(map[float64]uint32),
+			strIdx: make(map[string]uint32),
+			refIdx: make(map[CellAddr]uint32),
+			rngIdx: make(map[RangeAddr]uint32),
+		}
+		if err := subCompiler.compileNode(n.Body); err != nil {
+			return err
+		}
+		subFormula := &CompiledFormula{
+			Code:        subCompiler.code,
+			Consts:      subCompiler.consts,
+			Refs:        subCompiler.refs,
+			Ranges:      subCompiler.ranges,
+			SubFormulas: subCompiler.subFormulas,
+		}
+		subIdx := len(c.subFormulas)
+		c.subFormulas = append(c.subFormulas, subFormula)
+		c.emit(OpMakeArrayLambda, uint32(subIdx))
+
 	case *ParamRef:
 		c.emit(OpLoadParam, uint32(n.Slot))
 
