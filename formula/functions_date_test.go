@@ -1206,6 +1206,76 @@ func TestDAYS360(t *testing.T) {
 		{"error_prop_start", "DAYS360(1/0,1)", 0, true, ErrValDIV0},
 		{"error_prop_end", "DAYS360(1,1/0)", 0, true, ErrValDIV0},
 		{"error_prop_method", "DAYS360(1,2,1/0)", 0, true, ErrValDIV0},
+
+		// ── Additional comprehensive tests ───────────────────────────
+
+		// US: D2=31, D1<30 → D2 stays 31
+		// Jan 15 to May 31: (5-1)*30+(31-15) = 136
+		{"us_d2_31_d1_lt_30", "DAYS360(DATE(2025,1,15),DATE(2025,5,31),FALSE)", 136, false, 0},
+		// EU: Jan 15 to May 31: D2=31→30. (5-1)*30+(30-15) = 135
+		{"eu_d2_31_d1_lt_30", "DAYS360(DATE(2025,1,15),DATE(2025,5,31),TRUE)", 135, false, 0},
+
+		// US: D1=31, D2=non-31
+		// Mar 31 to Apr 15: D1=31→30. (4-3)*30+(15-30) = 15
+		{"us_d1_31_d2_mid", "DAYS360(DATE(2025,3,31),DATE(2025,4,15),FALSE)", 15, false, 0},
+		// EU: same. D1=31→30. (4-3)*30+(15-30) = 15
+		{"eu_d1_31_d2_mid", "DAYS360(DATE(2025,3,31),DATE(2025,4,15),TRUE)", 15, false, 0},
+
+		// Both Feb 28 in non-leap year (US: both last-of-Feb → D1=30,D2=30 → 0)
+		{"us_both_feb28_nonleap", "DAYS360(DATE(2025,2,28),DATE(2025,2,28),FALSE)", 0, false, 0},
+
+		// Feb 27 to Feb 28 non-leap year
+		// US: Feb 27 not last-of-Feb, Feb 28 is last-of-Feb (but only D2 adj applies if both are last-of-Feb)
+		// isLastDayOfFeb(2025,2,27)=false, so no US Feb rules. D1=27, D2=28. 28-27=1
+		{"us_feb27_to_feb28_nonleap", "DAYS360(DATE(2025,2,27),DATE(2025,2,28),FALSE)", 1, false, 0},
+		{"eu_feb27_to_feb28_nonleap", "DAYS360(DATE(2025,2,27),DATE(2025,2,28),TRUE)", 1, false, 0},
+
+		// Feb 28 non-leap to Mar 1
+		// US: Feb 28 is last-of-Feb → D1=30. Mar 1 → D2=1. (3-2)*30+(1-30)=1
+		{"us_feb28_to_mar1_nonleap", "DAYS360(DATE(2025,2,28),DATE(2025,3,1),FALSE)", 1, false, 0},
+		// EU: D1=28, D2=1. (3-2)*30+(1-28)=3
+		{"eu_feb28_to_mar1_nonleap", "DAYS360(DATE(2025,2,28),DATE(2025,3,1),TRUE)", 3, false, 0},
+
+		// Leap year: Feb 28 to Feb 29
+		// US: Feb 28 not last-of-Feb in leap year. D1=28, D2=29. 29-28=1
+		{"us_feb28_to_feb29_leap", "DAYS360(DATE(2024,2,28),DATE(2024,2,29),FALSE)", 1, false, 0},
+		{"eu_feb28_to_feb29_leap", "DAYS360(DATE(2024,2,28),DATE(2024,2,29),TRUE)", 1, false, 0},
+
+		// 30-day month vs 31-day month
+		// Apr 30 to May 31: US: D1=30, D2=31→30 (D1>=30). (5-4)*30+(30-30)=30
+		{"us_apr30_may31", "DAYS360(DATE(2025,4,30),DATE(2025,5,31),FALSE)", 30, false, 0},
+		// EU: D1=30, D2=31→30. Same = 30
+		{"eu_apr30_may31", "DAYS360(DATE(2025,4,30),DATE(2025,5,31),TRUE)", 30, false, 0},
+
+		// Negative span with 31-day adjustments
+		// US: Mar 31 to Jan 15 (reversed): D1=31→30, D2=15. (1-3)*30+(15-30)=-75
+		{"us_negative_31_adj", "DAYS360(DATE(2025,3,31),DATE(2025,1,15),FALSE)", -75, false, 0},
+
+		// Cross multiple years
+		// Jan 1, 2020 to Jan 1, 2030 = 10*360 = 3600
+		{"us_ten_years_jan_jan", "DAYS360(DATE(2020,1,1),DATE(2030,1,1),FALSE)", 3600, false, 0},
+		{"eu_ten_years_jan_jan", "DAYS360(DATE(2020,1,1),DATE(2030,1,1),TRUE)", 3600, false, 0},
+
+		// One day apart, mid-month
+		{"one_day_mid_month", "DAYS360(DATE(2025,6,14),DATE(2025,6,15))", 1, false, 0},
+
+		// US: end=31, start=29 (not 30 or 31) → D2 stays 31
+		// Jan 29 to Mar 31: (3-1)*30+(31-29) = 62
+		{"us_start_29_end_31", "DAYS360(DATE(2025,1,29),DATE(2025,3,31),FALSE)", 62, false, 0},
+		// EU: D2=31→30. (3-1)*30+(30-29) = 61
+		{"eu_start_29_end_31", "DAYS360(DATE(2025,1,29),DATE(2025,3,31),TRUE)", 61, false, 0},
+
+		// Full year from mid-month (Jun 15 to Jun 15)
+		{"us_full_year_mid", "DAYS360(DATE(2024,6,15),DATE(2025,6,15),FALSE)", 360, false, 0},
+		{"eu_full_year_mid", "DAYS360(DATE(2024,6,15),DATE(2025,6,15),TRUE)", 360, false, 0},
+
+		// Feb 29 leap to Feb 28 next year (non-leap)
+		// US: Feb 29 is last-of-Feb (D1=30), Feb 28 next year is last-of-Feb (D2=30).
+		// Both last-of-Feb rule: D2=30. Then D1 last-of-Feb: D1=30.
+		// (2025-2024)*360+(2-2)*30+(30-30)=360
+		{"us_feb29_to_feb28_next", "DAYS360(DATE(2024,2,29),DATE(2025,2,28),FALSE)", 360, false, 0},
+		// EU: D1=29, D2=28. (2025-2024)*360+(2-2)*30+(28-29)=359
+		{"eu_feb29_to_feb28_next", "DAYS360(DATE(2024,2,29),DATE(2025,2,28),TRUE)", 359, false, 0},
 	}
 
 	for _, tc := range tests {
@@ -2727,6 +2797,89 @@ func TestNETWORKDAYS(t *testing.T) {
 
 		// Too many args → error
 		{"too_many_args", "NETWORKDAYS(45663,45667,45665,1)", 0, true, ErrValVALUE},
+
+		// ── DATE()-based readability tests ────────────────────────────
+		// Mon 2024-01-01 to Fri 2024-01-05 = 5 working days
+		{"date_mon_to_fri", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5))", 5, false, 0},
+		// Fri 2024-01-05 to Mon 2024-01-08 = 2 (Fri + Mon, skip Sat/Sun)
+		{"date_fri_to_mon", "NETWORKDAYS(DATE(2024,1,5),DATE(2024,1,8))", 2, false, 0},
+		// Same day weekday (Mon)
+		{"date_same_day_weekday", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,1))", 1, false, 0},
+		// Same day weekend (Sat 2024-01-06)
+		{"date_same_day_saturday", "NETWORKDAYS(DATE(2024,1,6),DATE(2024,1,6))", 0, false, 0},
+		// Same day weekend (Sun 2024-01-07)
+		{"date_same_day_sunday", "NETWORKDAYS(DATE(2024,1,7),DATE(2024,1,7))", 0, false, 0},
+
+		// ── Start on weekend ──────────────────────────────────────────
+		// Sat to following Fri = 5 weekdays
+		{"start_saturday_to_fri", "NETWORKDAYS(DATE(2024,1,6),DATE(2024,1,12))", 5, false, 0},
+		// Sun to following Fri = 5 weekdays
+		{"start_sunday_to_fri", "NETWORKDAYS(DATE(2024,1,7),DATE(2024,1,12))", 5, false, 0},
+
+		// ── End on weekend ────────────────────────────────────────────
+		// Mon to Sat = 5 weekdays (Mon-Fri)
+		{"end_on_saturday", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,6))", 5, false, 0},
+		// Mon to Sun = 5 weekdays
+		{"end_on_sunday", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,7))", 5, false, 0},
+
+		// ── Cross-month boundary ──────────────────────────────────────
+		// Wed Jan 31 to Fri Feb 2, 2024 = 3 (Wed, Thu, Fri)
+		{"cross_month_jan_feb", "NETWORKDAYS(DATE(2024,1,31),DATE(2024,2,2))", 3, false, 0},
+		// Fri Feb 28 to Mon Mar 4 2025 = 3 (Fri, Mon Mar 3, Tue Mar 4)... wait
+		// Feb 28 = Fri, Mar 3 = Mon, Mar 4 = Tue. Count: Feb28(Fri)=1, Mar3(Mon)=2, Mar4(Tue)=3
+		{"cross_month_feb_mar", "NETWORKDAYS(DATE(2025,2,28),DATE(2025,3,4))", 3, false, 0},
+
+		// ── Cross-year boundary ───────────────────────────────────────
+		// Tue Dec 31, 2024 to Thu Jan 2, 2025 = 3 (Tue, Wed=Jan1, Thu=Jan2)
+		{"cross_year_2024_2025", "NETWORKDAYS(DATE(2024,12,31),DATE(2025,1,2))", 3, false, 0},
+		// Fri Dec 29, 2023 to Tue Jan 2, 2024
+		// Dec29(Fri)=1, Dec30(Sat)=skip, Dec31(Sun)=skip, Jan1(Mon)=2, Jan2(Tue)=3
+		{"cross_year_2023_2024", "NETWORKDAYS(DATE(2023,12,29),DATE(2024,1,2))", 3, false, 0},
+
+		// ── Full year ≈ 261 working days ──────────────────────────────
+		// 2024 is a leap year: Jan 1 (Mon) to Dec 31 (Tue)
+		// 366 calendar days, 52 full weeks = 260 weekdays + 2 extra days (Mon, Tue) = 262
+		{"full_year_2024", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,12,31))", 262, false, 0},
+		// 2025: Jan 1 (Wed) to Dec 31 (Wed)
+		// 365 calendar days, 52 weeks + 1 day. 52*5=260 + 1 (Wed) = 261
+		{"full_year_2025", "NETWORKDAYS(DATE(2025,1,1),DATE(2025,12,31))", 261, false, 0},
+
+		// ── Large span with holidays ──────────────────────────────────
+		// Full January 2024 with 1 holiday (Jan 15 Mon = MLK day)
+		// Jan 1 (Mon) to Jan 31 (Wed): 23 weekdays - 1 holiday = 22
+		{"jan_2024_with_mlk", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,31),DATE(2024,1,15))", 22, false, 0},
+
+		// ── Multiple holidays as array ────────────────────────────────
+		// Mon-Fri with 3 holidays (Tue, Wed, Thu) = 2 remaining
+		{"three_weekday_holidays", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{DATE(2024,1,2),DATE(2024,1,3),DATE(2024,1,4)})", 2, false, 0},
+
+		// ── Holiday on weekend (no double-count) ──────────────────────
+		// Mon to Fri with holiday on Sat = still 5
+		{"holiday_on_sat_no_effect", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),DATE(2024,1,6))", 5, false, 0},
+
+		// ── All weekdays are holidays → 0 ─────────────────────────────
+		// Mon-Fri, all 5 weekdays are holidays
+		{"all_holidays_zero", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{DATE(2024,1,1),DATE(2024,1,2),DATE(2024,1,3),DATE(2024,1,4),DATE(2024,1,5)})", 0, false, 0},
+
+		// ── Negative span (end before start) ──────────────────────────
+		{"date_negative_span", "NETWORKDAYS(DATE(2024,1,5),DATE(2024,1,1))", -5, false, 0},
+		{"date_negative_cross_year", "NETWORKDAYS(DATE(2025,1,2),DATE(2024,12,31))", -3, false, 0},
+
+		// ── Error propagation ──────────────────────────────────────────
+		{"error_prop_start", "NETWORKDAYS(1/0,45667)", 0, true, ErrValDIV0},
+		{"error_prop_end", "NETWORKDAYS(45663,1/0)", 0, true, ErrValDIV0},
+		{"error_prop_holiday", "NETWORKDAYS(45663,45667,1/0)", 0, true, ErrValDIV0},
+
+		// ── Two-week span ─────────────────────────────────────────────
+		// Mon Jan 1 to Fri Jan 12 = 10 weekdays
+		{"two_weeks", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))", 10, false, 0},
+
+		// ── February in leap year ─────────────────────────────────────
+		// Feb 1 (Thu) to Feb 29 (Thu) 2024 = 21 weekdays
+		{"feb_leap_year", "NETWORKDAYS(DATE(2024,2,1),DATE(2024,2,29))", 21, false, 0},
+
+		// ── Duplicate holidays (should not double-subtract) ───────────
+		{"duplicate_holiday", "NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{DATE(2024,1,3),DATE(2024,1,3)})", 4, false, 0},
 	}
 
 	for _, tc := range tests {

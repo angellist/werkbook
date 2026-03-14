@@ -103,7 +103,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | DAVERAGE | Returns the average of matching records in a database range. | Db | 5 |
 | DAY | Returns the day of the month from a date. | Date & Time | 28 |
 | DAYS | Returns the number of days between two dates. | Date & Time | 17 |
-| DAYS360 | Returns the number of days between two dates using a 360-day year. | Date & Time | 57 |
+| DAYS360 | Returns the number of days between two dates using a 360-day year. | Date & Time | 80 |
 | DB | Returns depreciation using the fixed-declining balance method. | Financial | 29 |
 | DCOUNT | Counts numeric values in matching records of a database range. | Db | 6 |
 | DCOUNTA | Counts non-empty values in matching records of a database range. | Db | 5 |
@@ -280,7 +280,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | N | Converts a value to a number using spreadsheet coercion rules. | Information | 19 |
 | NA | Returns the #N/A error value. | Information | 15 |
 | NEGBINOM.DIST | Returns the negative binomial distribution. | Statistical | 30 |
-| NETWORKDAYS | Counts working days between two dates. | Date & Time | 26 |
+| NETWORKDAYS | Counts working days between two dates. | Date & Time | 53 |
 | NETWORKDAYS.INTL | Counts working days between two dates using a custom weekend pattern. | Date & Time | 44 |
 | NOMINAL | Returns the nominal annual interest rate for an effective rate. | Financial | 17 |
 | NORM.DIST | Returns the normal distribution. | Statistical | 29 |
