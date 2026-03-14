@@ -327,11 +327,11 @@ func TestMONTH_Comprehensive(t *testing.T) {
 	resolver := &mockResolver{}
 
 	tests := []struct {
-		name   string
+		name    string
 		formula string
-		want   float64
-		isErr  bool
-		errVal ErrorValue
+		want    float64
+		isErr   bool
+		errVal  ErrorValue
 	}{
 		// --- Basic happy path: each month Jan through Dec ---
 		{"jan_date_func", "MONTH(DATE(2024,1,15))", 1, false, 0},
@@ -348,12 +348,12 @@ func TestMONTH_Comprehensive(t *testing.T) {
 		{"dec_date_func", "MONTH(DATE(2025,12,25))", 12, false, 0},
 
 		// --- Serial number inputs ---
-		{"serial_1_jan_1900", "MONTH(1)", 1, false, 0},           // Jan 1, 1900
-		{"serial_45306_jan_2024", "MONTH(45306)", 1, false, 0},   // Jan 15, 2024
-		{"serial_44927_jan_2023", "MONTH(44927)", 1, false, 0},   // Jan 1, 2023
-		{"serial_32_feb_1_1900", "MONTH(32)", 2, false, 0},       // Feb 1, 1900
-		{"serial_59_feb_28_1900", "MONTH(59)", 2, false, 0},      // Feb 28, 1900
-		{"serial_61_mar_1_1900", "MONTH(61)", 3, false, 0},       // Mar 1, 1900
+		{"serial_1_jan_1900", "MONTH(1)", 1, false, 0},         // Jan 1, 1900
+		{"serial_45306_jan_2024", "MONTH(45306)", 1, false, 0}, // Jan 15, 2024
+		{"serial_44927_jan_2023", "MONTH(44927)", 1, false, 0}, // Jan 1, 2023
+		{"serial_32_feb_1_1900", "MONTH(32)", 2, false, 0},     // Feb 1, 1900
+		{"serial_59_feb_28_1900", "MONTH(59)", 2, false, 0},    // Feb 28, 1900
+		{"serial_61_mar_1_1900", "MONTH(61)", 3, false, 0},     // Mar 1, 1900
 
 		// --- Boundary: serial 0 (Jan 0, 1900 sentinel) ---
 		{"serial_0_jan", "MONTH(0)", 1, false, 0},
@@ -371,7 +371,7 @@ func TestMONTH_Comprehensive(t *testing.T) {
 		{"max_serial_dec_9999", "MONTH(2958465)", 12, false, 0}, // Dec 31, 9999
 
 		// --- Boolean inputs ---
-		{"bool_true_serial_1", "MONTH(TRUE)", 1, false, 0},  // TRUE coerces to 1 = Jan 1, 1900
+		{"bool_true_serial_1", "MONTH(TRUE)", 1, false, 0},   // TRUE coerces to 1 = Jan 1, 1900
 		{"bool_false_serial_0", "MONTH(FALSE)", 1, false, 0}, // FALSE coerces to 0 = Jan 0, 1900
 
 		// --- Numeric string coercion ---
@@ -436,6 +436,58 @@ func TestDAY(t *testing.T) {
 	}
 	if got.Type != ValueNumber || got.Num != 15 {
 		t.Errorf("DAY: got %g, want 15", got.Num)
+	}
+}
+
+func TestDAY_Comprehensive(t *testing.T) {
+	resolver := &mockResolver{}
+
+	tests := []struct {
+		name         string
+		formula      string
+		want         float64
+		wantErr      bool
+		wantErrValue ErrorValue
+	}{
+		{name: "serial_example", formula: "DAY(45306)", want: 15},
+		{name: "serial_zero", formula: "DAY(0)", want: 0},
+		{name: "serial_59", formula: "DAY(59)", want: 28},
+		{name: "serial_60", formula: "DAY(60)", want: 29},
+		{name: "serial_61", formula: "DAY(61)", want: 1},
+		{name: "fractional_serial", formula: "DAY(45306.75)", want: 15},
+		{name: "max_serial", formula: "DAY(2958465)", want: 31},
+		{name: "bool_true", formula: "DAY(TRUE)", want: 1},
+		{name: "bool_false", formula: "DAY(FALSE)", want: 0},
+		{name: "numeric_string", formula: `DAY("45306")`, want: 15},
+		{name: "slash_date_string", formula: `DAY("1/15/2024")`, want: 15},
+		{name: "dash_date_string", formula: `DAY("15-Jan-2024")`, want: 15},
+		{name: "iso_date_string", formula: `DAY("2024-01-31")`, want: 31},
+		{name: "long_date_string", formula: `DAY("January 2, 2024")`, want: 2},
+		{name: "error_div0", formula: "DAY(1/0)", wantErr: true, wantErrValue: ErrValDIV0},
+		{name: "negative_serial", formula: "DAY(-1)", wantErr: true, wantErrValue: ErrValNUM},
+		{name: "beyond_max_serial", formula: "DAY(2958466)", wantErr: true, wantErrValue: ErrValNUM},
+		{name: "text_error", formula: `DAY("not a date")`, wantErr: true, wantErrValue: ErrValVALUE},
+		{name: "wrong_arg_count_zero", formula: "DAY()", wantErr: true, wantErrValue: ErrValVALUE},
+		{name: "wrong_arg_count_two", formula: "DAY(1,2)", wantErr: true, wantErrValue: ErrValVALUE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tt.formula, err)
+			}
+			if tt.wantErr {
+				if got.Type != ValueError || got.Err != tt.wantErrValue {
+					t.Fatalf("%s = %v, want error %v", tt.formula, got, tt.wantErrValue)
+				}
+				return
+			}
+			if got.Type != ValueNumber || got.Num != tt.want {
+				t.Fatalf("%s = %v, want %g", tt.formula, got, tt.want)
+			}
+		})
 	}
 }
 
