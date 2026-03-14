@@ -378,8 +378,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | SUBSTITUTE | Replaces matching text within a string. | Text | 25 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 32 |
 | SUM | Returns the sum of supplied numbers. | Statistical | 63 |
-| SUMIF | Returns the sum of values that match one condition. | Statistical | 39 |
-| SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 42 |
+| SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
+| SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 43 |
 | SUMSQ | Returns the sum of squares of the supplied values. | Statistical | 30 |
 | SUMX2MY2 | Returns the sum of the difference of squares of paired arrays. | Math & Trig | 31 |
