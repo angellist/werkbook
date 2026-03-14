@@ -12354,3 +12354,524 @@ func TestRANDARRAY_OnlyRowsArg(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SEQUENCE – additional comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestSEQUENCE_Basic5Rows(t *testing.T) {
+	// SEQUENCE(5) = {1;2;3;4;5}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 5 {
+		t.Fatalf("type=%v rows=%d, want 5-row array", got.Type, len(got.Array))
+	}
+	for i := 0; i < 5; i++ {
+		if len(got.Array[i]) != 1 {
+			t.Fatalf("row %d cols = %d, want 1", i, len(got.Array[i]))
+		}
+		want := float64(i + 1)
+		if got.Array[i][0].Num != want {
+			t.Errorf("[%d][0] = %g, want %g", i, got.Array[i][0].Num, want)
+		}
+	}
+}
+
+func TestSEQUENCE_3x3Matrix(t *testing.T) {
+	// SEQUENCE(3,3) = 3x3 matrix: {1,2,3;4,5,6;7,8,9}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(3,3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	n := 1.0
+	for r := 0; r < 3; r++ {
+		if len(got.Array[r]) != 3 {
+			t.Fatalf("row %d cols = %d, want 3", r, len(got.Array[r]))
+		}
+		for c := 0; c < 3; c++ {
+			if got.Array[r][c].Num != n {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, n)
+			}
+			n++
+		}
+	}
+}
+
+func TestSEQUENCE_CustomStartOnly(t *testing.T) {
+	// SEQUENCE(5,1,10) = {10;11;12;13;14}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(5,1,10)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 5 {
+		t.Fatalf("got type=%v rows=%d, want 5 rows", got.Type, len(got.Array))
+	}
+	want := []float64{10, 11, 12, 13, 14}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_CustomStepEven(t *testing.T) {
+	// SEQUENCE(5,1,0,2) = {0;2;4;6;8}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(5,1,0,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 5 {
+		t.Fatalf("got type=%v rows=%d, want 5 rows", got.Type, len(got.Array))
+	}
+	want := []float64{0, 2, 4, 6, 8}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_NegativeStepDown(t *testing.T) {
+	// SEQUENCE(5,1,10,-2) = {10;8;6;4;2}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(5,1,10,-2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 5 {
+		t.Fatalf("got type=%v rows=%d, want 5 rows", got.Type, len(got.Array))
+	}
+	want := []float64{10, 8, 6, 4, 2}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_WideRow10Cols(t *testing.T) {
+	// SEQUENCE(1,10) = row of 1-10
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(1,10)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 || len(got.Array[0]) != 10 {
+		t.Fatalf("got type=%v, want 1x10 array", got.Type)
+	}
+	for c := 0; c < 10; c++ {
+		want := float64(c + 1)
+		if got.Array[0][c].Num != want {
+			t.Errorf("[0][%d] = %g, want %g", c, got.Array[0][c].Num, want)
+		}
+	}
+}
+
+func TestSEQUENCE_FractionalStartAndStep(t *testing.T) {
+	// SEQUENCE(4,1,0.5,0.25) = {0.5;0.75;1.0;1.25}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(4,1,0.5,0.25)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 4 {
+		t.Fatalf("got type=%v rows=%d, want 4 rows", got.Type, len(got.Array))
+	}
+	want := []float64{0.5, 0.75, 1.0, 1.25}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_Large100Rows(t *testing.T) {
+	// SEQUENCE(100,1) = 100 rows, 1 to 100
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(100,1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 100 {
+		t.Fatalf("got type=%v rows=%d, want 100 rows", got.Type, len(got.Array))
+	}
+	for i := 0; i < 100; i++ {
+		want := float64(i + 1)
+		if got.Array[i][0].Num != want {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, want)
+		}
+	}
+}
+
+func TestSEQUENCE_NegativeColsError(t *testing.T) {
+	// SEQUENCE(3,-1) => #CALC!
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(3,-1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("got type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_ColsTruncated(t *testing.T) {
+	// SEQUENCE(1,3.7) should truncate cols to 3
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(1,3.7)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 || len(got.Array[0]) != 3 {
+		t.Fatalf("got type=%v, want 1x3 array", got.Type)
+	}
+	for c := 0; c < 3; c++ {
+		want := float64(c + 1)
+		if got.Array[0][c].Num != want {
+			t.Errorf("[0][%d] = %g, want %g", c, got.Array[0][c].Num, want)
+		}
+	}
+}
+
+func TestSEQUENCE_NegativeStartLargeStep(t *testing.T) {
+	// SEQUENCE(4,1,-5,3) = {-5;-2;1;4}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(4,1,-5,3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 4 {
+		t.Fatalf("got type=%v rows=%d, want 4 rows", got.Type, len(got.Array))
+	}
+	want := []float64{-5, -2, 1, 4}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_2x3Custom(t *testing.T) {
+	// SEQUENCE(2,3,10,10) = {10,20,30;40,50,60}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(2,3,10,10)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2 rows", got.Type, len(got.Array))
+	}
+	want := [][]float64{{10, 20, 30}, {40, 50, 60}}
+	for r := 0; r < 2; r++ {
+		if len(got.Array[r]) != 3 {
+			t.Fatalf("row %d cols = %d, want 3", r, len(got.Array[r]))
+		}
+		for c := 0; c < 3; c++ {
+			if got.Array[r][c].Num != want[r][c] {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, want[r][c])
+			}
+		}
+	}
+}
+
+func TestSEQUENCE_LargeStep1000(t *testing.T) {
+	// SEQUENCE(3,1,100,1000) = {100;1100;2100}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(3,1,100,1000)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3 rows", got.Type, len(got.Array))
+	}
+	want := []float64{100, 1100, 2100}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestSEQUENCE_BoolCoercion(t *testing.T) {
+	// SEQUENCE(TRUE) should coerce TRUE to 1 => scalar 1
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("got %v, want scalar 1", got)
+	}
+}
+
+func TestSEQUENCE_2x2Matrix(t *testing.T) {
+	// SEQUENCE(2,2) = {1,2;3,4}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(2,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2 rows", got.Type, len(got.Array))
+	}
+	want := [][]float64{{1, 2}, {3, 4}}
+	for r := 0; r < 2; r++ {
+		if len(got.Array[r]) != 2 {
+			t.Fatalf("row %d cols = %d, want 2", r, len(got.Array[r]))
+		}
+		for c := 0; c < 2; c++ {
+			if got.Array[r][c].Num != want[r][c] {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, want[r][c])
+			}
+		}
+	}
+}
+
+func TestSEQUENCE_ErrorPropagationFromCell(t *testing.T) {
+	// SEQUENCE with a cell that resolves to an error
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValNA),
+		},
+	}
+	cf := evalCompile(t, "SEQUENCE(A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNA {
+		t.Errorf("got type=%v err=%v, want #N/A", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_DirectCallFn(t *testing.T) {
+	// Test fnSEQUENCE directly with all four arguments
+	got, err := fnSEQUENCE([]Value{NumberVal(3), NumberVal(2), NumberVal(5), NumberVal(3)})
+	if err != nil {
+		t.Fatalf("fnSEQUENCE: %v", err)
+	}
+	// 3x2 starting at 5, step 3: {5,8;11,14;17,20}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3 rows", got.Type, len(got.Array))
+	}
+	want := [][]float64{{5, 8}, {11, 14}, {17, 20}}
+	for r := 0; r < 3; r++ {
+		if len(got.Array[r]) != 2 {
+			t.Fatalf("row %d cols = %d, want 2", r, len(got.Array[r]))
+		}
+		for c := 0; c < 2; c++ {
+			if got.Array[r][c].Num != want[r][c] {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, want[r][c])
+			}
+		}
+	}
+}
+
+func TestSEQUENCE_2DZeroStepFill(t *testing.T) {
+	// SEQUENCE(2,3,7,0) => all cells = 7
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(2,3,7,0)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2 rows", got.Type, len(got.Array))
+	}
+	for r := 0; r < 2; r++ {
+		if len(got.Array[r]) != 3 {
+			t.Fatalf("row %d cols = %d, want 3", r, len(got.Array[r]))
+		}
+		for c := 0; c < 3; c++ {
+			if got.Array[r][c].Num != 7 {
+				t.Errorf("[%d][%d] = %g, want 7", r, c, got.Array[r][c].Num)
+			}
+		}
+	}
+}
+
+func TestSEQUENCE_2DNegativeStepCountdown(t *testing.T) {
+	// SEQUENCE(2,3,100,-10) = {100,90,80;70,60,50}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(2,3,100,-10)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2 rows", got.Type, len(got.Array))
+	}
+	want := [][]float64{{100, 90, 80}, {70, 60, 50}}
+	for r := 0; r < 2; r++ {
+		for c := 0; c < 3; c++ {
+			if got.Array[r][c].Num != want[r][c] {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, want[r][c])
+			}
+		}
+	}
+}
+
+func TestSEQUENCE_SumComposition(t *testing.T) {
+	// SUM(SEQUENCE(5)) = 1+2+3+4+5 = 15
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUM(SEQUENCE(5))")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 15 {
+		t.Errorf("SUM(SEQUENCE(5)) = %v, want 15", got)
+	}
+}
+
+func TestSEQUENCE_ErrorInStepArg(t *testing.T) {
+	// Error in step argument should propagate
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValDIV0),
+		},
+	}
+	cf := evalCompile(t, "SEQUENCE(3,1,1,A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValDIV0 {
+		t.Errorf("got type=%v err=%v, want #DIV/0!", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_ErrorInColsArg(t *testing.T) {
+	// Error in cols argument should propagate
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValREF),
+		},
+	}
+	cf := evalCompile(t, "SEQUENCE(3,A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("got type=%v err=%v, want #REF!", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_ErrorInStartArg(t *testing.T) {
+	// Error in start argument should propagate
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValNUM),
+		},
+	}
+	cf := evalCompile(t, "SEQUENCE(3,1,A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNUM {
+		t.Errorf("got type=%v err=%v, want #NUM!", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_4x4Identity(t *testing.T) {
+	// SEQUENCE(4,4) = 4x4 matrix 1-16
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(4,4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 4 {
+		t.Fatalf("got type=%v rows=%d, want 4 rows", got.Type, len(got.Array))
+	}
+	n := 1.0
+	for r := 0; r < 4; r++ {
+		if len(got.Array[r]) != 4 {
+			t.Fatalf("row %d cols = %d, want 4", r, len(got.Array[r]))
+		}
+		for c := 0; c < 4; c++ {
+			if got.Array[r][c].Num != n {
+				t.Errorf("[%d][%d] = %g, want %g", r, c, got.Array[r][c].Num, n)
+			}
+			n++
+		}
+	}
+}
+
+func TestSEQUENCE_SingleRowOnlyRowsArg(t *testing.T) {
+	// SEQUENCE(1) = scalar 1 (rows=1, cols=1 default => single cell)
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SEQUENCE(1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("got %v, want scalar 1", got)
+	}
+}
+
+func TestSEQUENCE_StringCoercionNonNumericCols(t *testing.T) {
+	// SEQUENCE(3,"abc") => #VALUE! (can't coerce cols)
+	resolver := &mockResolver{}
+	cf := evalCompile(t, `SEQUENCE(3,"abc")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("got type=%v err=%v, want #VALUE!", got.Type, got.Err)
+	}
+}
+
+func TestSEQUENCE_MaxComposition(t *testing.T) {
+	// MAX(SEQUENCE(5)) = 5
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "MAX(SEQUENCE(5))")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 5 {
+		t.Errorf("MAX(SEQUENCE(5)) = %v, want 5", got)
+	}
+}
+
+func TestSEQUENCE_MinComposition(t *testing.T) {
+	// MIN(SEQUENCE(5,1,10,-3)) = MIN(10,7,4,1,-2) = -2
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "MIN(SEQUENCE(5,1,10,-3))")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != -2 {
+		t.Errorf("MIN(SEQUENCE(5,1,10,-3)) = %v, want -2", got)
+	}
+}

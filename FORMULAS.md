@@ -255,14 +255,14 @@ Werkbook supports **445** spreadsheet formula functions.
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
-| MAX | Returns the largest numeric value. | Statistical | 37 |
+| MAX | Returns the largest numeric value. | Statistical | 38 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
 | MDURATION | Returns the modified duration of a security. | Financial | 22 |
 | MEDIAN | Returns the median of a data set. | Statistical | 27 |
 | MID | Returns characters from the middle of a text value. | Text | 50 |
-| MIN | Returns the smallest numeric value. | Statistical | 34 |
+| MIN | Returns the smallest numeric value. | Statistical | 35 |
 | MINA | Returns the smallest value, counting logical values and text coercions. | Statistical | 16 |
 | MINIFS | Returns the minimum value that matches all supplied conditions. | Statistical | 49 |
 | MINUTE | Returns the minute from a time or datetime value. | Date & Time | 16 |
@@ -351,7 +351,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
 | SECOND | Returns the second from a time or datetime value. | Date & Time | 16 |
-| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 47 |
+| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 99 |
 | SERIESSUM | Returns the sum of a power series. | Math & Trig | 27 |
 | SHEET | Returns the sheet index of a reference. | Information | 14 |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information | 8 |
@@ -377,7 +377,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 25 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 70 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 71 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 72 |
@@ -419,7 +419,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | TYPE | Returns a numeric code describing a value's type. | Information | 25 |
 | UNICHAR | Returns the Unicode character for a code point. | Text | 48 |
 | UNICODE | Returns the Unicode code point for the first character in text. | Text | 36 |
-| UNIQUE | Returns distinct rows or columns from an array. | Lookup & Reference | 29 |
+| UNIQUE | Returns distinct rows or columns from an array. | Lookup & Reference | 53 |
 | UPPER | Converts text to uppercase. | Text | 62 |
 | VALUE | Converts text that looks like a number into a numeric value. | Text | 31 |
 | VALUETOTEXT | Converts a value to a text representation. | Text | 26 |

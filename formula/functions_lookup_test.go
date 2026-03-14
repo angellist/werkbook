@@ -17342,3 +17342,372 @@ func TestHYPERLINKAdditional(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// UNIQUE – additional comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestUNIQUE_ExactlyOnceAllDuplicates(t *testing.T) {
+	// UNIQUE({1;1;2;2},FALSE,TRUE) => #CALC! (nothing appears exactly once)
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "UNIQUE({1;1;2;2},FALSE,TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValCALC {
+		t.Errorf("got type=%v err=%v, want #CALC!", got.Type, got.Err)
+	}
+}
+
+func TestUNIQUE_ByColFalseExplicit(t *testing.T) {
+	// UNIQUE with explicit by_col=FALSE: unique rows
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "UNIQUE({1;2;1;3},FALSE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	want := []float64{1, 2, 3}
+	for i, w := range want {
+		if got.Array[i][0].Num != w {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, w)
+		}
+	}
+}
+
+func TestUNIQUE_ByColTrue1DRow(t *testing.T) {
+	// UNIQUE({1,2,1,3},TRUE) = unique columns on 1D row => {1,2,3}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "UNIQUE({1,2,1,3},TRUE)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 {
+		t.Fatalf("got type=%v rows=%d, want 1 row", got.Type, len(got.Array))
+	}
+	if len(got.Array[0]) != 3 {
+		t.Fatalf("cols = %d, want 3", len(got.Array[0]))
+	}
+	want := []float64{1, 2, 3}
+	for i, w := range want {
+		if got.Array[0][i].Num != w {
+			t.Errorf("[0][%d] = %g, want %g", i, got.Array[0][i].Num, w)
+		}
+	}
+}
+
+func TestUNIQUE_MultiColumnExactlyOnce(t *testing.T) {
+	// Multi-column with exactly_once: only rows that appear exactly once
+	// {1,"a";2,"b";1,"a"} => only {2,"b"} appears once
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), StringVal("a")},
+			{NumberVal(2), StringVal("b")},
+			{NumberVal(1), StringVal("a")},
+		}},
+		BoolVal(false),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 {
+		t.Fatalf("got type=%v rows=%d, want 1-row array", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Num != 2 || got.Array[0][1].Str != "b" {
+		t.Errorf("got %v, want {2,\"b\"}", got.Array[0])
+	}
+}
+
+func TestUNIQUE_NumericDuplicates(t *testing.T) {
+	// 1.0 and 1 should be treated as the same number
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1.0)},
+			{NumberVal(1)},
+			{NumberVal(2)},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2-row array", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][0].Num != 2 {
+		t.Errorf("got %v %v, want {1;2}", got.Array[0][0], got.Array[1][0])
+	}
+}
+
+func TestUNIQUE_1DRowArrayByDefault(t *testing.T) {
+	// A single-row array: {1,2,3,2,1} with by_col=FALSE (default)
+	// Only 1 row, so it's trivially unique
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(2), NumberVal(1)},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 || len(got.Array[0]) != 5 {
+		t.Fatalf("got type=%v, want 1x5 array", got.Type)
+	}
+}
+
+func TestUNIQUE_1DRowArrayByColTrue(t *testing.T) {
+	// {1,2,3,2,1} with by_col=TRUE => unique columns: {1,2,3}
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(2), NumberVal(1)},
+		}},
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 1 {
+		t.Fatalf("got type=%v rows=%d, want 1 row", got.Type, len(got.Array))
+	}
+	if len(got.Array[0]) != 3 {
+		t.Fatalf("cols = %d, want 3", len(got.Array[0]))
+	}
+	want := []float64{1, 2, 3}
+	for i, w := range want {
+		if got.Array[0][i].Num != w {
+			t.Errorf("[0][%d] = %g, want %g", i, got.Array[0][i].Num, w)
+		}
+	}
+}
+
+func TestUNIQUE_LargeArray200(t *testing.T) {
+	// 200 elements: 1,2,...,100 repeated twice => unique = 100 values
+	rows := make([][]Value, 200)
+	for i := 0; i < 200; i++ {
+		rows[i] = []Value{NumberVal(float64(i%100 + 1))}
+	}
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: rows},
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 100 {
+		t.Fatalf("got type=%v rows=%d, want 100-row array", got.Type, len(got.Array))
+	}
+	for i := 0; i < 100; i++ {
+		want := float64(i + 1)
+		if got.Array[i][0].Num != want {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, want)
+		}
+	}
+}
+
+func TestUNIQUE_ErrorArgPropagation(t *testing.T) {
+	// If the first arg is an error, it should be propagated
+	got, err := fnUNIQUE([]Value{ErrorVal(ErrValREF)})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("got type=%v err=%v, want #REF!", got.Type, got.Err)
+	}
+}
+
+func TestUNIQUE_ByColExactlyOnce1DRow(t *testing.T) {
+	// {1,2,3,2,1} by_col=TRUE, exactly_once=TRUE
+	// 1 appears 2x, 2 appears 2x, 3 appears 1x => only {3}
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(3), NumberVal(2), NumberVal(1)},
+		}},
+		BoolVal(true),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("got %v, want scalar 3", got)
+	}
+}
+
+func TestUNIQUE_MultiRowMultiColByColNew(t *testing.T) {
+	// 2x4 array, by_col=TRUE: columns {1;10}, {2;20}, {1;10}, {3;30}
+	// Unique columns => {1;10}, {2;20}, {3;30} => 2x3 result
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(1), NumberVal(3)},
+			{NumberVal(10), NumberVal(20), NumberVal(10), NumberVal(30)},
+		}},
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2-row array", got.Type, len(got.Array))
+	}
+	if len(got.Array[0]) != 3 || len(got.Array[1]) != 3 {
+		t.Fatalf("cols: got %d,%d, want 3,3", len(got.Array[0]), len(got.Array[1]))
+	}
+	wantRow0 := []float64{1, 2, 3}
+	wantRow1 := []float64{10, 20, 30}
+	for c := 0; c < 3; c++ {
+		if got.Array[0][c].Num != wantRow0[c] {
+			t.Errorf("[0][%d] = %g, want %g", c, got.Array[0][c].Num, wantRow0[c])
+		}
+		if got.Array[1][c].Num != wantRow1[c] {
+			t.Errorf("[1][%d] = %g, want %g", c, got.Array[1][c].Num, wantRow1[c])
+		}
+	}
+}
+
+func TestUNIQUE_ViaEvalStrings(t *testing.T) {
+	// Test string dedup through the full evaluator
+	resolver := &mockResolver{}
+	cf := evalCompile(t, `UNIQUE({"cat";"dog";"cat";"fish";"dog"})`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	want := []string{"cat", "dog", "fish"}
+	for i, w := range want {
+		if got.Array[i][0].Str != w {
+			t.Errorf("[%d]: got %q, want %q", i, got.Array[i][0].Str, w)
+		}
+	}
+}
+
+func TestUNIQUE_ViaEvalWithRangeMultiCol(t *testing.T) {
+	// Test with a 2-column cell range: A1:B4
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("x"),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 2}: StringVal("y"),
+			{Col: 1, Row: 3}: NumberVal(1),
+			{Col: 2, Row: 3}: StringVal("x"),
+			{Col: 1, Row: 4}: NumberVal(3),
+			{Col: 2, Row: 4}: StringVal("z"),
+		},
+	}
+	cf := evalCompile(t, "UNIQUE(A1:B4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	wantNums := []float64{1, 2, 3}
+	wantStrs := []string{"x", "y", "z"}
+	for i := range wantNums {
+		if got.Array[i][0].Num != wantNums[i] {
+			t.Errorf("[%d][0] = %g, want %g", i, got.Array[i][0].Num, wantNums[i])
+		}
+		if got.Array[i][1].Str != wantStrs[i] {
+			t.Errorf("[%d][1] = %q, want %q", i, got.Array[i][1].Str, wantStrs[i])
+		}
+	}
+}
+
+func TestUNIQUE_TwoDistinctElements(t *testing.T) {
+	// {1;2} => {1;2}
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "UNIQUE({1;2})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 2 {
+		t.Fatalf("got type=%v rows=%d, want 2-row array", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Num != 1 || got.Array[1][0].Num != 2 {
+		t.Errorf("got {%g;%g}, want {1;2}", got.Array[0][0].Num, got.Array[1][0].Num)
+	}
+}
+
+func TestUNIQUE_CompositionWithSEQUENCE(t *testing.T) {
+	// UNIQUE composed with SEQUENCE: all elements are unique
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "UNIQUE(SEQUENCE(5))")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 5 {
+		t.Fatalf("got type=%v rows=%d, want 5-row array", got.Type, len(got.Array))
+	}
+	for i := 0; i < 5; i++ {
+		want := float64(i + 1)
+		if got.Array[i][0].Num != want {
+			t.Errorf("[%d]: got %g, want %g", i, got.Array[i][0].Num, want)
+		}
+	}
+}
+
+func TestUNIQUE_DifferentErrorTypes(t *testing.T) {
+	// Different error types should be treated as distinct values
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{ErrorVal(ErrValDIV0)},
+			{ErrorVal(ErrValNA)},
+			{ErrorVal(ErrValDIV0)},
+			{ErrorVal(ErrValVALUE)},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	if got.Array[0][0].Err != ErrValDIV0 {
+		t.Errorf("[0]: got %v, want #DIV/0!", got.Array[0][0])
+	}
+	if got.Array[1][0].Err != ErrValNA {
+		t.Errorf("[1]: got %v, want #N/A", got.Array[1][0])
+	}
+	if got.Array[2][0].Err != ErrValVALUE {
+		t.Errorf("[2]: got %v, want #VALUE!", got.Array[2][0])
+	}
+}
+
+func TestUNIQUE_ThreeColumnByColExactlyOnce(t *testing.T) {
+	// 3x3 array by_col=TRUE, exactly_once=TRUE
+	// cols: {1;4;7}, {2;5;8}, {1;4;7} => col {2;5;8} appears once
+	got, err := fnUNIQUE([]Value{
+		{Type: ValueArray, Array: [][]Value{
+			{NumberVal(1), NumberVal(2), NumberVal(1)},
+			{NumberVal(4), NumberVal(5), NumberVal(4)},
+			{NumberVal(7), NumberVal(8), NumberVal(7)},
+		}},
+		BoolVal(true),
+		BoolVal(true),
+	})
+	if err != nil {
+		t.Fatalf("fnUNIQUE: %v", err)
+	}
+	if got.Type != ValueArray || len(got.Array) != 3 {
+		t.Fatalf("got type=%v rows=%d, want 3-row array", got.Type, len(got.Array))
+	}
+	wantCol := []float64{2, 5, 8}
+	for r, w := range wantCol {
+		if len(got.Array[r]) != 1 {
+			t.Fatalf("row %d: cols = %d, want 1", r, len(got.Array[r]))
+		}
+		if got.Array[r][0].Num != w {
+			t.Errorf("[%d][0] = %g, want %g", r, got.Array[r][0].Num, w)
+		}
+	}
+}
