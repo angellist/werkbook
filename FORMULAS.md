@@ -55,9 +55,9 @@ Werkbook supports **446** spreadsheet formula functions.
 | CEILING.PRECISE | Rounds a number up to the nearest significance, ignoring the sign of the significance. | Math & Trig | 37 |
 | CHAR | Returns the character for a numeric code. | Text | 41 |
 | CHISQ.DIST | Returns the chi-square distribution. | Statistical | 39 |
-| CHISQ.DIST.RT | Returns the right-tailed chi-square probability. | Statistical | 19 |
+| CHISQ.DIST.RT | Returns the right-tailed chi-square probability. | Statistical | 29 |
 | CHISQ.INV | Returns the inverse of the chi-square cumulative distribution. | Statistical | 36 |
-| CHISQ.INV.RT | Returns the inverse of the right-tailed chi-square distribution. | Statistical | 20 |
+| CHISQ.INV.RT | Returns the inverse of the right-tailed chi-square distribution. | Statistical | 32 |
 | CHISQ.TEST | Returns the result of a chi-square test. | Statistical | 23 |
 | CHOOSE | Returns the value at a position from a supplied list of choices. | Text | 49 |
 | CHOOSECOLS | Returns selected columns from an array. | Lookup & Reference | 28 |
@@ -145,9 +145,9 @@ Werkbook supports **446** spreadsheet formula functions.
 | EXPAND | Pads an array to a larger size with a fill value. | Lookup & Reference | 27 |
 | EXPON.DIST | Returns the exponential distribution. | Statistical | 28 |
 | F.DIST | Returns the F probability distribution. | Statistical | 42 |
-| F.DIST.RT | Returns the right-tailed F probability distribution. | Statistical | 19 |
+| F.DIST.RT | Returns the right-tailed F probability distribution. | Statistical | 30 |
 | F.INV | Returns the inverse of the F cumulative distribution. | Statistical | 36 |
-| F.INV.RT | Returns the inverse of the right-tailed F distribution. | Statistical | 21 |
+| F.INV.RT | Returns the inverse of the right-tailed F distribution. | Statistical | 34 |
 | F.TEST | Returns the result of an F-test for two arrays. | Statistical | 42 |
 | FACT | Returns the factorial of a number. | Math & Trig | 28 |
 | FACTDOUBLE | Returns the double factorial of a number. | Math & Trig | 30 |
@@ -387,10 +387,10 @@ Werkbook supports **446** spreadsheet formula functions.
 | SUMXMY2 | Returns the sum of squares of differences of paired arrays. | Math & Trig | 57 |
 | SWITCH | Matches an expression against a list of values and returns the corresponding result. | Logical | 28 |
 | SYD | Returns sum-of-years'-digits depreciation for a period. | Financial | 27 |
-| T | Returns text when a value is text, otherwise an empty string. | Text | 19 |
+| T | Returns text when a value is text, otherwise an empty string. | Text | 21 |
 | T.DIST | Returns the Student's t-distribution. | Statistical | 41 |
-| T.DIST.2T | Returns the two-tailed Student's t-distribution. | Statistical | 19 |
-| T.DIST.RT | Returns the right-tailed Student's t-distribution. | Statistical | 18 |
+| T.DIST.2T | Returns the two-tailed Student's t-distribution. | Statistical | 28 |
+| T.DIST.RT | Returns the right-tailed Student's t-distribution. | Statistical | 27 |
 | T.INV | Returns the inverse of the Student's t cumulative distribution. | Statistical | 33 |
 | T.INV.2T | Returns the inverse of the two-tailed Student's t-distribution. | Statistical | 20 |
 | T.TEST | Returns the probability associated with a Student's t-test. | Statistical | 34 |

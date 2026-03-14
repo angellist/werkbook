@@ -21255,6 +21255,27 @@ func TestT_DIST_RT(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "T.DIST.RT(2)", 0, true, ErrValVALUE},
 		{"err_too_many", "T.DIST.RT(2,10,1)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"df5_x2", "T.DIST.RT(2,5)", 0.05096974, false, 0},
+		{"df50_x1_68", "T.DIST.RT(1.68,50)", 0.04959793, false, 0},
+		{"df200_x2_576", "T.DIST.RT(2.576,200)", 0.00535801, false, 0},
+
+		// Boundary: probability near 0 (large x)
+		{"very_large_x", "T.DIST.RT(10,5)", 0.00008547, false, 0},
+
+		// Boundary: probability near 1 (large negative x)
+		{"neg_very_large", "T.DIST.RT(-10,5)", 0.99991453, false, 0},
+
+		// Large degrees of freedom (approaches standard normal)
+		{"df1000_x1_96", "T.DIST.RT(1.96,1000)", 0.02513659, false, 0},
+
+		// Boolean coercion: TRUE -> 1
+		{"bool_true_x", "T.DIST.RT(TRUE,10)", 0.17044657, false, 0},
+		{"bool_false_x", "T.DIST.RT(FALSE,10)", 0.50000000, false, 0},
+
+		// Error propagation
+		{"err_propagate_x", "T.DIST.RT(1/0,10)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -21324,6 +21345,29 @@ func TestT_DIST_2T(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "T.DIST.2T(2)", 0, true, ErrValVALUE},
 		{"err_too_many", "T.DIST.2T(2,10,1)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"df5_x2", "T.DIST.2T(2,5)", 0.10193948, false, 0},
+		{"df200_x2_576", "T.DIST.2T(2.576,200)", 0.01071602, false, 0},
+		{"df50_x1_68", "T.DIST.2T(1.68,50)", 0.09919585, false, 0},
+
+		// Boundary: probability near 0 (large x)
+		{"very_large_x", "T.DIST.2T(10,5)", 0.00017095, false, 0},
+
+		// Boundary: probability near 1 (x near 0)
+		{"tiny_x", "T.DIST.2T(0.001,10)", 0.99922178, false, 0},
+
+		// Large degrees of freedom (approaches standard normal)
+		{"df1000_x1_96", "T.DIST.2T(1.96,1000)", 0.05027318, false, 0},
+
+		// Boolean coercion: TRUE -> 1
+		{"bool_true_x", "T.DIST.2T(TRUE,10)", 0.34089313, false, 0},
+
+		// Error: very small negative triggers #NUM
+		{"err_tiny_neg", "T.DIST.2T(-0.0001,10)", 0, true, ErrValNUM},
+
+		// Error propagation
+		{"err_propagate_x", "T.DIST.2T(1/0,10)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -21467,6 +21511,28 @@ func TestCHISQ_DIST_RT(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "CHISQ.DIST.RT(1)", 0, true, ErrValVALUE},
 		{"err_too_many", "CHISQ.DIST.RT(1,3,TRUE)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"critical_99_df1", "CHISQ.DIST.RT(6.635,1)", 0.00999942, false, 0},
+		{"critical_99_df5", "CHISQ.DIST.RT(15.086,5)", 0.01000112, false, 0},
+		{"df50", "CHISQ.DIST.RT(50,50)", 0.47339847, false, 0},
+		{"df100", "CHISQ.DIST.RT(100,100)", 0.48119168, false, 0},
+
+		// Boundary: probability near 0 (very large x)
+		{"very_large_x", "CHISQ.DIST.RT(50,5)", 0.00000000, false, 0},
+
+		// Boundary: x = 0 always returns 1
+		{"x0_df1", "CHISQ.DIST.RT(0,1)", 1.0, false, 0},
+		{"x0_df100", "CHISQ.DIST.RT(0,100)", 1.0, false, 0},
+
+		// Small df
+		{"df1_x0_5", "CHISQ.DIST.RT(0.5,1)", 0.47950012, false, 0},
+
+		// Boolean coercion: TRUE -> 1
+		{"bool_true_x", "CHISQ.DIST.RT(TRUE,5)", 0.96256577, false, 0},
+
+		// Error propagation
+		{"err_propagate_x", "CHISQ.DIST.RT(1/0,5)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -21541,6 +21607,32 @@ func TestCHISQ_INV_RT(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "CHISQ.INV.RT(0.05)", 0, true, ErrValVALUE},
 		{"err_too_many", "CHISQ.INV.RT(0.05,5,1)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"critical_01_5", "CHISQ.INV.RT(0.01,5)", 15.0862725, false, 0},
+		{"critical_01_10", "CHISQ.INV.RT(0.01,10)", 23.2092512, false, 0},
+		{"critical_05_50", "CHISQ.INV.RT(0.05,50)", 67.5048065, false, 0},
+		{"critical_05_100", "CHISQ.INV.RT(0.05,100)", 124.342113, false, 0},
+
+		// Boundary: probability near 1
+		{"p99_df5", "CHISQ.INV.RT(0.99,5)", 0.55429808, false, 0},
+		{"p999_df10", "CHISQ.INV.RT(0.999,10)", 1.47874346, false, 0},
+
+		// Boundary: p = 1 returns 0
+		{"p1_df1", "CHISQ.INV.RT(1,1)", 0, false, 0},
+		{"p1_df100", "CHISQ.INV.RT(1,100)", 0, false, 0},
+
+		// Large degrees of freedom
+		{"p05_df200", "CHISQ.INV.RT(0.05,200)", 233.994269, false, 0},
+
+		// Boolean coercion
+		{"bool_true_p", "CHISQ.INV.RT(TRUE,5)", 0, false, 0},
+
+		// Error: df too large
+		{"err_df_too_large", "CHISQ.INV.RT(0.05,10000000001)", 0, true, ErrValNUM},
+
+		// Error propagation
+		{"err_propagate_p", "CHISQ.INV.RT(1/0,5)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -21610,6 +21702,31 @@ func TestF_DIST_RT(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "F.DIST.RT(1,5)", 0, true, ErrValVALUE},
 		{"err_too_many", "F.DIST.RT(1,5,5,TRUE)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"critical_05_5_10", "F.DIST.RT(3.3258,5,10)", 0.05000, false, 0},
+		{"critical_01_2_5", "F.DIST.RT(13.2739,2,5)", 0.01000, false, 0},
+		{"df50_50_x1", "F.DIST.RT(1,50,50)", 0.50000, false, 0},
+
+		// Boundary: probability near 0 (very large x)
+		{"very_large_x", "F.DIST.RT(1000,5,5)", 0.00000, false, 0},
+
+		// Boundary: x = 0 always returns 1
+		{"x0_df1_1", "F.DIST.RT(0,1,1)", 1.0, false, 0},
+		{"x0_df100_100", "F.DIST.RT(0,100,100)", 1.0, false, 0},
+
+		// Large degrees of freedom
+		{"df100_100_x1_5", "F.DIST.RT(1.5,100,100)", 0.02193, false, 0},
+
+		// Boolean coercion: TRUE -> 1
+		{"bool_true_x", "F.DIST.RT(TRUE,5,5)", 0.50000, false, 0},
+
+		// Asymmetric degrees of freedom
+		{"df1_100", "F.DIST.RT(3.94,1,100)", 0.04989, false, 0},
+		{"df100_1", "F.DIST.RT(0.5,100,1)", 0.83959, false, 0},
+
+		// Error propagation
+		{"err_propagate_x", "F.DIST.RT(1/0,5,5)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -21685,6 +21802,33 @@ func TestF_INV_RT(t *testing.T) {
 		// Error: wrong arg count
 		{"err_too_few", "F.INV.RT(0.05,5)", 0, true, ErrValVALUE},
 		{"err_too_many", "F.INV.RT(0.05,5,5,1)", 0, true, ErrValVALUE},
+
+		// Additional known values from statistical tables
+		{"critical_05_5_10", "F.INV.RT(0.05,5,10)", 3.3258, false, 0},
+		{"critical_01_2_5", "F.INV.RT(0.01,2,5)", 13.2739, false, 0},
+		{"p50_df50_50", "F.INV.RT(0.5,50,50)", 1.0, false, 0},
+		{"critical_05_100_100", "F.INV.RT(0.05,100,100)", 1.3917, false, 0},
+
+		// Boundary: probability near 1
+		{"p99_df5_5", "F.INV.RT(0.99,5,5)", 0.0912, false, 0},
+		{"p95_df10_10", "F.INV.RT(0.95,10,10)", 0.3358, false, 0},
+
+		// Boundary: p = 1 returns 0
+		{"p1_df1_1", "F.INV.RT(1,1,1)", 0, false, 0},
+		{"p1_df100_100", "F.INV.RT(1,100,100)", 0, false, 0},
+
+		// Asymmetric degrees of freedom
+		{"p05_df1_100", "F.INV.RT(0.05,1,100)", 3.9361, false, 0},
+
+		// Boolean coercion
+		{"bool_true_p", "F.INV.RT(TRUE,5,5)", 0, false, 0},
+
+		// Error: df negative
+		{"err_df1_neg", "F.INV.RT(0.05,-1,5)", 0, true, ErrValNUM},
+		{"err_df2_neg", "F.INV.RT(0.05,5,-1)", 0, true, ErrValNUM},
+
+		// Error propagation
+		{"err_propagate_p", "F.INV.RT(1/0,5,5)", 0, true, ErrValDIV0},
 	}
 
 	for _, tt := range tests {
@@ -39546,4 +39690,300 @@ func computeCorrel(xs, ys []float64) float64 {
 		return 0
 	}
 	return cov / denom
+}
+
+// ---------------------------------------------------------------------------
+// Cross-check tests for right-tailed distribution functions
+// ---------------------------------------------------------------------------
+
+func TestCHISQ_DIST_RT_CrossCheck(t *testing.T) {
+	// CHISQ.DIST.RT(x, df) = 1 - CHISQ.DIST(x, df, TRUE)
+	resolver := &mockResolver{}
+	const tol = 1e-7
+
+	cases := []struct {
+		name string
+		x    string
+		df   string
+	}{
+		{"x3_df5", "3", "5"},
+		{"x10_df10", "10", "10"},
+		{"x0_5_df1", "0.5", "1"},
+		{"x20_df20", "20", "20"},
+		{"x1_df3", "1", "3"},
+		{"x50_df30", "50", "30"},
+		{"x0_01_df2", "0.01", "2"},
+		{"x15_df8", "15", "8"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rtFormula := "CHISQ.DIST.RT(" + tc.x + "," + tc.df + ")"
+			cdfFormula := "1-CHISQ.DIST(" + tc.x + "," + tc.df + ",TRUE)"
+
+			cfRT := evalCompile(t, rtFormula)
+			cfCDF := evalCompile(t, cdfFormula)
+
+			gotRT, err := Eval(cfRT, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval RT error: %v", err)
+			}
+			gotCDF, err := Eval(cfCDF, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval CDF error: %v", err)
+			}
+
+			if gotRT.Type != ValueNumber || gotCDF.Type != ValueNumber {
+				t.Fatalf("expected numbers, got RT type=%d CDF type=%d", gotRT.Type, gotCDF.Type)
+			}
+			if math.Abs(gotRT.Num-gotCDF.Num) > tol {
+				t.Errorf("CHISQ.DIST.RT(%s,%s)=%g != 1-CHISQ.DIST(%s,%s,TRUE)=%g (diff=%g)",
+					tc.x, tc.df, gotRT.Num, tc.x, tc.df, gotCDF.Num, math.Abs(gotRT.Num-gotCDF.Num))
+			}
+		})
+	}
+}
+
+func TestCHISQ_INV_RT_RoundTrip(t *testing.T) {
+	// CHISQ.INV.RT(CHISQ.DIST.RT(x, df), df) ≈ x
+	resolver := &mockResolver{}
+	const tol = 1e-4
+
+	cases := []struct {
+		name string
+		x    string
+		df   string
+	}{
+		{"x3_df5", "3", "5"},
+		{"x10_df10", "10", "10"},
+		{"x1_df1", "1", "1"},
+		{"x20_df20", "20", "20"},
+		{"x5_df3", "5", "3"},
+		{"x0_5_df2", "0.5", "2"},
+		{"x15_df8", "15", "8"},
+		{"x7_df4", "7", "4"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip := "CHISQ.INV.RT(CHISQ.DIST.RT(" + tc.x + "," + tc.df + ")," + tc.df + ")"
+			cf := evalCompile(t, roundTrip)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("expected number, got type=%d err=%v", got.Type, got.Err)
+			}
+			xVal := 0.0
+			switch tc.x {
+			case "3":
+				xVal = 3
+			case "10":
+				xVal = 10
+			case "1":
+				xVal = 1
+			case "20":
+				xVal = 20
+			case "5":
+				xVal = 5
+			case "0.5":
+				xVal = 0.5
+			case "15":
+				xVal = 15
+			case "7":
+				xVal = 7
+			}
+			if math.Abs(got.Num-xVal) > tol {
+				t.Errorf("round-trip CHISQ.INV.RT(CHISQ.DIST.RT(%s,%s),%s)=%g, want %g (diff=%g)",
+					tc.x, tc.df, tc.df, got.Num, xVal, math.Abs(got.Num-xVal))
+			}
+		})
+	}
+}
+
+func TestF_DIST_RT_CrossCheck(t *testing.T) {
+	// F.DIST.RT(x, df1, df2) = 1 - F.DIST(x, df1, df2, TRUE)
+	resolver := &mockResolver{}
+	const tol = 1e-6
+
+	cases := []struct {
+		name string
+		x    string
+		df1  string
+		df2  string
+	}{
+		{"x1_5_5", "1", "5", "5"},
+		{"x2_5_5", "2", "5", "5"},
+		{"x3_2_3", "3", "2", "3"},
+		{"x0_5_10_10", "0.5", "10", "10"},
+		{"x5_1_1", "5", "1", "1"},
+		{"x1_5_30_30", "1.5", "30", "30"},
+		{"x0_1_5_5", "0.1", "5", "5"},
+		{"x10_3_7", "10", "3", "7"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rtFormula := "F.DIST.RT(" + tc.x + "," + tc.df1 + "," + tc.df2 + ")"
+			cdfFormula := "1-F.DIST(" + tc.x + "," + tc.df1 + "," + tc.df2 + ",TRUE)"
+
+			cfRT := evalCompile(t, rtFormula)
+			cfCDF := evalCompile(t, cdfFormula)
+
+			gotRT, err := Eval(cfRT, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval RT error: %v", err)
+			}
+			gotCDF, err := Eval(cfCDF, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval CDF error: %v", err)
+			}
+
+			if gotRT.Type != ValueNumber || gotCDF.Type != ValueNumber {
+				t.Fatalf("expected numbers, got RT type=%d CDF type=%d", gotRT.Type, gotCDF.Type)
+			}
+			if math.Abs(gotRT.Num-gotCDF.Num) > tol {
+				t.Errorf("F.DIST.RT(%s,%s,%s)=%g != 1-F.DIST(%s,%s,%s,TRUE)=%g (diff=%g)",
+					tc.x, tc.df1, tc.df2, gotRT.Num, tc.x, tc.df1, tc.df2, gotCDF.Num, math.Abs(gotRT.Num-gotCDF.Num))
+			}
+		})
+	}
+}
+
+func TestF_INV_RT_RoundTrip(t *testing.T) {
+	// F.INV.RT(F.DIST.RT(x, df1, df2), df1, df2) ≈ x
+	resolver := &mockResolver{}
+	const tol = 1e-3
+
+	cases := []struct {
+		name string
+		x    float64
+		df1  string
+		df2  string
+	}{
+		{"x1_5_5", 1, "5", "5"},
+		{"x2_5_5", 2, "5", "5"},
+		{"x3_2_3", 3, "2", "3"},
+		{"x0_5_10_10", 0.5, "10", "10"},
+		{"x5_3_7", 5, "3", "7"},
+		{"x1_5_30_30", 1.5, "30", "30"},
+		{"x0_1_5_5", 0.1, "5", "5"},
+		{"x10_3_7", 10, "3", "7"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			xStr := fmt.Sprintf("%g", tc.x)
+			roundTrip := "F.INV.RT(F.DIST.RT(" + xStr + "," + tc.df1 + "," + tc.df2 + ")," + tc.df1 + "," + tc.df2 + ")"
+			cf := evalCompile(t, roundTrip)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval error: %v", err)
+			}
+			if got.Type != ValueNumber {
+				t.Fatalf("expected number, got type=%d err=%v", got.Type, got.Err)
+			}
+			if math.Abs(got.Num-tc.x) > tol {
+				t.Errorf("round-trip F.INV.RT(F.DIST.RT(%g,%s,%s),%s,%s)=%g, want %g (diff=%g)",
+					tc.x, tc.df1, tc.df2, tc.df1, tc.df2, got.Num, tc.x, math.Abs(got.Num-tc.x))
+			}
+		})
+	}
+}
+
+func TestT_DIST_RT_CrossCheck(t *testing.T) {
+	// T.DIST.RT(x, df) = 1 - T.DIST(x, df, TRUE)
+	resolver := &mockResolver{}
+	const tol = 1e-7
+
+	cases := []struct {
+		name string
+		x    string
+		df   string
+	}{
+		{"x2_10", "2", "10"},
+		{"x0_5", "0", "5"},
+		{"x_neg2_10", "-2", "10"},
+		{"x1_1", "1", "1"},
+		{"x1_96_30", "1.96", "30"},
+		{"x5_10", "5", "10"},
+		{"x0_1_5", "0.1", "5"},
+		{"x3_100", "3", "100"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rtFormula := "T.DIST.RT(" + tc.x + "," + tc.df + ")"
+			cdfFormula := "1-T.DIST(" + tc.x + "," + tc.df + ",TRUE)"
+
+			cfRT := evalCompile(t, rtFormula)
+			cfCDF := evalCompile(t, cdfFormula)
+
+			gotRT, err := Eval(cfRT, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval RT error: %v", err)
+			}
+			gotCDF, err := Eval(cfCDF, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval CDF error: %v", err)
+			}
+
+			if gotRT.Type != ValueNumber || gotCDF.Type != ValueNumber {
+				t.Fatalf("expected numbers, got RT type=%d CDF type=%d", gotRT.Type, gotCDF.Type)
+			}
+			if math.Abs(gotRT.Num-gotCDF.Num) > tol {
+				t.Errorf("T.DIST.RT(%s,%s)=%g != 1-T.DIST(%s,%s,TRUE)=%g (diff=%g)",
+					tc.x, tc.df, gotRT.Num, tc.x, tc.df, gotCDF.Num, math.Abs(gotRT.Num-gotCDF.Num))
+			}
+		})
+	}
+}
+
+func TestT_DIST_2T_CrossCheck(t *testing.T) {
+	// T.DIST.2T(x, df) = 2 * T.DIST.RT(x, df) for x > 0
+	resolver := &mockResolver{}
+	const tol = 1e-7
+
+	cases := []struct {
+		name string
+		x    string
+		df   string
+	}{
+		{"x2_10", "2", "10"},
+		{"x1_5", "1", "5"},
+		{"x0_1_5", "0.1", "5"},
+		{"x5_10", "5", "10"},
+		{"x1_96_30", "1.96", "30"},
+		{"x3_100", "3", "100"},
+		{"x0_5_2", "0.5", "2"},
+		{"x10_50", "10", "50"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			twoTailFormula := "T.DIST.2T(" + tc.x + "," + tc.df + ")"
+			twoTimesRTFormula := "2*T.DIST.RT(" + tc.x + "," + tc.df + ")"
+
+			cf2T := evalCompile(t, twoTailFormula)
+			cf2RT := evalCompile(t, twoTimesRTFormula)
+
+			got2T, err := Eval(cf2T, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval 2T error: %v", err)
+			}
+			got2RT, err := Eval(cf2RT, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval 2*RT error: %v", err)
+			}
+
+			if got2T.Type != ValueNumber || got2RT.Type != ValueNumber {
+				t.Fatalf("expected numbers, got 2T type=%d 2*RT type=%d", got2T.Type, got2RT.Type)
+			}
+			if math.Abs(got2T.Num-got2RT.Num) > tol {
+				t.Errorf("T.DIST.2T(%s,%s)=%g != 2*T.DIST.RT(%s,%s)=%g (diff=%g)",
+					tc.x, tc.df, got2T.Num, tc.x, tc.df, got2RT.Num, math.Abs(got2T.Num-got2RT.Num))
+			}
+		})
+	}
 }
