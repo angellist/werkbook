@@ -5745,6 +5745,717 @@ func TestSUMXMY2_AllNegative(t *testing.T) {
 	}
 }
 
+// --------------- SUMX2MY2 additional tests ---------------
+
+func TestSUMX2MY2_ZeroArgs(t *testing.T) {
+	got, err := fnSumx2my2(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMX2MY2_OneArrayAllZeros(t *testing.T) {
+	resolver := &mockResolver{}
+	// When y=0: SUMX2MY2 = SUMSQ(x) = 1+4+9 = 14
+	cf := evalCompile(t, "SUMX2MY2({1,2,3},{0,0,0})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 14 {
+		t.Errorf("got %v (%g), want 14", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_IdentitySumSqDiff(t *testing.T) {
+	// Mathematical identity: SUMX2MY2(x,y) = SUMSQ(x) - SUMSQ(y)
+	// x={3,4,5}, y={1,2,3}: SUMSQ(x)=9+16+25=50, SUMSQ(y)=1+4+9=14, diff=36
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUMX2MY2({3,4,5},{1,2,3})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 36 {
+		t.Errorf("got %v (%g), want 36", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_MixedPositiveNegativeLarger(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-5,10,-15,20} vs {3,-7,11,-13}
+	// (25-9)+(100-49)+(225-121)+(400-169) = 16+51+104+231 = 402
+	cf := evalCompile(t, "SUMX2MY2({-5,10,-15,20},{3,-7,11,-13})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 402 {
+		t.Errorf("got %v (%g), want 402", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_VeryLargeValues(t *testing.T) {
+	resolver := &mockResolver{}
+	// {10000,20000} vs {30000,40000}
+	// (1e8-9e8)+(4e8-16e8) = -8e8 + -12e8 = -2e9
+	cf := evalCompile(t, "SUMX2MY2({10000,20000},{30000,40000})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != -2e9 {
+		t.Errorf("got %v (%g), want -2e9", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_FractionalDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {0.1,0.2,0.3} vs {0.4,0.5,0.6}
+	// (0.01-0.16)+(0.04-0.25)+(0.09-0.36) = -0.15-0.21-0.27 = -0.63
+	cf := evalCompile(t, "SUMX2MY2({0.1,0.2,0.3},{0.4,0.5,0.6})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if math.Abs(got.Num-(-0.63)) > 1e-10 {
+		t.Errorf("got %v (%g), want -0.63", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_TextInSecondArray(t *testing.T) {
+	got, err := fnSumx2my2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(3), StringVal("hello")}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMX2MY2_MultiRow2DArray(t *testing.T) {
+	// 2D array: {{1,2},{3,4}} vs {{5,6},{7,8}} flattened: {1,2,3,4} vs {5,6,7,8}
+	// (1-25)+(4-36)+(9-49)+(16-64) = -24-32-40-48 = -144
+	got, err := fnSumx2my2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}, {NumberVal(3), NumberVal(4)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(5), NumberVal(6)}, {NumberVal(7), NumberVal(8)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != -144 {
+		t.Errorf("got %v (%g), want -144", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_BothBoolArrays(t *testing.T) {
+	// {TRUE,FALSE} vs {FALSE,TRUE} => {1,0} vs {0,1}
+	// (1-0)+(0-1) = 1-1 = 0
+	got, err := fnSumx2my2([]Value{
+		{Type: ValueArray, Array: [][]Value{{BoolVal(true), BoolVal(false)}}},
+		{Type: ValueArray, Array: [][]Value{{BoolVal(false), BoolVal(true)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("got %v (%g), want 0", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_NegativeDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-1.5,-2.5} vs {-0.5,-1.5}
+	// (2.25-0.25)+(6.25-2.25) = 2+4 = 6
+	cf := evalCompile(t, "SUMX2MY2({-1.5,-2.5},{-0.5,-1.5})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 6 {
+		t.Errorf("got %v (%g), want 6", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2MY2_AntiSymmetry(t *testing.T) {
+	// SUMX2MY2(x,y) = -SUMX2MY2(y,x)
+	resolver := &mockResolver{}
+	cf1 := evalCompile(t, "SUMX2MY2({2,5,8},{3,4,6})")
+	got1, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cf2 := evalCompile(t, "SUMX2MY2({3,4,6},{2,5,8})")
+	got2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got1.Num != -got2.Num {
+		t.Errorf("anti-symmetry failed: SUMX2MY2(x,y)=%g, SUMX2MY2(y,x)=%g", got1.Num, got2.Num)
+	}
+}
+
+func TestSUMX2MY2_CellRangeWithEmptyCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(4),
+			// A3 is empty (treated as 0)
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(5),
+		},
+	}
+	cf := evalCompile(t, "SUMX2MY2(A1:A3,B1:B3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// (9-1)+(16-4)+(0-25) = 8+12-25 = -5
+	if got.Type != ValueNumber || got.Num != -5 {
+		t.Errorf("got %v (%g), want -5", got.Type, got.Num)
+	}
+}
+
+// --------------- SUMX2PY2 additional tests ---------------
+
+func TestSUMX2PY2_ZeroArgs(t *testing.T) {
+	got, err := fnSumx2py2(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMX2PY2_OneArrayAllZeros(t *testing.T) {
+	resolver := &mockResolver{}
+	// When y=0: SUMX2PY2 = SUMSQ(x) = 1+4+9 = 14
+	cf := evalCompile(t, "SUMX2PY2({1,2,3},{0,0,0})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 14 {
+		t.Errorf("got %v (%g), want 14", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_IdentityWithSUMX2MY2(t *testing.T) {
+	// SUMX2PY2(x,y) = SUMX2MY2(x,y) + 2*SUMSQ(y)
+	// x={2,3}, y={4,5}: SUMX2PY2=(4+16)+(9+25)=54
+	// SUMX2MY2=(4-16)+(9-25)=-28, SUMSQ(y)=16+25=41, -28+82=54 ✓
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUMX2PY2({2,3},{4,5})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 54 {
+		t.Errorf("got %v (%g), want 54", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_MixedPositiveNegativeLarger(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-5,10,-15,20} vs {3,-7,11,-13}
+	// (25+9)+(100+49)+(225+121)+(400+169) = 34+149+346+569 = 1098
+	cf := evalCompile(t, "SUMX2PY2({-5,10,-15,20},{3,-7,11,-13})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1098 {
+		t.Errorf("got %v (%g), want 1098", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_VeryLargeValues(t *testing.T) {
+	resolver := &mockResolver{}
+	// {10000,20000} vs {30000,40000}
+	// (1e8+9e8)+(4e8+16e8) = 10e8+20e8 = 3e9
+	cf := evalCompile(t, "SUMX2PY2({10000,20000},{30000,40000})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3e9 {
+		t.Errorf("got %v (%g), want 3e9", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_FractionalDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {0.1,0.2,0.3} vs {0.4,0.5,0.6}
+	// (0.01+0.16)+(0.04+0.25)+(0.09+0.36) = 0.17+0.29+0.45 = 0.91
+	cf := evalCompile(t, "SUMX2PY2({0.1,0.2,0.3},{0.4,0.5,0.6})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if math.Abs(got.Num-0.91) > 1e-10 {
+		t.Errorf("got %v (%g), want 0.91", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_TextInSecondArray(t *testing.T) {
+	got, err := fnSumx2py2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(3), StringVal("xyz")}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMX2PY2_MultiRow2DArray(t *testing.T) {
+	// 2D array: {{1,2},{3,4}} vs {{5,6},{7,8}} flattened: {1,2,3,4} vs {5,6,7,8}
+	// (1+25)+(4+36)+(9+49)+(16+64) = 26+40+58+80 = 204
+	got, err := fnSumx2py2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}, {NumberVal(3), NumberVal(4)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(5), NumberVal(6)}, {NumberVal(7), NumberVal(8)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 204 {
+		t.Errorf("got %v (%g), want 204", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_BothBoolArrays(t *testing.T) {
+	// {TRUE,FALSE} vs {FALSE,TRUE} => {1,0} vs {0,1}
+	// (1+0)+(0+1) = 1+1 = 2
+	got, err := fnSumx2py2([]Value{
+		{Type: ValueArray, Array: [][]Value{{BoolVal(true), BoolVal(false)}}},
+		{Type: ValueArray, Array: [][]Value{{BoolVal(false), BoolVal(true)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_NegativeDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-1.5,-2.5} vs {-0.5,-1.5}
+	// (2.25+0.25)+(6.25+2.25) = 2.5+8.5 = 11
+	cf := evalCompile(t, "SUMX2PY2({-1.5,-2.5},{-0.5,-1.5})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 11 {
+		t.Errorf("got %v (%g), want 11", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_Symmetric(t *testing.T) {
+	// SUMX2PY2(x,y) = SUMX2PY2(y,x) — it's commutative
+	resolver := &mockResolver{}
+	cf1 := evalCompile(t, "SUMX2PY2({2,5,8},{3,4,6})")
+	got1, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cf2 := evalCompile(t, "SUMX2PY2({3,4,6},{2,5,8})")
+	got2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got1.Num != got2.Num {
+		t.Errorf("symmetry failed: SUMX2PY2(x,y)=%g, SUMX2PY2(y,x)=%g", got1.Num, got2.Num)
+	}
+}
+
+func TestSUMX2PY2_CellRangeWithEmptyCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(4),
+			// A3 is empty (treated as 0)
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(5),
+		},
+	}
+	cf := evalCompile(t, "SUMX2PY2(A1:A3,B1:B3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// (9+1)+(16+4)+(0+25) = 10+20+25 = 55
+	if got.Type != ValueNumber || got.Num != 55 {
+		t.Errorf("got %v (%g), want 55", got.Type, got.Num)
+	}
+}
+
+func TestSUMX2PY2_AlwaysNonNegative(t *testing.T) {
+	// SUMX2PY2 result is always >= 0 for any real inputs
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUMX2PY2({-99,-50,0,50,99},{-88,-44,0,44,88})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num < 0 {
+		t.Errorf("expected non-negative, got %v (%g)", got.Type, got.Num)
+	}
+	// Exact: (9801+7744)+(2500+1936)+(0+0)+(2500+1936)+(9801+7744) = 43962
+	if got.Num != 43962 {
+		t.Errorf("got %g, want 43962", got.Num)
+	}
+}
+
+// --------------- SUMXMY2 additional tests ---------------
+
+func TestSUMXMY2_ZeroArgs(t *testing.T) {
+	got, err := fnSumxmy2(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMXMY2_OneArrayAllZeros(t *testing.T) {
+	resolver := &mockResolver{}
+	// When y=0: SUMXMY2 = SUMSQ(x) = 1+4+9 = 14
+	cf := evalCompile(t, "SUMXMY2({1,2,3},{0,0,0})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 14 {
+		t.Errorf("got %v (%g), want 14", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_IdentityCrossCheck(t *testing.T) {
+	// SUMXMY2(x,y) = SUMX2PY2(x,y) - 2*SUMPRODUCT(x,y)
+	// x={2,3,4}, y={1,5,2}
+	// SUMX2PY2 = (4+1)+(9+25)+(16+4) = 5+34+20 = 59
+	// SUMPRODUCT = 2*1 + 3*5 + 4*2 = 2+15+8 = 25
+	// SUMXMY2 = 59 - 50 = 9
+	// Direct: (2-1)²+(3-5)²+(4-2)² = 1+4+4 = 9 ✓
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUMXMY2({2,3,4},{1,5,2})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 9 {
+		t.Errorf("got %v (%g), want 9", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_MixedPositiveNegativeLarger(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-5,10,-15,20} vs {3,-7,11,-13}
+	// (-5-3)²+(10-(-7))²+(-15-11)²+(20-(-13))²
+	// = (-8)²+(17)²+(-26)²+(33)² = 64+289+676+1089 = 2118
+	cf := evalCompile(t, "SUMXMY2({-5,10,-15,20},{3,-7,11,-13})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2118 {
+		t.Errorf("got %v (%g), want 2118", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_VeryLargeValues(t *testing.T) {
+	resolver := &mockResolver{}
+	// {10000,20000} vs {30000,40000}
+	// (-20000)²+(-20000)² = 4e8+4e8 = 8e8
+	cf := evalCompile(t, "SUMXMY2({10000,20000},{30000,40000})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 8e8 {
+		t.Errorf("got %v (%g), want 8e8", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_FractionalDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {0.1,0.2,0.3} vs {0.4,0.5,0.6}
+	// (-0.3)²+(-0.3)²+(-0.3)² = 0.09+0.09+0.09 = 0.27
+	cf := evalCompile(t, "SUMXMY2({0.1,0.2,0.3},{0.4,0.5,0.6})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if math.Abs(got.Num-0.27) > 1e-10 {
+		t.Errorf("got %v (%g), want 0.27", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_TextInSecondArray(t *testing.T) {
+	got, err := fnSumxmy2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(3), StringVal("nope")}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("expected #VALUE!, got type=%v err=%v", got.Type, got.Err)
+	}
+}
+
+func TestSUMXMY2_MultiRow2DArray(t *testing.T) {
+	// 2D array: {{1,2},{3,4}} vs {{5,6},{7,8}} flattened: {1,2,3,4} vs {5,6,7,8}
+	// (-4)²+(-4)²+(-4)²+(-4)² = 16+16+16+16 = 64
+	got, err := fnSumxmy2([]Value{
+		{Type: ValueArray, Array: [][]Value{{NumberVal(1), NumberVal(2)}, {NumberVal(3), NumberVal(4)}}},
+		{Type: ValueArray, Array: [][]Value{{NumberVal(5), NumberVal(6)}, {NumberVal(7), NumberVal(8)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 64 {
+		t.Errorf("got %v (%g), want 64", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_BothBoolArrays(t *testing.T) {
+	// {TRUE,FALSE} vs {FALSE,TRUE} => {1,0} vs {0,1}
+	// (1-0)²+(0-1)² = 1+1 = 2
+	got, err := fnSumxmy2([]Value{
+		{Type: ValueArray, Array: [][]Value{{BoolVal(true), BoolVal(false)}}},
+		{Type: ValueArray, Array: [][]Value{{BoolVal(false), BoolVal(true)}}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_NegativeDecimals(t *testing.T) {
+	resolver := &mockResolver{}
+	// {-1.5,-2.5} vs {-0.5,-1.5}
+	// (-1.5-(-0.5))²+(-2.5-(-1.5))² = (-1)²+(-1)² = 1+1 = 2
+	cf := evalCompile(t, "SUMXMY2({-1.5,-2.5},{-0.5,-1.5})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("got %v (%g), want 2", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_Symmetric(t *testing.T) {
+	// SUMXMY2(x,y) = SUMXMY2(y,x) because (x-y)² = (y-x)²
+	resolver := &mockResolver{}
+	cf1 := evalCompile(t, "SUMXMY2({2,5,8},{3,4,6})")
+	got1, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cf2 := evalCompile(t, "SUMXMY2({3,4,6},{2,5,8})")
+	got2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got1.Num != got2.Num {
+		t.Errorf("symmetry failed: SUMXMY2(x,y)=%g, SUMXMY2(y,x)=%g", got1.Num, got2.Num)
+	}
+}
+
+func TestSUMXMY2_CellRangeWithEmptyCell(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(4),
+			// A3 is empty (treated as 0)
+			{Col: 2, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 3}: NumberVal(5),
+		},
+	}
+	cf := evalCompile(t, "SUMXMY2(A1:A3,B1:B3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// (3-1)²+(4-2)²+(0-5)² = 4+4+25 = 33
+	if got.Type != ValueNumber || got.Num != 33 {
+		t.Errorf("got %v (%g), want 33", got.Type, got.Num)
+	}
+}
+
+func TestSUMXMY2_AlwaysNonNegative(t *testing.T) {
+	// SUMXMY2 result is always >= 0
+	resolver := &mockResolver{}
+	cf := evalCompile(t, "SUMXMY2({-99,-50,0,50,99},{-88,-44,0,44,88})")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num < 0 {
+		t.Errorf("expected non-negative, got %v (%g)", got.Type, got.Num)
+	}
+	// Exact: (-11)²+(-6)²+0+(6)²+(11)² = 121+36+0+36+121 = 314
+	if got.Num != 314 {
+		t.Errorf("got %g, want 314", got.Num)
+	}
+}
+
+// --------------- Cross-function identity tests ---------------
+
+func TestSUMX_TripleIdentity(t *testing.T) {
+	// For x={1,2,3,4}, y={5,6,7,8}:
+	// SUMX2PY2 = SUMX2MY2 + 2*SUMSQ(y)
+	// SUMXMY2 = SUMX2PY2 - 2*SUMPRODUCT(x,y)
+	resolver := &mockResolver{}
+
+	cf1 := evalCompile(t, "SUMX2MY2({1,2,3,4},{5,6,7,8})")
+	x2my2, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2MY2 error: %v", err)
+	}
+
+	cf2 := evalCompile(t, "SUMX2PY2({1,2,3,4},{5,6,7,8})")
+	x2py2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2PY2 error: %v", err)
+	}
+
+	cf3 := evalCompile(t, "SUMXMY2({1,2,3,4},{5,6,7,8})")
+	xmy2, err := Eval(cf3, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMXMY2 error: %v", err)
+	}
+
+	// Manual: SUMSQ(y) = 25+36+49+64 = 174
+	sumsqY := 174.0
+	// Manual: SUMPRODUCT(x,y) = 5+12+21+32 = 70
+	sumprod := 70.0
+
+	// Identity 1: SUMX2PY2 = SUMX2MY2 + 2*SUMSQ(y)
+	lhs1 := x2py2.Num
+	rhs1 := x2my2.Num + 2*sumsqY
+	if math.Abs(lhs1-rhs1) > 1e-10 {
+		t.Errorf("identity SUMX2PY2 = SUMX2MY2 + 2*SUMSQ(y) failed: %g != %g", lhs1, rhs1)
+	}
+
+	// Identity 2: SUMXMY2 = SUMX2PY2 - 2*SUMPRODUCT(x,y)
+	lhs2 := xmy2.Num
+	rhs2 := x2py2.Num - 2*sumprod
+	if math.Abs(lhs2-rhs2) > 1e-10 {
+		t.Errorf("identity SUMXMY2 = SUMX2PY2 - 2*SUMPRODUCT failed: %g != %g", lhs2, rhs2)
+	}
+
+	// Identity 3: SUMX2MY2 = SUMSQ(x) - SUMSQ(y)
+	// SUMSQ(x) = 1+4+9+16 = 30
+	sumsqX := 30.0
+	lhs3 := x2my2.Num
+	rhs3 := sumsqX - sumsqY
+	if math.Abs(lhs3-rhs3) > 1e-10 {
+		t.Errorf("identity SUMX2MY2 = SUMSQ(x) - SUMSQ(y) failed: %g != %g", lhs3, rhs3)
+	}
+}
+
+func TestSUMX_IdentityWithNegatives(t *testing.T) {
+	// Same identities with negative and mixed values
+	// x={-3,7,-2,10}, y={4,-5,8,-1}
+	resolver := &mockResolver{}
+
+	cf1 := evalCompile(t, "SUMX2MY2({-3,7,-2,10},{4,-5,8,-1})")
+	x2my2, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2MY2 error: %v", err)
+	}
+
+	cf2 := evalCompile(t, "SUMX2PY2({-3,7,-2,10},{4,-5,8,-1})")
+	x2py2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2PY2 error: %v", err)
+	}
+
+	cf3 := evalCompile(t, "SUMXMY2({-3,7,-2,10},{4,-5,8,-1})")
+	xmy2, err := Eval(cf3, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMXMY2 error: %v", err)
+	}
+
+	// SUMSQ(x) = 9+49+4+100 = 162
+	sumsqX := 162.0
+	// SUMSQ(y) = 16+25+64+1 = 106
+	sumsqY := 106.0
+	// SUMPRODUCT = -12 + -35 + -16 + -10 = -73
+	sumprod := -73.0
+
+	// Identity 1: SUMX2MY2 = SUMSQ(x) - SUMSQ(y)
+	if math.Abs(x2my2.Num-(sumsqX-sumsqY)) > 1e-10 {
+		t.Errorf("identity SUMX2MY2 = SUMSQ(x) - SUMSQ(y) failed: %g != %g", x2my2.Num, sumsqX-sumsqY)
+	}
+
+	// Identity 2: SUMX2PY2 = SUMX2MY2 + 2*SUMSQ(y)
+	if math.Abs(x2py2.Num-(x2my2.Num+2*sumsqY)) > 1e-10 {
+		t.Errorf("identity SUMX2PY2 = SUMX2MY2 + 2*SUMSQ(y) failed: %g != %g", x2py2.Num, x2my2.Num+2*sumsqY)
+	}
+
+	// Identity 3: SUMXMY2 = SUMX2PY2 - 2*SUMPRODUCT
+	if math.Abs(xmy2.Num-(x2py2.Num-2*sumprod)) > 1e-10 {
+		t.Errorf("identity SUMXMY2 = SUMX2PY2 - 2*SUMPRODUCT failed: %g != %g", xmy2.Num, x2py2.Num-2*sumprod)
+	}
+}
+
+func TestSUMX_EqualArraysProperties(t *testing.T) {
+	// When x = y:
+	// SUMX2MY2 = 0 (x²-y² = 0 for each pair)
+	// SUMXMY2 = 0 ((x-y)² = 0 for each pair)
+	// SUMX2PY2 = 2*SUMSQ(x)
+	resolver := &mockResolver{}
+
+	cf1 := evalCompile(t, "SUMX2MY2({3,7,11},{3,7,11})")
+	x2my2, err := Eval(cf1, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2MY2 error: %v", err)
+	}
+	if x2my2.Num != 0 {
+		t.Errorf("SUMX2MY2 with equal arrays: got %g, want 0", x2my2.Num)
+	}
+
+	cf2 := evalCompile(t, "SUMXMY2({3,7,11},{3,7,11})")
+	xmy2, err := Eval(cf2, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMXMY2 error: %v", err)
+	}
+	if xmy2.Num != 0 {
+		t.Errorf("SUMXMY2 with equal arrays: got %g, want 0", xmy2.Num)
+	}
+
+	cf3 := evalCompile(t, "SUMX2PY2({3,7,11},{3,7,11})")
+	x2py2, err := Eval(cf3, resolver, nil)
+	if err != nil {
+		t.Fatalf("SUMX2PY2 error: %v", err)
+	}
+	// 2*SUMSQ(3,7,11) = 2*(9+49+121) = 2*179 = 358
+	if x2py2.Num != 358 {
+		t.Errorf("SUMX2PY2 with equal arrays: got %g, want 358", x2py2.Num)
+	}
+}
+
 func TestINT(t *testing.T) {
 	resolver := &mockResolver{}
 
