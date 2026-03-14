@@ -9307,6 +9307,397 @@ func TestACCRINT_Comprehensive(t *testing.T) {
 			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), StringVal("abc"), NumberVal(1000), NumberVal(2), NumberVal(0)},
 			wantErr: true,
 		},
+		{
+			name:    "non-numeric par",
+			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), NumberVal(0.05), StringVal("abc"), NumberVal(2), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric frequency",
+			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), NumberVal(0.05), NumberVal(1000), StringVal("abc"), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric basis",
+			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), NumberVal(0.05), NumberVal(1000), NumberVal(2), StringVal("abc")},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric first_interest",
+			args:    []Value{NumberVal(39462), StringVal("abc"), NumberVal(39553), NumberVal(0.05), NumberVal(1000), NumberVal(2), NumberVal(0)},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric calc_method",
+			args:    []Value{NumberVal(39462), NumberVal(39644), NumberVal(39553), NumberVal(0.05), NumberVal(1000), NumberVal(2), NumberVal(0), StringVal("abc")},
+			wantErr: true,
+		},
+
+		// --- Different par values ---
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-04-01(40269)
+		// rate=0.06, freq=2, basis=0
+		// 30/360: 1/1 to 4/1 = 90 days, NL=180, par*rate/freq*90/180
+		{
+			name: "par 100",
+			args: numArgs(40179, 40360, 40269, 0.06, 100, 2, 0),
+			want: 1.5, // 100*0.06/2*90/180 = 1.5
+			tol:  0.0001,
+		},
+		{
+			name: "par 1000",
+			args: numArgs(40179, 40360, 40269, 0.06, 1000, 2, 0),
+			want: 15.0, // 1000*0.06/2*90/180 = 15.0
+			tol:  0.0001,
+		},
+		{
+			name: "par 10000",
+			args: numArgs(40179, 40360, 40269, 0.06, 10000, 2, 0),
+			want: 150.0, // 10000*0.06/2*90/180 = 150.0
+			tol:  0.0001,
+		},
+
+		// --- High coupon rate ---
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-04-01(40269)
+		// rate=0.25, par=1000, freq=2, basis=0
+		// 1000*0.25/2*90/180 = 62.5
+		{
+			name: "high coupon rate 25%",
+			args: numArgs(40179, 40360, 40269, 0.25, 1000, 2, 0),
+			want: 62.5,
+			tol:  0.0001,
+		},
+
+		// --- Very low coupon rate ---
+		// rate=0.0001, par=1000, freq=2, basis=0
+		// 1000*0.0001/2*90/180 = 0.025
+		{
+			name: "very low coupon rate 0.01%",
+			args: numArgs(40179, 40360, 40269, 0.0001, 1000, 2, 0),
+			want: 0.025,
+			tol:  0.0001,
+		},
+
+		// --- Short accrual period (1 day) ---
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-01-02(40180)
+		// rate=0.06, par=1000, freq=2, basis=0
+		// 30/360: 1/1 to 1/2 = 1 day, NL=180. 1000*0.06/2*1/180 = 0.166667
+		{
+			name: "short accrual 1 day",
+			args: numArgs(40179, 40360, 40180, 0.06, 1000, 2, 0),
+			want: 0.166667,
+			tol:  0.000001,
+		},
+
+		// --- Short accrual period (1 day) with actual/actual ---
+		// basis=1, actual days: 1 day, period from 2010-01-01 to 2010-07-01 = 181 days
+		// 1000*0.06/2*1/181 = 0.165746
+		{
+			name: "short accrual 1 day basis 1",
+			args: numArgs(40179, 40360, 40180, 0.06, 1000, 2, 1),
+			want: 0.165746,
+			tol:  0.001,
+		},
+
+		// --- Long accrual period (multiple years) ---
+		// issue=2005-01-01(38353), fi=2005-07-01(38534), settlement=2010-01-01(40179)
+		// rate=0.08, par=1000, freq=2, basis=0, calc_method=TRUE
+		// 5 years = 10 semi-annual periods, each period = 1000*0.08/2 = 40
+		// Total = 400.0
+		{
+			name: "long accrual 5 years 10 periods",
+			args: numArgs(38353, 38534, 40179, 0.08, 1000, 2, 0, 1),
+			want: 400.0,
+			tol:  0.01,
+		},
+
+		// --- Long accrual with calc_method FALSE ---
+		// Same dates but calc_method=FALSE; accrue only from PCD before settlement
+		// settlement=2010-01-01, PCD before 2010-01-01 = 2010-01-01 itself (coupon date)
+		// So accrued = 0 (settlement is on a coupon date and PCD=settlement)
+		// Actually PCD on or before settlement: fi=2005-07-01 => coupons at 01-01, 07-01
+		// PCD=2010-01-01 which is settlement, so accrued = 0
+		{
+			name: "long accrual calc_method FALSE settlement on coupon",
+			args: numArgs(38353, 38534, 40179, 0.08, 1000, 2, 0, 0),
+			want: 0.0,
+			tol:  0.0001,
+		},
+
+		// --- Annual frequency with basis 1 (actual/actual) ---
+		// issue=2015-01-01(42005), fi=2016-01-01(42370), settlement=2015-07-01(42186)
+		// rate=0.05, par=1000, freq=1, basis=1
+		// actual days: 2015-01-01 to 2015-07-01 = 181 days
+		// period: 2015-01-01 to 2016-01-01 = 365 days
+		// 1000*0.05/1*181/365 = 24.7945
+		{
+			name: "annual freq basis 1 actual/actual",
+			args: numArgs(42005, 42370, 42186, 0.05, 1000, 1, 1),
+			want: 24.7945,
+			tol:  0.001,
+		},
+
+		// --- Quarterly frequency with basis 2 (actual/360) ---
+		// issue=2015-01-01(42005), fi=2015-04-01(42095), settlement=2015-03-31(42094)
+		// rate=0.04, par=1000, freq=4, basis=2
+		// actual days: 2015-01-01 to 2015-03-31 = 89 days
+		// NL = 360/4 = 90
+		// 1000*0.04/4*89/90 = 9.8889
+		{
+			name: "quarterly freq basis 2 actual/360",
+			args: numArgs(42005, 42095, 42094, 0.04, 1000, 4, 2),
+			want: 9.8889,
+			tol:  0.001,
+		},
+
+		// --- Quarterly frequency with basis 3 (actual/365) ---
+		// issue=2015-01-01(42005), fi=2015-04-01(42095), settlement=2015-03-31(42094)
+		// rate=0.04, par=1000, freq=4, basis=3
+		// actual days: 89, NL=365/4=91.25
+		// 1000*0.04/4*89/91.25 = 9.7534
+		{
+			name: "quarterly freq basis 3 actual/365",
+			args: numArgs(42005, 42095, 42094, 0.04, 1000, 4, 3),
+			want: 9.7534,
+			tol:  0.001,
+		},
+
+		// --- Basis 4 European 30/360 with end-of-month ---
+		// issue=2015-01-01(42005), fi=2015-07-01(42186), settlement=2015-06-15(42170)
+		// rate=0.06, par=1000, freq=2, basis=4
+		// Euro 30/360: 1/1 to 6/15 = (6-1)*30+(15-1) = 164 days, NL=180
+		// 1000*0.06/2*164/180 = 27.3333
+		{
+			name: "basis 4 euro 30/360 mid month",
+			args: numArgs(42005, 42186, 42170, 0.06, 1000, 2, 4),
+			want: 27.3333,
+			tol:  0.001,
+		},
+
+		// --- Settlement exactly 1 period after issue ---
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-07-01(40360)
+		// rate=0.10, par=1000, freq=2, basis=0
+		// 30/360: 1/1 to 7/1 = 180 days, NL=180. 1000*0.10/2*180/180 = 50.0
+		{
+			name: "settlement exactly 1 period after issue",
+			args: numArgs(40179, 40360, 40360, 0.10, 1000, 2, 0),
+			want: 50.0,
+			tol:  0.0001,
+		},
+
+		// --- Basis 0 end-of-month scenario ---
+		// issue=2010-01-31(40209), fi=2010-07-31 => but let's use a standard:
+		// issue=2010-01-31(40209), fi=2010-07-01(40360), settlement=2010-03-01(40238)
+		// rate=0.06, par=1000, freq=2, basis=0
+		// US 30/360: day1=31=>30 adjustment. 1/30 to 3/1 = 1*30+1 = 31 days
+		// NL=180. 1000*0.06/2*31/180 = 5.1667
+		{
+			name: "basis 0 end-of-month issue",
+			args: numArgs(40209, 40360, 40238, 0.06, 1000, 2, 0),
+			want: 5.1667,
+			tol:  0.01,
+		},
+
+		// --- Multiple periods spanning with calc_method=TRUE, basis 1 ---
+		// issue=2019-01-01(43466), fi=2019-07-01(43647), settlement=2020-04-01(43922)
+		// rate=0.05, par=1000, freq=2, basis=1
+		// calc_method TRUE: accrue from issue to settlement
+		// Periods: 2019-01-01..2019-07-01 (181/181=1.0, pay=25),
+		//          2019-07-01..2020-01-01 (184/184=1.0, pay=25),
+		//          2020-01-01..2020-04-01 (91 days, period 2020-01-01..2020-07-01=182 days, pay=25*91/182=12.5)
+		// Total = 25 + 25 + 12.5 = 62.5
+		{
+			name: "multi period basis 1 calc_method TRUE",
+			args: numArgs(43466, 43647, 43922, 0.05, 1000, 2, 1, 1),
+			want: 62.5,
+			tol:  0.01,
+		},
+
+		// --- Same as above but calc_method=FALSE ---
+		// PCD before 2020-04-01 with fi=2019-07-01 pattern: PCD=2020-01-01
+		// accrue from max(issue, PCD) = PCD=2020-01-01 to settlement=2020-04-01
+		// 91 actual days, period=182. 1000*0.05/2*91/182=12.5
+		{
+			name: "multi period basis 1 calc_method FALSE",
+			args: numArgs(43466, 43647, 43922, 0.05, 1000, 2, 1, 0),
+			want: 12.5,
+			tol:  0.01,
+		},
+
+		// --- Leap year: basis 1 actual/actual across Feb 29 ---
+		// issue=2020-01-15(43845), fi=2020-07-15(44027), settlement=2020-04-15(43936)
+		// rate=0.06, par=1000, freq=2, basis=1
+		// actual days: 2020-01-15 to 2020-04-15 = 91 days (through Feb 29)
+		// period: 2020-01-15 to 2020-07-15 = 182 days
+		// 1000*0.06/2*91/182 = 15.0
+		{
+			name: "leap year basis 1 across Feb 29",
+			args: numArgs(43845, 44027, 43936, 0.06, 1000, 2, 1),
+			want: 15.0,
+			tol:  0.0001,
+		},
+
+		// --- Leap year: basis 2 actual/360 across Feb 29 ---
+		// Same dates, basis=2
+		// actual days: 91, NL=360/2=180
+		// 1000*0.06/2*91/180 = 15.1667
+		{
+			name: "leap year basis 2 across Feb 29",
+			args: numArgs(43845, 44027, 43936, 0.06, 1000, 2, 2),
+			want: 15.1667,
+			tol:  0.001,
+		},
+
+		// --- Leap year: basis 3 actual/365 across Feb 29 ---
+		// Same dates, basis=3
+		// actual days: 91, NL=365/2=182.5
+		// 1000*0.06/2*91/182.5 = 14.9589
+		{
+			name: "leap year basis 3 across Feb 29",
+			args: numArgs(43845, 44027, 43936, 0.06, 1000, 2, 3),
+			want: 14.9589,
+			tol:  0.001,
+		},
+
+		// --- Annual bond spanning multiple years ---
+		// issue=2018-01-01(43101), fi=2019-01-01(43466), settlement=2020-07-01(44013)
+		// rate=0.07, par=5000, freq=1, basis=0, calc_method=TRUE
+		// 30/360 annual periods:
+		// 2018-01-01..2019-01-01: 360 days => 5000*0.07*360/360 = 350
+		// 2019-01-01..2020-01-01: 360 days => 350
+		// 2020-01-01..2020-07-01: 180 days, NL=360 => 5000*0.07*180/360 = 175
+		// Total = 875
+		{
+			name: "annual multi-year par 5000",
+			args: numArgs(43101, 43466, 44013, 0.07, 5000, 1, 0, 1),
+			want: 875.0,
+			tol:  0.01,
+		},
+
+		// --- Quarterly multi-period ---
+		// issue=2022-01-01(44562), fi=2022-04-01(44652), settlement=2022-10-01(44835)
+		// rate=0.08, par=1000, freq=4, basis=0, calc_method=TRUE
+		// 30/360 quarterly periods:
+		// Q1: 2022-01-01..2022-04-01: 90 days, NL=90. 1000*0.08/4*90/90 = 20
+		// Q2: 2022-04-01..2022-07-01: 90 days, NL=90. 20
+		// Q3: 2022-07-01..2022-10-01: 90 days, NL=90. 20
+		// Total = 60
+		{
+			name: "quarterly multi-period 3 full quarters",
+			args: numArgs(44562, 44652, 44835, 0.08, 1000, 4, 0, 1),
+			want: 60.0,
+			tol:  0.0001,
+		},
+
+		// --- Same quarterly but calc_method=FALSE ---
+		// PCD before 2022-10-01: PCD=2022-10-01 (it's a coupon date)
+		// So accrued from PCD to settlement = 0
+		{
+			name: "quarterly multi-period calc_method FALSE on coupon",
+			args: numArgs(44562, 44652, 44835, 0.08, 1000, 4, 0, 0),
+			want: 0.0,
+			tol:  0.0001,
+		},
+
+		// --- Basis 0 vs Basis 4 difference ---
+		// On Feb end-of-month, US 30/360 and Euro 30/360 can differ.
+		// issue=2020-02-29(43890), fi=2020-07-15(44027), settlement=2020-04-15(43936)
+		// rate=0.06, par=1000, freq=2, basis=0
+		// US 30/360: Feb 29 => d1=30 for 30/360 US, so 2/30 to 4/15 = 1*30+15 = 45 days?
+		// Actually d1=29 for issue, d2=15 for settlement.
+		// US: if d1=29 (and it's end of Feb which is <=29), we need to check the US rule:
+		// d1=29 stays 29 in standard NASD unless d1>=30. days = (4-2)*30+(15-29) = 60-14 = 46
+		// NL=180. 1000*0.06/2*46/180 = 7.6667
+		// basis=4 Euro: d1=min(d1,30)=29, d2=min(d2,30)=15. days = (4-2)*30+(15-29) = 46
+		// Same result here because d1<30 and d2<30.
+		// Let's use a case where they differ: d1=31
+		// issue=2010-01-31(40209), fi=2010-07-01(40360), settlement=2010-04-01(40269)
+		// US 30/360: d1=31=>30, d2=1. days = (4-1)*30+(1-30) = 90-29 = 61?
+		// Actually: days360Calc: US method adjusts d1>=31=>30, then if d2>=31 and d1>=30, d2=>30 too.
+		// d1=31=>30, d2=1, (y2-y1)*360+(m2-m1)*30+(d2-d1) = 0+90+(1-30) = 61
+		// Wait that doesn't seem right... let me check the formula differently.
+		// The 30/360 formula is: (y2-y1)*360 + (m2-m1)*30 + (d2-d1).
+		// With US adjustments: d1=31 => d1=30. d2=1.
+		// = 0*360 + (4-1)*30 + (1-30) = 90 - 29 = 61 days
+		// Euro adjustments: d1=min(31,30)=30, d2=min(1,30)=1.
+		// = 0*360 + 90 + (1-30) = 61 days. Same.
+		// Let me try: issue=2010-03-31, fi=2010-07-01, settlement=2010-06-30
+		// Actually the existing test already covers basis 0 vs 4.
+		// Instead let's just ensure basis 4 gives correct European 30/360.
+		// issue=2022-01-15(44576), fi=2022-07-15(44757), settlement=2022-04-15(44652+15=NO)
+		// Let me use: issue=2022-01-15(44576), fi=2022-07-15(44757), settlement=2023-04-15(45031)
+		// rate=0.05, par=1000, freq=2, basis=4, calc_method=TRUE
+		// Euro 30/360 periods from 1/15:
+		// 2022-01-15..2022-07-15: 180 days => 25
+		// 2022-07-15..2023-01-15: 180 days => 25
+		// 2023-01-15..2023-04-15: 90 days, NL=180 => 25*90/180=12.5
+		// Total = 62.5
+		{
+			name: "basis 4 multi-period spanning year",
+			args: numArgs(44576, 44757, 45031, 0.05, 1000, 2, 4, 1),
+			want: 62.5,
+			tol:  0.01,
+		},
+
+		// --- Basis 2 actual/360: NL always 180 for semi-annual ---
+		// issue=2022-01-15(44576), fi=2022-07-15(44757), settlement=2022-04-15
+		// DATE(2022,4,15) = 44576+90=44666
+		// actual days: 2022-01-15 to 2022-04-15 = 90 days
+		// NL = 360/2 = 180
+		// 1000*0.05/2*90/180 = 12.5
+		{
+			name: "basis 2 semi-annual 90 actual days",
+			args: numArgs(44576, 44757, 44666, 0.05, 1000, 2, 2),
+			want: 12.5,
+			tol:  0.01,
+		},
+
+		// --- Settlement very close to next coupon date ---
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-06-30(40359)
+		// rate=0.06, par=1000, freq=2, basis=0
+		// 30/360: 1/1 to 6/30 = 5*30+29 = 179 days, NL=180
+		// 1000*0.06/2*179/180 = 29.8333
+		{
+			name: "settlement near coupon date 1 day before",
+			args: numArgs(40179, 40360, 40359, 0.06, 1000, 2, 0),
+			want: 29.8333,
+			tol:  0.001,
+		},
+
+		// --- Default basis (omit basis arg) ---
+		// Should default to 0 (US 30/360).
+		// issue=2010-01-01(40179), fi=2010-07-01(40360), settlement=2010-04-01(40269)
+		// rate=0.06, par=1000, freq=2
+		// Same as basis=0: 90/180 = 0.5, 1000*0.06/2*0.5 = 15.0
+		{
+			name: "default basis omitted is 30/360",
+			args: numArgs(40179, 40360, 40269, 0.06, 1000, 2),
+			want: 15.0,
+			tol:  0.0001,
+		},
+
+		// --- Only 6 args (minimum valid call) ---
+		{
+			name: "minimum args 6",
+			args: numArgs(40179, 40360, 40269, 0.06, 1000, 2),
+			want: 15.0,
+			tol:  0.0001,
+		},
+
+		// --- 7 args (with basis) ---
+		{
+			name: "7 args with basis",
+			args: numArgs(40179, 40360, 40269, 0.06, 1000, 2, 1),
+			want: 14.917127, // actual/actual: 91 days / 181 period
+			tol:  0.001,
+		},
+
+		// --- 8 args (with basis and calc_method) ---
+		{
+			name: "8 args with basis and calc_method",
+			args: numArgs(40179, 40360, 40269, 0.06, 1000, 2, 1, 1),
+			want: 14.917127,
+			tol:  0.001,
+		},
 	}
 
 	for _, tc := range tests {
@@ -9345,6 +9736,129 @@ func TestACCRINT_ViaEval(t *testing.T) {
 	}
 	if math.Abs(v.Num-16.666667) > 0.000001 {
 		t.Errorf("got %f, want 16.666667", v.Num)
+	}
+}
+
+func TestACCRINT_ViaEval_AllBases(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		want    float64
+		tol     float64
+	}{
+		{
+			name:    "eval basis 0",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2,0)",
+			want:    15.0,
+			tol:     0.0001,
+		},
+		{
+			name:    "eval basis 1",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2,1)",
+			want:    14.917127,
+			tol:     0.001,
+		},
+		{
+			name:    "eval basis 2",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2,2)",
+			want:    15.0, // actual days 90, NL=180, 1000*0.06/2*90/180 = 15.0
+			tol:     0.001,
+		},
+		{
+			name:    "eval basis 3",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2,3)",
+			want:    14.7945, // actual days 90, NL=182.5, 1000*0.06/2*90/182.5
+			tol:     0.001,
+		},
+		{
+			name:    "eval basis 4",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2,4)",
+			want:    15.0,
+			tol:     0.0001,
+		},
+		{
+			name:    "eval annual frequency",
+			formula: "ACCRINT(DATE(2015,1,1),DATE(2016,1,1),DATE(2015,7,1),0.05,1000,1,0)",
+			want:    25.0, // 1000*0.05/1*180/360 = 25.0
+			tol:     0.0001,
+		},
+		{
+			name:    "eval quarterly frequency",
+			formula: "ACCRINT(DATE(2015,1,1),DATE(2015,4,1),DATE(2015,3,31),0.04,1000,4,0)",
+			want:    10.0, // 1000*0.04/4*90/90 = 10.0
+			tol:     0.01,
+		},
+		{
+			name:    "eval calc_method FALSE",
+			formula: "ACCRINT(DATE(2007,1,1),DATE(2007,7,1),DATE(2008,4,1),0.1,1000,2,0,FALSE)",
+			want:    25.0,
+			tol:     0.0001,
+		},
+		{
+			name:    "eval calc_method TRUE",
+			formula: "ACCRINT(DATE(2007,1,1),DATE(2007,7,1),DATE(2008,4,1),0.1,1000,2,0,TRUE)",
+			want:    125.0,
+			tol:     0.0001,
+		},
+		{
+			name:    "eval default basis omitted",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.06,1000,2)",
+			want:    15.0, // defaults to basis=0
+			tol:     0.0001,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueNumber {
+				t.Fatalf("expected number, got %v (str=%q)", v.Type, v.Str)
+			}
+			if math.Abs(v.Num-tc.want) > tc.tol {
+				t.Errorf("got %f, want %f (tol=%g)", v.Num, tc.want, tc.tol)
+			}
+		})
+	}
+}
+
+func TestACCRINT_ViaEval_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+	}{
+		{
+			name:    "eval negative rate",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),-0.05,1000,2,0)",
+		},
+		{
+			name:    "eval invalid frequency",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.05,1000,3,0)",
+		},
+		{
+			name:    "eval invalid basis",
+			formula: "ACCRINT(DATE(2010,1,1),DATE(2010,7,1),DATE(2010,4,1),0.05,1000,2,5)",
+		},
+		{
+			name:    "eval issue after settlement",
+			formula: "ACCRINT(DATE(2010,7,1),DATE(2010,7,1),DATE(2010,4,1),0.05,1000,2,0)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v.Type != ValueError {
+				t.Errorf("expected error, got type %v (num=%f)", v.Type, v.Num)
+			}
+		})
 	}
 }
 

@@ -5,7 +5,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | Function | Description | Category | Tests |
 |----------|-------------|----------|------:|
 | ABS | Returns the absolute value of a number. | Math & Trig | 26 |
-| ACCRINT | Returns accrued interest for a security that pays periodic interest. | Financial | 3 |
+| ACCRINT | Returns accrued interest for a security that pays periodic interest. | Financial | 19 |
 | ACCRINTM | Returns accrued interest for a security that pays interest at maturity. | Financial | 3 |
 | ACOS | Returns the arccosine of a number. | Math & Trig | 32 |
 | ACOSH | Returns the inverse hyperbolic cosine of a number. | Math & Trig | 32 |
