@@ -71,6 +71,1074 @@ func TestHLOOKUP(t *testing.T) {
 	}
 }
 
+func TestVLOOKUPComprehensive(t *testing.T) {
+	// Base table: sorted numbers in col A, labels in col B, extra data in col C
+	//   A1=1  B1="one"    C1=100
+	//   A2=2  B2="two"    C2=200
+	//   A3=3  B3="three"  C3=300
+	//   A4=5  B4="five"   C4=500
+	//   A5=8  B5="eight"  C5=800
+	baseResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: StringVal("one"),
+			{Col: 3, Row: 1}: NumberVal(100),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 2, Row: 2}: StringVal("two"),
+			{Col: 3, Row: 2}: NumberVal(200),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 3}: StringVal("three"),
+			{Col: 3, Row: 3}: NumberVal(300),
+			{Col: 1, Row: 4}: NumberVal(5),
+			{Col: 2, Row: 4}: StringVal("five"),
+			{Col: 3, Row: 4}: NumberVal(500),
+			{Col: 1, Row: 5}: NumberVal(8),
+			{Col: 2, Row: 5}: StringVal("eight"),
+			{Col: 3, Row: 5}: NumberVal(800),
+		},
+	}
+
+	t.Run("exact_match_found", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(3,A1:C5,2,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three'", got)
+		}
+	})
+
+	t.Run("exact_match_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(4,A1:C5,2,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("exact_match_return_col3", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(5,A1:C5,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 500 {
+			t.Errorf("got %v, want 500", got)
+		}
+	})
+
+	t.Run("approximate_match_exact_value", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(3,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three'", got)
+		}
+	})
+
+	t.Run("approximate_match_between_values", func(t *testing.T) {
+		// 4 is between 3 and 5, should return row for 3
+		cf := evalCompile(t, "VLOOKUP(4,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three'", got)
+		}
+	})
+
+	t.Run("approximate_match_above_max", func(t *testing.T) {
+		// 100 is greater than all values, should return last row
+		cf := evalCompile(t, "VLOOKUP(100,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "eight" {
+			t.Errorf("got %v, want 'eight'", got)
+		}
+	})
+
+	t.Run("approximate_match_below_min", func(t *testing.T) {
+		// 0 is less than all values, should return #N/A
+		cf := evalCompile(t, "VLOOKUP(0,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("default_range_lookup_true", func(t *testing.T) {
+		// Omitting the 4th arg should behave as range_lookup=TRUE
+		cf := evalCompile(t, "VLOOKUP(4,A1:C5,2)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three' (default range_lookup=TRUE)", got)
+		}
+	})
+
+	t.Run("col_index_1_return_lookup_column", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(2,A1:C5,1,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("col_index_out_of_range", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(2,A1:C5,4,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("got %v, want #REF!", got)
+		}
+	})
+
+	t.Run("col_index_zero", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(2,A1:C5,0,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("col_index_negative", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(2,A1:C5,-1,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("case_insensitive_text_lookup", func(t *testing.T) {
+		// Table with text in column A
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("Banana"),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: StringVal("Cherry"),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("banana",A1:B3,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("wildcard_star", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("Banana"),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: StringVal("Cherry"),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("*nana",A1:B3,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("wildcard_question_mark", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("cat"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("bat"),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: StringVal("hat"),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		// ?at should match first occurrence: "cat"
+		cf := evalCompile(t, `VLOOKUP("?at",A1:B3,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1 (first match: cat)", got)
+		}
+	})
+
+	t.Run("wildcard_star_prefix_suffix", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello world"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("goodbye world"),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: StringVal("hello there"),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("*bye*",A1:B3,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("duplicate_values_returns_first", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: StringVal("first"),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 2}: StringVal("second"),
+				{Col: 1, Row: 3}: NumberVal(2),
+				{Col: 2, Row: 3}: StringVal("third"),
+				{Col: 1, Row: 4}: NumberVal(3),
+				{Col: 2, Row: 4}: StringVal("fourth"),
+			},
+		}
+		cf := evalCompile(t, "VLOOKUP(2,A1:B4,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "second" {
+			t.Errorf("got %v, want 'second' (first match)", got)
+		}
+	})
+
+	t.Run("boolean_lookup", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(false),
+				{Col: 2, Row: 1}: StringVal("no"),
+				{Col: 1, Row: 2}: BoolVal(true),
+				{Col: 2, Row: 2}: StringVal("yes"),
+			},
+		}
+		cf := evalCompile(t, "VLOOKUP(TRUE,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf("got %v, want 'yes'", got)
+		}
+	})
+
+	t.Run("empty_lookup_value", func(t *testing.T) {
+		// Looking up empty value in a table - exact match skips empty cells
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("a"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("b"),
+				{Col: 2, Row: 2}: NumberVal(2),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("",A1:B2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		// Empty string won't match "a" or "b"
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("error_in_result_column_propagates", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: ErrorVal(ErrValDIV0),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 2}: StringVal("ok"),
+			},
+		}
+		cf := evalCompile(t, "VLOOKUP(1,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("single_row_table", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+				{Col: 2, Row: 1}: StringVal("found"),
+			},
+		}
+		cf := evalCompile(t, "VLOOKUP(42,A1:B1,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "found" {
+			t.Errorf("got %v, want 'found'", got)
+		}
+	})
+
+	t.Run("large_table_last_row", func(t *testing.T) {
+		cells := map[CellAddr]Value{}
+		for i := 1; i <= 100; i++ {
+			cells[CellAddr{Col: 1, Row: i}] = NumberVal(float64(i))
+			cells[CellAddr{Col: 2, Row: i}] = StringVal("row" + string(rune('0'+i%10)))
+		}
+		cells[CellAddr{Col: 2, Row: 100}] = StringVal("last")
+		resolver := &mockResolver{cells: cells}
+		cf := evalCompile(t, "VLOOKUP(100,A1:B100,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "last" {
+			t.Errorf("got %v, want 'last'", got)
+		}
+	})
+
+	t.Run("numeric_string_vs_number_no_match", func(t *testing.T) {
+		// Looking up string "2" should NOT match number 2 in exact mode
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: StringVal("one"),
+				{Col: 1, Row: 2}: NumberVal(2),
+				{Col: 2, Row: 2}: StringVal("two"),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("2",A1:B2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A (string '2' != number 2)", got)
+		}
+	})
+
+	t.Run("approximate_match_first_value", func(t *testing.T) {
+		// Looking up exactly the first value
+		cf := evalCompile(t, "VLOOKUP(1,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "one" {
+			t.Errorf("got %v, want 'one'", got)
+		}
+	})
+
+	t.Run("approximate_match_last_value", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(8,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "eight" {
+			t.Errorf("got %v, want 'eight'", got)
+		}
+	})
+
+	t.Run("mixed_types_in_lookup_column", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: StringVal("number"),
+				{Col: 1, Row: 2}: StringVal("hello"),
+				{Col: 2, Row: 2}: StringVal("string"),
+				{Col: 1, Row: 3}: BoolVal(true),
+				{Col: 2, Row: 3}: StringVal("bool"),
+			},
+		}
+		cf := evalCompile(t, `VLOOKUP("hello",A1:B3,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "string" {
+			t.Errorf("got %v, want 'string'", got)
+		}
+	})
+
+	t.Run("approximate_col_index_out_of_range", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(2,A1:C5,5,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("got %v, want #REF!", got)
+		}
+	})
+
+	t.Run("exact_match_first_row", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(1,A1:C5,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 100 {
+			t.Errorf("got %v, want 100", got)
+		}
+	})
+
+	t.Run("exact_match_last_row", func(t *testing.T) {
+		cf := evalCompile(t, "VLOOKUP(8,A1:C5,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 800 {
+			t.Errorf("got %v, want 800", got)
+		}
+	})
+
+	t.Run("approximate_match_fractional", func(t *testing.T) {
+		// 2.5 is between 2 and 3, should match row for 2
+		cf := evalCompile(t, "VLOOKUP(2.5,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "two" {
+			t.Errorf("got %v, want 'two'", got)
+		}
+	})
+
+	t.Run("approximate_match_just_above_value", func(t *testing.T) {
+		// 5.001 is just above 5, should match row for 5
+		cf := evalCompile(t, "VLOOKUP(5.001,A1:C5,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "five" {
+			t.Errorf("got %v, want 'five'", got)
+		}
+	})
+
+	t.Run("empty_cells_in_lookup_column_exact", func(t *testing.T) {
+		// Exact match should skip empty cells
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				// Row 1: empty in col A
+				{Col: 2, Row: 1}: StringVal("empty_row"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: StringVal("found"),
+			},
+		}
+		cf := evalCompile(t, "VLOOKUP(1,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "found" {
+			t.Errorf("got %v, want 'found'", got)
+		}
+	})
+
+	t.Run("range_lookup_false_with_0_value", func(t *testing.T) {
+		// range_lookup=0 should behave as FALSE
+		cf := evalCompile(t, "VLOOKUP(3,A1:C5,2,0)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three'", got)
+		}
+	})
+
+	t.Run("range_lookup_true_with_1_value", func(t *testing.T) {
+		// range_lookup=1 should behave as TRUE
+		cf := evalCompile(t, "VLOOKUP(4,A1:C5,2,1)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "three" {
+			t.Errorf("got %v, want 'three'", got)
+		}
+	})
+
+	t.Run("text_approximate_match_sorted", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("alpha"),
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("beta"),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 1, Row: 3}: StringVal("gamma"),
+				{Col: 2, Row: 3}: NumberVal(3),
+			},
+		}
+		// "delta" is between "beta" and "gamma", should return "beta" row
+		cf := evalCompile(t, `VLOOKUP("delta",A1:B3,2,TRUE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2 (beta row)", got)
+		}
+	})
+}
+
+func TestHLOOKUPComprehensive(t *testing.T) {
+	// Base table: sorted numbers in row 1, labels in row 2, extra data in row 3
+	//   A1=1  B1=2  C1=3   D1=5   E1=8
+	//   A2=a  B2=b  C2=c   D2=e   E2=h
+	//   A3=10 B3=20 C3=30  D3=50  E3=80
+	baseResolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 2, Row: 1}: NumberVal(2),
+			{Col: 3, Row: 1}: NumberVal(3),
+			{Col: 4, Row: 1}: NumberVal(5),
+			{Col: 5, Row: 1}: NumberVal(8),
+			{Col: 1, Row: 2}: StringVal("a"),
+			{Col: 2, Row: 2}: StringVal("b"),
+			{Col: 3, Row: 2}: StringVal("c"),
+			{Col: 4, Row: 2}: StringVal("e"),
+			{Col: 5, Row: 2}: StringVal("h"),
+			{Col: 1, Row: 3}: NumberVal(10),
+			{Col: 2, Row: 3}: NumberVal(20),
+			{Col: 3, Row: 3}: NumberVal(30),
+			{Col: 4, Row: 3}: NumberVal(50),
+			{Col: 5, Row: 3}: NumberVal(80),
+		},
+	}
+
+	t.Run("exact_match_found", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(3,A1:E3,2,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c'", got)
+		}
+	})
+
+	t.Run("exact_match_not_found", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(4,A1:E3,2,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("exact_match_return_row3", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(5,A1:E3,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 50 {
+			t.Errorf("got %v, want 50", got)
+		}
+	})
+
+	t.Run("approximate_match_exact_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(3,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c'", got)
+		}
+	})
+
+	t.Run("approximate_match_between_values", func(t *testing.T) {
+		// 4 is between 3 and 5, should return column for 3
+		cf := evalCompile(t, "HLOOKUP(4,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c'", got)
+		}
+	})
+
+	t.Run("approximate_match_above_max", func(t *testing.T) {
+		// 100 is greater than all header values, should return last column
+		cf := evalCompile(t, "HLOOKUP(100,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "h" {
+			t.Errorf("got %v, want 'h'", got)
+		}
+	})
+
+	t.Run("approximate_match_below_min", func(t *testing.T) {
+		// 0 is less than all header values, should return #N/A
+		cf := evalCompile(t, "HLOOKUP(0,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("default_range_lookup_true", func(t *testing.T) {
+		// Omitting 4th arg => range_lookup=TRUE
+		cf := evalCompile(t, "HLOOKUP(4,A1:E3,2)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c' (default range_lookup=TRUE)", got)
+		}
+	})
+
+	t.Run("row_index_1_return_lookup_row", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(2,A1:E3,1,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("row_index_out_of_range", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(2,A1:E3,4,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValREF {
+			t.Errorf("got %v, want #REF!", got)
+		}
+	})
+
+	t.Run("row_index_zero", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(2,A1:E3,0,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("row_index_negative", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(2,A1:E3,-1,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValVALUE {
+			t.Errorf("got %v, want #VALUE!", got)
+		}
+	})
+
+	t.Run("case_insensitive_text_lookup", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: StringVal("Banana"),
+				{Col: 3, Row: 1}: StringVal("Cherry"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 3, Row: 2}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("banana",A1:C2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("wildcard_star", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("Apple"),
+				{Col: 2, Row: 1}: StringVal("Banana"),
+				{Col: 3, Row: 1}: StringVal("Cherry"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 3, Row: 2}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("*nana",A1:C2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("wildcard_question_mark", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("cat"),
+				{Col: 2, Row: 1}: StringVal("bat"),
+				{Col: 3, Row: 1}: StringVal("hat"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 3, Row: 2}: NumberVal(3),
+			},
+		}
+		// ?at should match first: "cat"
+		cf := evalCompile(t, `HLOOKUP("?at",A1:C2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 1 {
+			t.Errorf("got %v, want 1 (first match: cat)", got)
+		}
+	})
+
+	t.Run("duplicate_values_returns_first", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 3, Row: 1}: NumberVal(2),
+				{Col: 4, Row: 1}: NumberVal(3),
+				{Col: 1, Row: 2}: StringVal("first"),
+				{Col: 2, Row: 2}: StringVal("second"),
+				{Col: 3, Row: 2}: StringVal("third"),
+				{Col: 4, Row: 2}: StringVal("fourth"),
+			},
+		}
+		cf := evalCompile(t, "HLOOKUP(2,A1:D2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "second" {
+			t.Errorf("got %v, want 'second' (first match)", got)
+		}
+	})
+
+	t.Run("boolean_lookup", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: BoolVal(false),
+				{Col: 2, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: StringVal("no"),
+				{Col: 2, Row: 2}: StringVal("yes"),
+			},
+		}
+		cf := evalCompile(t, "HLOOKUP(TRUE,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "yes" {
+			t.Errorf("got %v, want 'yes'", got)
+		}
+	})
+
+	t.Run("error_in_result_row_propagates", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: ErrorVal(ErrValDIV0),
+				{Col: 2, Row: 2}: StringVal("ok"),
+			},
+		}
+		cf := evalCompile(t, "HLOOKUP(1,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValDIV0 {
+			t.Errorf("got %v, want #DIV/0!", got)
+		}
+	})
+
+	t.Run("single_column_table", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(42),
+				{Col: 1, Row: 2}: StringVal("found"),
+			},
+		}
+		cf := evalCompile(t, "HLOOKUP(42,A1:A2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "found" {
+			t.Errorf("got %v, want 'found'", got)
+		}
+	})
+
+	t.Run("numeric_string_vs_number_no_match", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: NumberVal(2),
+				{Col: 1, Row: 2}: StringVal("one"),
+				{Col: 2, Row: 2}: StringVal("two"),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("2",A1:B2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A (string '2' != number 2)", got)
+		}
+	})
+
+	t.Run("approximate_match_fractional", func(t *testing.T) {
+		// 2.5 is between 2 and 3, should match column for 2
+		cf := evalCompile(t, "HLOOKUP(2.5,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "b" {
+			t.Errorf("got %v, want 'b'", got)
+		}
+	})
+
+	t.Run("approximate_match_first_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(1,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "a" {
+			t.Errorf("got %v, want 'a'", got)
+		}
+	})
+
+	t.Run("approximate_match_last_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(8,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "h" {
+			t.Errorf("got %v, want 'h'", got)
+		}
+	})
+
+	t.Run("range_lookup_false_with_0_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(3,A1:E3,2,0)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c'", got)
+		}
+	})
+
+	t.Run("range_lookup_true_with_1_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(4,A1:E3,2,1)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "c" {
+			t.Errorf("got %v, want 'c'", got)
+		}
+	})
+
+	t.Run("mixed_types_in_lookup_row", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: NumberVal(1),
+				{Col: 2, Row: 1}: StringVal("hello"),
+				{Col: 3, Row: 1}: BoolVal(true),
+				{Col: 1, Row: 2}: StringVal("num"),
+				{Col: 2, Row: 2}: StringVal("str"),
+				{Col: 3, Row: 2}: StringVal("bool"),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("hello",A1:C2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "str" {
+			t.Errorf("got %v, want 'str'", got)
+		}
+	})
+
+	t.Run("empty_lookup_value", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("a"),
+				{Col: 2, Row: 1}: StringVal("b"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("",A1:B2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueError || got.Err != ErrValNA {
+			t.Errorf("got %v, want #N/A", got)
+		}
+	})
+
+	t.Run("empty_cells_in_lookup_row_exact", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				// Col 1 row 1: empty
+				{Col: 2, Row: 1}: NumberVal(1),
+				{Col: 1, Row: 2}: StringVal("empty_col"),
+				{Col: 2, Row: 2}: StringVal("found"),
+			},
+		}
+		cf := evalCompile(t, "HLOOKUP(1,A1:B2,2,FALSE)")
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "found" {
+			t.Errorf("got %v, want 'found'", got)
+		}
+	})
+
+	t.Run("exact_match_first_column", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(1,A1:E3,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 10 {
+			t.Errorf("got %v, want 10", got)
+		}
+	})
+
+	t.Run("exact_match_last_column", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(8,A1:E3,3,FALSE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 80 {
+			t.Errorf("got %v, want 80", got)
+		}
+	})
+
+	t.Run("text_approximate_match_sorted", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("alpha"),
+				{Col: 2, Row: 1}: StringVal("beta"),
+				{Col: 3, Row: 1}: StringVal("gamma"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 3, Row: 2}: NumberVal(3),
+			},
+		}
+		// "delta" is between "beta" and "gamma"
+		cf := evalCompile(t, `HLOOKUP("delta",A1:C2,2,TRUE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2 (beta column)", got)
+		}
+	})
+
+	t.Run("wildcard_star_prefix_suffix", func(t *testing.T) {
+		resolver := &mockResolver{
+			cells: map[CellAddr]Value{
+				{Col: 1, Row: 1}: StringVal("hello world"),
+				{Col: 2, Row: 1}: StringVal("goodbye world"),
+				{Col: 3, Row: 1}: StringVal("hello there"),
+				{Col: 1, Row: 2}: NumberVal(1),
+				{Col: 2, Row: 2}: NumberVal(2),
+				{Col: 3, Row: 2}: NumberVal(3),
+			},
+		}
+		cf := evalCompile(t, `HLOOKUP("*bye*",A1:C2,2,FALSE)`)
+		got, err := Eval(cf, resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 2 {
+			t.Errorf("got %v, want 2", got)
+		}
+	})
+
+	t.Run("approximate_match_just_above_value", func(t *testing.T) {
+		cf := evalCompile(t, "HLOOKUP(5.001,A1:E3,2,TRUE)")
+		got, err := Eval(cf, baseResolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueString || got.Str != "e" {
+			t.Errorf("got %v, want 'e'", got)
+		}
+	})
+}
+
 func TestINDEX(t *testing.T) {
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{

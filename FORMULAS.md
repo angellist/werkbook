@@ -180,7 +180,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | HEX2BIN | Converts a hexadecimal number to binary. | Engineering | 38 |
 | HEX2DEC | Converts a hexadecimal number to decimal. | Engineering | 39 |
 | HEX2OCT | Converts a hexadecimal number to octal. | Engineering | 35 |
-| HLOOKUP | Looks up a value across the top row of a table and returns a value from a specified row. | Lookup & Reference | 69 |
+| HLOOKUP | Looks up a value across the top row of a table and returns a value from a specified row. | Lookup & Reference | 102 |
 | HOUR | Returns the hour from a time or datetime value. | Date & Time | 16 |
 | HSTACK | Stacks arrays horizontally. | Lookup & Reference | 18 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 23 |
@@ -430,7 +430,7 @@ Werkbook supports **445** spreadsheet formula functions.
 | VARP | Returns the population variance. | Statistical | 30 |
 | VARPA | Returns the population variance including logical values and text coercions. | Statistical | 22 |
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
-| VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 51 |
+| VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 86 |
 | VSTACK | Stacks arrays vertically. | Lookup & Reference | 18 |
 | WEEKDAY | Returns the day of the week for a date. | Date & Time | 59 |
 | WEEKNUM | Returns the week number of a date. | Date & Time | 39 |
