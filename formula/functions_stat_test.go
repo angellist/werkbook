@@ -33860,3 +33860,790 @@ func TestLOGEST(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// COUNTIF — comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestCOUNTIF_BasicNumericExactMatch(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(10),
+			{Col: 1, Row: 4}: NumberVal(30),
+			{Col: 1, Row: 5}: NumberVal(10),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A5,10)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF numeric exact: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_StringExactMatchCaseInsensitive(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("Apple"),
+			{Col: 1, Row: 2}: StringVal("APPLE"),
+			{Col: 1, Row: 3}: StringVal("apple"),
+			{Col: 1, Row: 4}: StringVal("banana"),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A4,"apple")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF case-insensitive: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_ComparisonOperators(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(3),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 1, Row: 4}: NumberVal(7),
+			{Col: 1, Row: 5}: NumberVal(9),
+		},
+	}
+
+	tests := []struct {
+		formula string
+		want    float64
+		label   string
+	}{
+		{`COUNTIF(A1:A5,">5")`, 2, ">5"},       // 7, 9
+		{`COUNTIF(A1:A5,">=5")`, 3, ">=5"},      // 5, 7, 9
+		{`COUNTIF(A1:A5,"<5")`, 2, "<5"},        // 1, 3
+		{`COUNTIF(A1:A5,"<=5")`, 3, "<=5"},      // 1, 3, 5
+		{`COUNTIF(A1:A5,"<>5")`, 4, "<>5"},      // 1, 3, 7, 9
+		{`COUNTIF(A1:A5,"<=9")`, 5, "<=9"},      // all
+		{`COUNTIF(A1:A5,">0")`, 5, ">0"},        // all
+		{`COUNTIF(A1:A5,">=10")`, 0, ">=10"},    // none
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if got.Type != ValueNumber || got.Num != tt.want {
+				t.Errorf("COUNTIF %s: got %g, want %g", tt.label, got.Num, tt.want)
+			}
+		})
+	}
+}
+
+func TestCOUNTIF_WildcardStarAny(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("hello"),
+			{Col: 1, Row: 2}: StringVal("world"),
+			{Col: 1, Row: 3}: StringVal("hi"),
+			{Col: 1, Row: 4}: NumberVal(42),
+		},
+	}
+
+	// "*" matches any string
+	cf := evalCompile(t, `COUNTIF(A1:A4,"*")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Wildcard * matches any string, including number-as-string representations
+	if got.Type != ValueNumber || got.Num != 4 {
+		t.Errorf("COUNTIF *: got %g, want 4", got.Num)
+	}
+}
+
+func TestCOUNTIF_WildcardQuestionMark(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("cat"),
+			{Col: 1, Row: 2}: StringVal("bat"),
+			{Col: 1, Row: 3}: StringVal("hat"),
+			{Col: 1, Row: 4}: StringVal("that"),
+			{Col: 1, Row: 5}: StringVal("at"),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A5,"?at")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// "?at" matches 3-char strings ending in "at": cat, bat, hat
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF ?at: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_WildcardStartsWith(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("Alpha"),
+			{Col: 1, Row: 2}: StringVal("Always"),
+			{Col: 1, Row: 3}: StringVal("Beta"),
+			{Col: 1, Row: 4}: StringVal("Apex"),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A4,"A*")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Starts with A: Alpha, Always, Apex
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF A*: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_WildcardEndsWith(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("running"),
+			{Col: 1, Row: 2}: StringVal("jumping"),
+			{Col: 1, Row: 3}: StringVal("swim"),
+			{Col: 1, Row: 4}: StringVal("walking"),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A4,"*ing")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Ends with "ing": running, jumping, walking
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF *ing: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_EmptyCriteriaMatchesEmpty(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			// A2 empty
+			{Col: 1, Row: 3}: StringVal("hello"),
+			// A4 empty
+			{Col: 1, Row: 5}: NumberVal(0),
+		},
+	}
+
+	// Empty string criteria "" matches empty cells
+	cf := evalCompile(t, `COUNTIF(A1:A5,"")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Empty cells: A2, A4
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF empty criteria: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_EqualsCriteriaMatchesEmpty(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			// A2 empty
+			{Col: 1, Row: 3}: StringVal(""),
+			// A4 empty
+		},
+	}
+
+	// "=" matches truly empty cells (TypeEmpty), not empty strings
+	cf := evalCompile(t, `COUNTIF(A1:A4,"=")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Only truly empty cells: A2, A4
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF =: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_NotEqualEmptyMatchesNonEmpty(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			// A2 empty
+			{Col: 1, Row: 3}: StringVal("hello"),
+			// A4 empty
+			{Col: 1, Row: 5}: StringVal(""),
+		},
+	}
+
+	// "<>" matches everything except truly empty cells
+	cf := evalCompile(t, `COUNTIF(A1:A5,"<>")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Non-empty: A1 (1), A3 ("hello"), A5 ("") — empty string is non-empty for <>
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF <>: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_BooleanCriteria(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: BoolVal(true),
+			{Col: 1, Row: 2}: BoolVal(false),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 4}: NumberVal(1), // 1 is not TRUE
+			{Col: 1, Row: 5}: StringVal("TRUE"), // string "TRUE" is not boolean TRUE
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A5,TRUE)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Only boolean TRUE cells: A1, A3
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF TRUE: got %g, want 2", got.Num)
+	}
+
+	cf = evalCompile(t, `COUNTIF(A1:A5,FALSE)`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Only boolean FALSE cells: A2
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("COUNTIF FALSE: got %g, want 1", got.Num)
+	}
+}
+
+func TestCOUNTIF_MixedTypes(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: StringVal("hello"),
+			{Col: 1, Row: 3}: BoolVal(true),
+			// A4 empty
+			{Col: 1, Row: 5}: NumberVal(5),
+			{Col: 1, Row: 6}: StringVal("5"), // string "5" matches number 5
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A6,5)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Numeric 5 matches: A1 (5), A5 (5), A6 ("5" coerced)
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF mixed types: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_LargeRange(t *testing.T) {
+	cells := make(map[CellAddr]Value)
+	for i := 1; i <= 100; i++ {
+		if i%3 == 0 {
+			cells[CellAddr{Col: 1, Row: i}] = NumberVal(42)
+		} else {
+			cells[CellAddr{Col: 1, Row: i}] = NumberVal(float64(i))
+		}
+	}
+	resolver := &mockResolver{cells: cells}
+
+	cf := evalCompile(t, `COUNTIF(A1:A100,42)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Every 3rd cell from 3 to 99 => 33 cells
+	if got.Type != ValueNumber || got.Num != 33 {
+		t.Errorf("COUNTIF large range: got %g, want 33", got.Num)
+	}
+}
+
+func TestCOUNTIF_NoMatchesReturnsZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A3,99)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTIF no matches: got %g, want 0", got.Num)
+	}
+}
+
+func TestCOUNTIF_AllMatch(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(7),
+			{Col: 1, Row: 2}: NumberVal(7),
+			{Col: 1, Row: 3}: NumberVal(7),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A3,7)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF all match: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_CriteriaAsCellReference(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: NumberVal(10),
+			{Col: 2, Row: 1}: NumberVal(10), // B1 = criteria value
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A3,B1)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF cell ref criteria: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_NumericStringCriteria(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: NumberVal(20),
+			{Col: 1, Row: 3}: StringVal("10"),
+			{Col: 1, Row: 4}: NumberVal(10),
+		},
+	}
+
+	// String criteria "10" should match cells containing the number 10
+	cf := evalCompile(t, `COUNTIF(A1:A4,"10")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Matches: A1 (10), A3 ("10"), A4 (10)
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Errorf("COUNTIF numeric string: got %g, want 3", got.Num)
+	}
+}
+
+func TestCOUNTIF_ErrorInRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 3}: NumberVal(5),
+			{Col: 1, Row: 4}: NumberVal(10),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A4,5)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Error cells don't match numeric criteria; only A1, A3 match
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF error in range: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_WrongArgCount(t *testing.T) {
+	// Too few args
+	got, err := fnCOUNTIF([]Value{NumberVal(1)})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("COUNTIF 1 arg: got %v, want #VALUE!", got)
+	}
+
+	// Too many args
+	got, err = fnCOUNTIF([]Value{NumberVal(1), NumberVal(2), NumberVal(3)})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("COUNTIF 3 args: got %v, want #VALUE!", got)
+	}
+}
+
+func TestCOUNTIF_DateSerialNumber(t *testing.T) {
+	// Excel date serial numbers: 44197 = 2021-01-01, 44228 = 2021-02-01, 44256 = 2021-03-01
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(44197),
+			{Col: 1, Row: 2}: NumberVal(44228),
+			{Col: 1, Row: 3}: NumberVal(44256),
+			{Col: 1, Row: 4}: NumberVal(44197),
+		},
+	}
+
+	// Exact date match
+	cf := evalCompile(t, `COUNTIF(A1:A4,44197)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF date serial exact: got %g, want 2", got.Num)
+	}
+
+	// Date range comparison
+	cf = evalCompile(t, `COUNTIF(A1:A4,">44200")`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// 44228, 44256 match
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF date serial >: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_SingleCellRange(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(42),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1,42)`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("COUNTIF single cell match: got %g, want 1", got.Num)
+	}
+
+	cf = evalCompile(t, `COUNTIF(A1,99)`)
+	got, err = Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTIF single cell no match: got %g, want 0", got.Num)
+	}
+}
+
+func TestCOUNTIF_StringBooleanCriteria(t *testing.T) {
+	// String criteria "TRUE"/"FALSE" should match boolean cells
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: BoolVal(true),
+			{Col: 1, Row: 2}: BoolVal(false),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 4}: NumberVal(1),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A1:A4,"TRUE")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// String "TRUE" coerced to boolean: matches A1, A3
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTIF string TRUE: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTIF_ErrorRangeArg(t *testing.T) {
+	// If range itself is an error, return the error
+	got, err := fnCOUNTIF([]Value{ErrorVal(ErrValREF), NumberVal(5)})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Errorf("COUNTIF error range: got %v, want #REF!", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// COUNTBLANK — comprehensive tests
+// ---------------------------------------------------------------------------
+
+func TestCOUNTBLANK_BasicWithSomeEmpty(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			// A2 empty
+			{Col: 1, Row: 3}: StringVal("hi"),
+			// A4 empty
+			{Col: 1, Row: 5}: NumberVal(3),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTBLANK some empty: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_AllEmptyEqualsRangeSize(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A8)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 8 {
+		t.Errorf("COUNTBLANK all empty: got %g, want 8", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_NoEmptyReturnsZero(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: StringVal("x"),
+			{Col: 1, Row: 4}: BoolVal(false),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTBLANK no empty: got %g, want 0", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_MixedTypesNotBlank(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("text"),
+			{Col: 1, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 4}: BoolVal(false),
+			{Col: 1, Row: 5}: NumberVal(-1),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A5)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// None are blank: text, 0, true, false, -1 are all non-blank
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTBLANK mixed non-blank: got %g, want 0", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_EmptyStringIsBlank(t *testing.T) {
+	// In the implementation, empty strings ARE counted as blank
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal(""),
+			{Col: 1, Row: 2}: StringVal(""),
+			{Col: 1, Row: 3}: StringVal("not empty"),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Empty strings count as blank
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTBLANK empty strings: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_SingleCellEmptyNew(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("COUNTBLANK single empty: got %g, want 1", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_SingleCellNotEmpty(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("data"),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTBLANK single not empty: got %g, want 0", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_LargeRangeNew(t *testing.T) {
+	cells := make(map[CellAddr]Value)
+	// Fill every 5th cell, leaving 80 out of 100 blank
+	for i := 1; i <= 100; i++ {
+		if i%5 == 0 {
+			cells[CellAddr{Col: 1, Row: i}] = NumberVal(float64(i))
+		}
+	}
+	resolver := &mockResolver{cells: cells}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A100)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// 100 cells total, 20 filled (5,10,15,...,100), 80 blank
+	if got.Type != ValueNumber || got.Num != 80 {
+		t.Errorf("COUNTBLANK large range: got %g, want 80", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_ErrorCellsNotBlank(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 2}: ErrorVal(ErrValNA),
+			// A3 empty
+			{Col: 1, Row: 4}: NumberVal(1),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A4)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Error cells are not blank; only A3 is blank
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("COUNTBLANK error cells: got %g, want 1", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_WrongArgCountNew(t *testing.T) {
+	// No args
+	got, err := fnCOUNTBLANK([]Value{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("COUNTBLANK no args: got %v, want #VALUE!", got)
+	}
+
+	// Two args
+	got, err = fnCOUNTBLANK([]Value{NumberVal(1), NumberVal(2)})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("COUNTBLANK two args: got %v, want #VALUE!", got)
+	}
+}
+
+func TestCOUNTBLANK_2DRangeWithBlanks(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			// A2, B1 empty
+			{Col: 2, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+			{Col: 2, Row: 3}: NumberVal(4),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:B3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// 6 cells total (3 rows x 2 cols), 4 filled, 2 blank (B1, A2)
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNTBLANK 2D: got %g, want 2", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_WhitespaceStringNotBlank(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal(" "),  // space
+			{Col: 1, Row: 2}: StringVal("  "), // two spaces
+			{Col: 1, Row: 3}: StringVal(""),   // empty string = blank
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// Whitespace strings are NOT blank; only A3 (empty string) counts
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("COUNTBLANK whitespace: got %g, want 1", got.Num)
+	}
+}
+
+func TestCOUNTBLANK_ZeroNotBlankNew(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(0),
+			{Col: 1, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: NumberVal(0),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A1:A3)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("COUNTBLANK zeros: got %g, want 0", got.Num)
+	}
+}

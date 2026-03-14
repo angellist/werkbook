@@ -81,8 +81,8 @@ Werkbook supports **445** spreadsheet formula functions.
 | COTH | Returns the hyperbolic cotangent of a number. | Math & Trig | 26 |
 | COUNT | Counts numeric values. | Statistical | 26 |
 | COUNTA | Counts non-empty values. | Statistical | 18 |
-| COUNTBLANK | Counts blank cells in a range. | Statistical | 15 |
-| COUNTIF | Counts values that match one condition. | Statistical | 20 |
+| COUNTBLANK | Counts blank cells in a range. | Statistical | 40 |
+| COUNTIF | Counts values that match one condition. | Statistical | 74 |
 | COUNTIFS | Counts values that match all supplied conditions. | Statistical | 49 |
 | COUPDAYBS | Returns the number of days from the coupon period start to settlement. | Financial | 17 |
 | COUPDAYS | Returns the number of days in the coupon period containing settlement. | Financial | 17 |
