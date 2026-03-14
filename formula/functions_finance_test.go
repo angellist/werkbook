@@ -8288,6 +8288,539 @@ func TestTBILLEQ_ViaEval(t *testing.T) {
 	assertClose(t, "TBILLEQ via eval", v, 0.09415)
 }
 
+// === Additional TBILLPRICE eval tests ===
+
+func TestTBILLPRICE_ViaEval_91Day5Pct(t *testing.T) {
+	// 91-day T-bill at 5% discount: price = 100*(1 - 0.05*91/360) = 98.7361
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 91d 5%", v, 98.7361)
+}
+
+func TestTBILLPRICE_ViaEval_91Day3Pct(t *testing.T) {
+	// 91-day T-bill at 3% discount: price = 100*(1 - 0.03*91/360) = 99.2417
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.03)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 91d 3%", v, 99.2417)
+}
+
+func TestTBILLPRICE_ViaEval_91Day10Pct(t *testing.T) {
+	// 91-day T-bill at 10% discount: price = 100*(1 - 0.10*91/360) = 97.4722
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 91d 10%", v, 97.4722)
+}
+
+func TestTBILLPRICE_ViaEval_182Day5Pct(t *testing.T) {
+	// 182-day T-bill at 5% discount: price = 100*(1 - 0.05*182/360) = 97.4722
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,7,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 182d 5%", v, 97.4722)
+}
+
+func TestTBILLPRICE_ViaEval_182Day8Pct(t *testing.T) {
+	// 182-day T-bill at 8% discount: price = 100*(1 - 0.08*182/360) = 95.9556
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,7,15),0.08)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 182d 8%", v, 95.9556)
+}
+
+func TestTBILLPRICE_ViaEval_365Day3Pct(t *testing.T) {
+	// 365-day T-bill at 3% discount: price = 100*(1 - 0.03*365/360) = 96.9583
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2025,1,14),0.03)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 365d 3%", v, 96.9583)
+}
+
+func TestTBILLPRICE_ViaEval_30Day1Pct(t *testing.T) {
+	// 30-day T-bill at 1% discount: price = 100*(1 - 0.01*30/360) = 99.9167
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,2,14),0.01)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 30d 1%", v, 99.9167)
+}
+
+func TestTBILLPRICE_ViaEval_30Day15Pct(t *testing.T) {
+	// 30-day T-bill at 15% discount: price = 100*(1 - 0.15*30/360) = 98.7500
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,2,14),0.15)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 30d 15%", v, 98.7500)
+}
+
+func TestTBILLPRICE_ViaEval_ErrorSettlementAfterMaturity(t *testing.T) {
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,7,15),DATE(2024,1,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLPRICE settlement>maturity", v)
+}
+
+func TestTBILLPRICE_ViaEval_ErrorSettlementEqualsMaturity(t *testing.T) {
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,1,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLPRICE settlement==maturity", v)
+}
+
+func TestTBILLPRICE_ViaEval_ErrorMoreThanOneYear(t *testing.T) {
+	// DATE(2024,1,15) to DATE(2025,1,15) = 366 days > 1 year
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2025,1,16),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLPRICE >1 year", v)
+}
+
+func TestTBILLPRICE_ViaEval_ErrorNegativeDiscount(t *testing.T) {
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),-0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLPRICE negative discount", v)
+}
+
+func TestTBILLPRICE_ViaEval_ErrorZeroDiscount(t *testing.T) {
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLPRICE zero discount", v)
+}
+
+func TestTBILLPRICE_ViaEval_VerySmallDiscount(t *testing.T) {
+	// 91 days, 0.01% discount: price = 100*(1 - 0.0001*91/360) = 99.99747
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.0001)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 91d 0.01%", v, 99.9975)
+}
+
+func TestTBILLPRICE_ViaEval_HighDiscount20Pct(t *testing.T) {
+	// 91 days, 20% discount: price = 100*(1 - 0.20*91/360) = 94.9444
+	cf := evalCompile(t, "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.20)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLPRICE 91d 20%", v, 94.9444)
+}
+
+// === Additional TBILLYIELD eval tests ===
+
+func TestTBILLYIELD_ViaEval_91DayPrice98(t *testing.T) {
+	// 91-day T-bill, pr=98: yield = ((100-98)/98)*(360/91) = 0.08073
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),98)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 91d pr=98", v, 0.08073)
+}
+
+func TestTBILLYIELD_ViaEval_91DayPrice99(t *testing.T) {
+	// 91-day T-bill, pr=99: yield = ((100-99)/99)*(360/91) = 0.03996
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),99)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 91d pr=99", v, 0.03996)
+}
+
+func TestTBILLYIELD_ViaEval_91DayPrice995(t *testing.T) {
+	// 91-day T-bill, pr=99.5: yield = ((100-99.5)/99.5)*(360/91) = 0.01988
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),99.5)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 91d pr=99.5", v, 0.01988)
+}
+
+func TestTBILLYIELD_ViaEval_182DayPrice97(t *testing.T) {
+	// 182-day T-bill, pr=97: yield = ((100-97)/97)*(360/182) = 0.06119
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,7,15),97)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 182d pr=97", v, 0.06119)
+}
+
+func TestTBILLYIELD_ViaEval_30DayPrice999(t *testing.T) {
+	// 30-day T-bill, pr=99.9: yield = ((100-99.9)/99.9)*(360/30) = 0.01201
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,2,14),99.9)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 30d pr=99.9", v, 0.01201)
+}
+
+func TestTBILLYIELD_ViaEval_PriceAt100(t *testing.T) {
+	// pr=100 (at par): yield = ((100-100)/100)*(360/91) = 0
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),100)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD pr=100", v, 0)
+}
+
+func TestTBILLYIELD_ViaEval_PriceAbove100(t *testing.T) {
+	// pr=101 (premium): yield = ((100-101)/101)*(360/91) = -0.03917
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),101)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD pr=101 negative yield", v, -0.03917)
+}
+
+func TestTBILLYIELD_ViaEval_365DayPrice95(t *testing.T) {
+	// 365-day T-bill, pr=95: yield = ((100-95)/95)*(360/365) = 0.05191
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2025,1,14),95)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD 365d pr=95", v, 0.05191)
+}
+
+func TestTBILLYIELD_ViaEval_VeryLowPrice(t *testing.T) {
+	// pr=50: yield = ((100-50)/50)*(360/91) = 3.95604
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),50)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD pr=50", v, 3.95604)
+}
+
+func TestTBILLYIELD_ViaEval_ErrorSettlementAfterMaturity(t *testing.T) {
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,7,15),DATE(2024,1,15),98)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLYIELD settlement>maturity", v)
+}
+
+func TestTBILLYIELD_ViaEval_ErrorSettlementEqualsMaturity(t *testing.T) {
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,1,15),98)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLYIELD settlement==maturity", v)
+}
+
+func TestTBILLYIELD_ViaEval_ErrorPriceZero(t *testing.T) {
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLYIELD pr=0", v)
+}
+
+func TestTBILLYIELD_ViaEval_ErrorPriceNegative(t *testing.T) {
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),-10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLYIELD pr<0", v)
+}
+
+func TestTBILLYIELD_ViaEval_ErrorMoreThanOneYear(t *testing.T) {
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2025,1,16),98)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLYIELD >1 year", v)
+}
+
+func TestTBILLYIELD_ViaEval_VeryHighPrice(t *testing.T) {
+	// pr=99.99: yield = ((100-99.99)/99.99)*(360/91) = 0.000396
+	cf := evalCompile(t, "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),99.99)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLYIELD pr=99.99", v, 0.000396)
+}
+
+// === Additional TBILLEQ eval tests ===
+
+func TestTBILLEQ_ViaEval_91Day5Pct(t *testing.T) {
+	// Short-term (91 days <= 182): TBILLEQ = (365*0.05)/(360-0.05*91) = 0.05134
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 91d 5%", v, 0.05134)
+}
+
+func TestTBILLEQ_ViaEval_91Day1Pct(t *testing.T) {
+	// Short-term: TBILLEQ = (365*0.01)/(360-0.01*91) = 3.65/359.09 = 0.01017
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),0.01)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 91d 1%", v, 0.01017)
+}
+
+func TestTBILLEQ_ViaEval_91Day10Pct(t *testing.T) {
+	// Short-term: TBILLEQ = (365*0.10)/(360-0.10*91) = 36.5/350.9 = 0.10402
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),0.10)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 91d 10%", v, 0.10402)
+}
+
+func TestTBILLEQ_ViaEval_182Day4Pct(t *testing.T) {
+	// Short-term boundary (182 days): TBILLEQ = (365*0.04)/(360-0.04*182) = 0.04139
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,7,15),0.04)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 182d 4%", v, 0.04139)
+}
+
+func TestTBILLEQ_ViaEval_30Day5Pct(t *testing.T) {
+	// Very short-term: TBILLEQ = (365*0.05)/(360-0.05*30) = 18.25/358.5 = 0.05091
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,2,14),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 30d 5%", v, 0.05091)
+}
+
+func TestTBILLEQ_ViaEval_LongTerm200Day5Pct(t *testing.T) {
+	// Long-term path (200 > 182): uses semi-annual compounding formula
+	// price = 100*(1-0.05*200/360) = 97.2222
+	// b = 200/365 = 0.54795
+	// result = 0.05202
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,8,2),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 200d 5% long-term", v, 0.05202)
+}
+
+func TestTBILLEQ_ViaEval_LongTerm250Day3Pct(t *testing.T) {
+	// Long-term: DSM=250, discount=3%
+	// price = 100*(1-0.03*250/360) = 97.9167, result = 0.03093
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,9,21),0.03)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 250d 3% long-term", v, 0.03093)
+}
+
+func TestTBILLEQ_ViaEval_LongTerm300Day4Pct(t *testing.T) {
+	// Long-term: DSM=300, discount=4%
+	// price = 100*(1-0.04*300/360) = 96.6667, result = 0.04161
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,11,10),0.04)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 300d 4% long-term", v, 0.04161)
+}
+
+func TestTBILLEQ_ViaEval_LongTerm183Day6Pct(t *testing.T) {
+	// Just over the boundary (183 > 182): uses long-term formula
+	// price = 100*(1-0.06*183/360) = 96.95, result = 0.06274
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,7,16),0.06)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 183d 6% long-term", v, 0.06274)
+}
+
+func TestTBILLEQ_ViaEval_ErrorSettlementAfterMaturity(t *testing.T) {
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,7,15),DATE(2024,1,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLEQ settlement>maturity", v)
+}
+
+func TestTBILLEQ_ViaEval_ErrorMoreThanOneYear(t *testing.T) {
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2025,1,16),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLEQ >1 year", v)
+}
+
+func TestTBILLEQ_ViaEval_ErrorNegativeDiscount(t *testing.T) {
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),-0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLEQ negative discount", v)
+}
+
+func TestTBILLEQ_ViaEval_ErrorZeroDiscount(t *testing.T) {
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),0)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, "TBILLEQ zero discount", v)
+}
+
+func TestTBILLEQ_ViaEval_SettlementEqualsMaturity(t *testing.T) {
+	// TBILLEQ allows settlement == maturity (unlike TBILLPRICE/TBILLYIELD)
+	// DSM=0: TBILLEQ = (365*0.05)/(360-0.05*0) = 18.25/360 = 0.05069
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2024,1,15),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ settlement==maturity", v, 0.05069)
+}
+
+func TestTBILLEQ_ViaEval_LongTerm365Day5Pct(t *testing.T) {
+	// DSM=365, discount=5%: long-term formula
+	// price = 100*(1-0.05*365/360) = 94.9306
+	// result = 0.05271
+	cf := evalCompile(t, "TBILLEQ(DATE(2024,1,15),DATE(2025,1,14),0.05)")
+	v, err := Eval(cf, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertClose(t, "TBILLEQ 365d 5% long-term", v, 0.05271)
+}
+
+// === TBILL cross-check tests ===
+// Verify that TBILLPRICE and TBILLYIELD are inverses of each other,
+// and that TBILLEQ results are consistent with TBILLPRICE.
+
+func TestTBILL_CrossCheck_PriceToYield(t *testing.T) {
+	// Compute price from TBILLPRICE, then feed it to TBILLYIELD.
+	// TBILLPRICE(settlement, maturity, 0.09) = 98.45 (doc example, DSM=62)
+	// TBILLYIELD(settlement, maturity, 98.45) = 0.09141
+	// These are not exact inverses because discount rate != yield, but they
+	// should be consistent with the documented formulas.
+	tests := []struct {
+		name     string
+		formula  string
+		expected float64
+	}{
+		{
+			name:     "price from 5% discount 91d",
+			formula:  "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.05)",
+			expected: 98.7361,
+		},
+		{
+			name:     "yield from that price 91d",
+			formula:  "TBILLYIELD(DATE(2024,1,15),DATE(2024,4,15),98.7361)",
+			expected: 0.05064,
+		},
+		{
+			name:     "price from 8% discount 182d",
+			formula:  "TBILLPRICE(DATE(2024,1,15),DATE(2024,7,15),0.08)",
+			expected: 95.9556,
+		},
+		{
+			name:     "yield from that price 182d",
+			formula:  "TBILLYIELD(DATE(2024,1,15),DATE(2024,7,15),95.9556)",
+			expected: 0.08336,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertClose(t, tc.name, v, tc.expected)
+		})
+	}
+}
+
+func TestTBILL_CrossCheck_EqConsistentWithPrice(t *testing.T) {
+	// For DSM <= 182, TBILLEQ should always be >= discount (bond equiv yield > discount yield).
+	// This tests consistency: the bond-equivalent yield adjusts from 360/DSM to 365/DSM.
+	tests := []struct {
+		name     string
+		formula  string
+		expected float64
+	}{
+		{
+			// TBILLEQ > discount for short-term
+			name:     "TBILLEQ 91d 5% > discount",
+			formula:  "TBILLEQ(DATE(2024,1,15),DATE(2024,4,15),0.05)",
+			expected: 0.05134,
+		},
+		{
+			// TBILLEQ for same parameters, verify via TBILLPRICE
+			name:     "TBILLPRICE 91d 5% consistent",
+			formula:  "TBILLPRICE(DATE(2024,1,15),DATE(2024,4,15),0.05)",
+			expected: 98.7361,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cf := evalCompile(t, tc.formula)
+			v, err := Eval(cf, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertClose(t, tc.name, v, tc.expected)
+		})
+	}
+}
+
 // === DISC ===
 
 func TestDISC_Comprehensive(t *testing.T) {

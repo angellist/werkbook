@@ -397,9 +397,9 @@ Werkbook supports **445** spreadsheet formula functions.
 | TAKE | Returns a requested number of rows or columns from an array. | Lookup & Reference | 30 |
 | TAN | Returns the tangent of an angle. | Math & Trig | 23 |
 | TANH | Returns the hyperbolic tangent of a number. | Math & Trig | 27 |
-| TBILLEQ | Returns the bond-equivalent yield for a Treasury bill. | Financial | 3 |
-| TBILLPRICE | Returns the price per 100 face value for a Treasury bill. | Financial | 3 |
-| TBILLYIELD | Returns the yield for a Treasury bill. | Financial | 3 |
+| TBILLEQ | Returns the bond-equivalent yield for a Treasury bill. | Financial | 34 |
+| TBILLPRICE | Returns the price per 100 face value for a Treasury bill. | Financial | 36 |
+| TBILLYIELD | Returns the yield for a Treasury bill. | Financial | 35 |
 | TEXT | Formats a value as text using a number format pattern. | Text | 127 |
 | TEXTAFTER | Returns the text that appears after a delimiter. | Text | 34 |
 | TEXTBEFORE | Returns the text that appears before a delimiter. | Text | 34 |
