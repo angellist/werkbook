@@ -229,6 +229,9 @@ func TestOfficeEraFormulaPrefixesInXML(t *testing.T) {
 	}
 }
 
+// These tests lock down the exact OOXML fragments that previously triggered
+// Excel's repair dialog. They inspect the generated package directly so the
+// regression suite stays pure Go and does not need to automate Excel.
 func TestFutureFunctionWorkbookXMLIncludesCalcFeatures(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
@@ -272,15 +275,15 @@ func TestFutureFunctionWorkbookXMLChildOrder(t *testing.T) {
 	}
 
 	workbookXML := string(readSheetXML(t, path, "xl/workbook.xml"))
-	sheetsPos := strings.Index(workbookXML, "<sheets>")
-	definedNamesPos := strings.Index(workbookXML, "<definedNames>")
-	calcPrPos := strings.Index(workbookXML, "<calcPr")
-	extLstPos := strings.Index(workbookXML, "<extLst>")
-	if sheetsPos < 0 || definedNamesPos < 0 || calcPrPos < 0 || extLstPos < 0 {
-		t.Fatalf("expected workbook XML to contain sheets, definedNames, calcPr, and extLst in order, XML: %s", workbookXML)
+	got := directChildElementNames(t, []byte(workbookXML))
+	want := []string{"sheets", "definedNames", "calcPr", "extLst"}
+	if len(got) < len(want) {
+		t.Fatalf("workbook child elements = %v, want at least %v", got, want)
 	}
-	if !(sheetsPos < definedNamesPos && definedNamesPos < calcPrPos && calcPrPos < extLstPos) {
-		t.Fatalf("unexpected workbook XML child order: sheets=%d definedNames=%d calcPr=%d extLst=%d XML: %s", sheetsPos, definedNamesPos, calcPrPos, extLstPos, workbookXML)
+	for i, name := range want {
+		if got[i] != name {
+			t.Fatalf("workbook child elements = %v, want prefix %v", got, want)
+		}
 	}
 }
 
@@ -338,6 +341,48 @@ func TestLETFormulaSerializationUsesXlpmPrefixes(t *testing.T) {
 	}
 	if val.Type != werkbook.TypeNumber || val.Number != 6 {
 		t.Fatalf("LET cached value = %#v, want 6", val)
+	}
+}
+
+func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
+	tests := []struct {
+		name       string
+		formula    string
+		wantXML    string
+		setupCells map[string]any
+	}{
+		{
+			name:    "lambda",
+			formula: "LAMBDA(x,x+1)",
+			wantXML: `<f>_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)</f>`,
+		},
+		{
+			name:    "map lambda",
+			formula: "MAP(A1:A3,LAMBDA(x,x+1))",
+			wantXML: `<f>_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))</f>`,
+			setupCells: map[string]any{
+				"A1": 1,
+				"A2": 2,
+				"A3": 3,
+			},
+		},
+		{
+			name:    "byrow lambda",
+			formula: "BYROW(A1:B2,LAMBDA(r,SUM(r)))",
+			wantXML: `<f>_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))</f>`,
+			setupCells: map[string]any{
+				"A1": 1,
+				"B1": 2,
+				"A2": 3,
+				"B2": 4,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertFormulaXMLRoundTrip(t, tt.formula, tt.wantXML, tt.setupCells)
+		})
 	}
 }
 
@@ -569,6 +614,76 @@ func TestEmptyFormulaIgnored(t *testing.T) {
 	content := string(data)
 	if strings.Contains(content, "<f>") || strings.Contains(content, "</f>") {
 		t.Errorf("unexpected <f> element in XML for cell without formula: %s", content)
+	}
+}
+
+// assertFormulaXMLRoundTrip verifies the exact serialized <f> fragment and
+// then reopens the workbook to ensure StripXlfnPrefixes restores the user-
+// facing formula text. This keeps the regression anchored to raw OOXML
+// without calling external spreadsheet apps.
+func assertFormulaXMLRoundTrip(t *testing.T, userFormula, wantXML string, setupCells map[string]any) {
+	t.Helper()
+
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+	for cell, value := range setupCells {
+		if err := s.SetValue(cell, value); err != nil {
+			t.Fatalf("SetValue(%s): %v", cell, err)
+		}
+	}
+	if err := s.SetFormula("H1", userFormula); err != nil {
+		t.Fatalf("SetFormula(H1=%q): %v", userFormula, err)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "formula-roundtrip.xlsx")
+	if err := f.SaveAs(path); err != nil {
+		t.Fatalf("SaveAs: %v", err)
+	}
+
+	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
+	if !strings.Contains(sheetXML, wantXML) {
+		t.Fatalf("formula XML missing expected fragment\nwant: %s\nxml: %s", wantXML, sheetXML)
+	}
+
+	f2, err := werkbook.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	got, err := f2.Sheet("Sheet1").GetFormula("H1")
+	if err != nil {
+		t.Fatalf("GetFormula: %v", err)
+	}
+	if got != userFormula {
+		t.Fatalf("formula round-trip = %q, want %q", got, userFormula)
+	}
+}
+
+func directChildElementNames(t *testing.T, doc []byte) []string {
+	t.Helper()
+
+	dec := xml.NewDecoder(strings.NewReader(string(doc)))
+	var (
+		depth int
+		names []string
+	)
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			return names
+		}
+		if err != nil {
+			t.Fatalf("decode xml: %v", err)
+		}
+		switch tok := tok.(type) {
+		case xml.StartElement:
+			if depth == 1 {
+				names = append(names, tok.Name.Local)
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		}
 	}
 }
 

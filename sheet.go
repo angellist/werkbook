@@ -1116,6 +1116,9 @@ func cellToData(ref string, v Value, f string, isArrayFormula bool, formulaRef s
 		}
 		cd.Value = v.String
 	}
+	// Future-function OOXML uses two layers of prefixes. We first add the
+	// function prefix (_xlfn./_xlfn._xlws.), then decorate LET/LAMBDA parameter
+	// identifiers so LET(x,5,x+1) becomes _xlfn.LET(_xlpm.x,5,_xlpm.x+1).
 	cd.Formula = formula.AddXlpmPrefixes(formula.AddXlfnPrefixes(f))
 	return cd
 }

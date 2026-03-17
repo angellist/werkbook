@@ -11,7 +11,13 @@ import (
 const xmlHeader = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` + "\n"
 
 const (
-	defaultFutureFunctionsCalcID  = 181029
+	// Excel 16.x writes this calcId on future-function workbooks such as
+	// <f>_xlfn.ACOT(1)</f> and <f>_xlfn.LET(_xlpm.x,5,_xlpm.x+1)</f>.
+	defaultFutureFunctionsCalcID = 181029
+
+	// futureFunctionsWorkbookExtXML is copied from an Excel-authored workbook.
+	// Omitting this bundle causes Excel to open the file with a repair prompt
+	// even when the individual sheet formulas are serialized correctly.
 	futureFunctionsWorkbookExtXML = `<ext uri="{140A7094-0E35-4892-8432-C4D2E57EDEB5}" xmlns:x15="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"><x15:workbookPr chartTrackingRefBase="1"/></ext><ext uri="{B58B0392-4F1F-4190-BB64-5DF3571DCE5F}" xmlns:xcalcf="http://schemas.microsoft.com/office/spreadsheetml/2018/calcfeatures"><xcalcf:calcFeatures><xcalcf:feature name="microsoft.com:RD"/><xcalcf:feature name="microsoft.com:Single"/><xcalcf:feature name="microsoft.com:FV"/><xcalcf:feature name="microsoft.com:CNMTM"/><xcalcf:feature name="microsoft.com:LET_WF"/><xcalcf:feature name="microsoft.com:LAMBDA_WF"/><xcalcf:feature name="microsoft.com:ARRAYTEXT_WF"/></xcalcf:calcFeatures></ext>`
 )
 
@@ -191,6 +197,10 @@ func writeWorkbookXML(zw *zip.Writer, data *WorkbookData) error {
 		Xmlns:  NSSpreadsheetML,
 		XmlnsR: NSOfficeDocument,
 	}
+
+	// Future-function formulas are serialized with _xlfn.* prefixes in sheet XML.
+	// Excel expects the workbook part to advertise the matching calc metadata,
+	// otherwise it offers to repair the file on open.
 	calcProps := data.CalcProps
 	if workbookNeedsFutureFunctionsMetadata(data) && calcProps.ID == 0 {
 		calcProps.ID = defaultFutureFunctionsCalcID
@@ -381,6 +391,10 @@ func boolString(v bool) string {
 	return ""
 }
 
+// workbookNeedsFutureFunctionsMetadata reports whether any serialized formula
+// already contains _xlfn. prefixes and therefore needs the workbook-level calc
+// feature bundle. The check runs after cell serialization, so formulas such as
+// LET(x,5,x+1) are seen here as _xlfn.LET(_xlpm.x,5,_xlpm.x+1).
 func workbookNeedsFutureFunctionsMetadata(data *WorkbookData) bool {
 	for _, sheet := range data.Sheets {
 		for _, row := range sheet.Rows {

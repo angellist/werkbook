@@ -224,7 +224,11 @@ func AddXlfnPrefixes(f string) string {
 
 // AddXlpmPrefixes tokenizes the formula and inserts the required OOXML
 // _xlpm. prefix on LET/LAMBDA parameter names and references. This matches
-// how Excel serializes future formulas such as LET(x,5,x+1) in workbook XML.
+// how Excel serializes future formulas in workbook XML, for example:
+//
+//	LET(x,5,x+1) -> _xlfn.LET(_xlpm.x,5,_xlpm.x+1)
+//	MAP(A1:A3,LAMBDA(x,x+1)) -> _xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))
+//
 // Returns the original string unchanged if tokenization fails.
 func AddXlpmPrefixes(f string) string {
 	if f == "" {
@@ -342,6 +346,10 @@ type tokenSpan struct {
 	end   int
 }
 
+// Lambda and LET parameter names are tokenized as TokCellRef because bare
+// identifiers share the same lexical space as column-only references. This
+// walk reinterprets the tokens based on function argument position and inserts
+// _xlpm. only when the identifier is in scope as a lambda parameter.
 func collectXlpmInsertions(tokens []Token, start, end int, scope map[string]struct{}, inserts *[]int) {
 	for i := start; i < end; {
 		tok := tokens[i]
