@@ -9,7 +9,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | ACCRINTM | Returns accrued interest for a security that pays interest at maturity. | Financial | 15 |
 | ACOS | Returns the arccosine of a number. | Math & Trig | 32 |
 | ACOSH | Returns the inverse hyperbolic cosine of a number. | Math & Trig | 32 |
-| ACOT | Returns the arccotangent of a number. | Math & Trig | 27 |
+| ACOT | Returns the arccotangent of a number. | Math & Trig | 29 |
 | ACOTH | Returns the inverse hyperbolic cotangent of a number. | Math & Trig | 32 |
 | ADDRESS | Builds a cell reference from row and column numbers. | Lookup & Reference | 44 |
 | AGGREGATE | Applies an aggregate calculation with options to ignore selected values. | Statistical | 98 |
@@ -48,8 +48,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | BITOR | Returns the bitwise OR of two integers. | Math & Trig | 27 |
 | BITRSHIFT | Returns a number shifted right by a requested number of bits. | Math & Trig | 27 |
 | BITXOR | Returns the bitwise XOR of two integers. | Math & Trig | 27 |
-| BYCOL | Applies a lambda to each column of an array. | Logical | 24 |
-| BYROW | Applies a lambda to each row of an array. | Logical | 24 |
+| BYCOL | Applies a lambda to each column of an array. | Logical | 29 |
+| BYROW | Applies a lambda to each row of an array. | Logical | 26 |
 | CEILING | Rounds a number up to the nearest multiple of a significance. | Math & Trig | 51 |
 | CEILING.MATH | Rounds a number up using Excel's CEILING.MATH rules. | Math & Trig | 37 |
 | CEILING.PRECISE | Rounds a number up to the nearest significance, ignoring the sign of the significance. | Math & Trig | 37 |
@@ -237,12 +237,12 @@ Werkbook supports **446** spreadsheet formula functions.
 | ISREF | Returns TRUE when a value is a reference. | Information | 24 |
 | ISTEXT | Returns TRUE when a value is text. | Information | 25 |
 | KURT | Returns the kurtosis of a data set. | Statistical | 22 |
-| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 12 |
+| LAMBDA | Defines a reusable custom formula from parameters and an expression. | Logical | 13 |
 | LARGE | Returns the k-th largest value in a data set. | Statistical | 31 |
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
 | LEN | Returns the number of characters in text. | Text | 37 |
-| LET | Assigns names to intermediate values within a formula. | Logical | 33 |
+| LET | Assigns names to intermediate values within a formula. | Logical | 35 |
 | LINEST | Returns linear regression statistics. | Statistical | 3 |
 | LN | Returns the natural logarithm of a number. | Math & Trig | 32 |
 | LOG | Returns the logarithm of a number in a chosen base. | Math & Trig | 35 |
@@ -252,8 +252,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | LOGNORM.INV | Returns the inverse of the lognormal cumulative distribution. | Statistical | 31 |
 | LOOKUP | Looks up a value in a one-dimensional range and returns the matching result. | Lookup & Reference | 24 |
 | LOWER | Converts text to lowercase. | Text | 48 |
-| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
-| MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 24 |
+| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 32 |
+| MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 26 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
 | MAX | Returns the largest numeric value. | Statistical | 38 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
@@ -377,7 +377,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 41 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 71 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 73 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 71 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 72 |

@@ -219,6 +219,36 @@ func TestMAKEARRAY(t *testing.T) {
 			formula: `MAKEARRAY("abc", 2, LAMBDA(r,c, r+c))`,
 			want:    ErrorVal(ErrValVALUE),
 		},
+		// 26. Cols negative
+		{
+			name:    "cols negative",
+			formula: `MAKEARRAY(2, -1, LAMBDA(r,c, r+c))`,
+			want:    ErrorVal(ErrValVALUE),
+		},
+		// 27. Cols is string
+		{
+			name:    "cols string",
+			formula: `MAKEARRAY(2, "abc", LAMBDA(r,c, r+c))`,
+			want:    ErrorVal(ErrValVALUE),
+		},
+		// 28. XLFN LAMBDA prefix
+		{
+			name:    "xlfn lambda prefix",
+			formula: `MAKEARRAY(2, 2, _XLFN.LAMBDA(r,c, r+c))`,
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{NumberVal(2), NumberVal(3)},
+				{NumberVal(3), NumberVal(4)},
+			}},
+		},
+		// 29. Lambda body errors remain cell-local
+		{
+			name:    "lambda body errors",
+			formula: `MAKEARRAY(2, 2, LAMBDA(r,c, IF(r=c, NA(), r*10+c)))`,
+			want: Value{Type: ValueArray, Array: [][]Value{
+				{ErrorVal(ErrValNA), NumberVal(12)},
+				{NumberVal(21), ErrorVal(ErrValNA)},
+			}},
+		},
 	}
 
 	for _, tt := range tests {
