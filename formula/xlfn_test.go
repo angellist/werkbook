@@ -27,6 +27,8 @@ func TestAddXlfnPrefixes(t *testing.T) {
 		{name: "PDURATION gets prefix", in: "PDURATION(0.025,2000,2200)", want: "_xlfn.PDURATION(0.025,2000,2200)"},
 		{name: "RRI gets prefix", in: "RRI(96,10000,11000)", want: "_xlfn.RRI(96,10000,11000)"},
 		{name: "SORT gets xlws prefix", in: "SORT(A1:A5)", want: "_xlfn._xlws.SORT(A1:A5)"},
+		{name: "BYCOL gets prefix", in: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))", want: "_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(c,SUM(c)))"},
+		{name: "MAKEARRAY gets prefix", in: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))", want: "_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(r,c,r+c))"},
 		{name: "XLOOKUP gets prefix", in: "XLOOKUP(A1,B:B,C:C)", want: "_xlfn.XLOOKUP(A1,B:B,C:C)"},
 		{name: "TEXTJOIN gets prefix", in: `TEXTJOIN(",",TRUE,A1:A5)`, want: `_xlfn.TEXTJOIN(",",TRUE,A1:A5)`},
 		{name: "UNIQUE gets prefix", in: "UNIQUE(A1:A5)", want: "_xlfn.UNIQUE(A1:A5)"},
@@ -67,6 +69,8 @@ func TestAddXlpmPrefixes(t *testing.T) {
 		{name: "LAMBDA body refs", in: "_xlfn.LAMBDA(x,x+1)", want: "_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)"},
 		{name: "MAP lambda params", in: "_xlfn.MAP(A1:A3,_xlfn.LAMBDA(x,x+1))", want: "_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))"},
 		{name: "BYROW lambda refs", in: "_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(r,SUM(r)))", want: "_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))"},
+		{name: "BYCOL lambda refs", in: "_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(c,SUM(c)))", want: "_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))"},
+		{name: "MAKEARRAY lambda refs", in: "_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(r,c,r+c))", want: "_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))"},
 	}
 
 	for _, tt := range tests {
@@ -95,6 +99,8 @@ func TestStripXlfnPrefixes(t *testing.T) {
 		{name: "strip xlfn", in: "_xlfn.MAXIFS(A1:A5,B1:B5,1)", want: "MAXIFS(A1:A5,B1:B5,1)"},
 		{name: "strip xlws", in: "_xlfn._xlws.SORT(A1:A5)", want: "SORT(A1:A5)"},
 		{name: "strip UNIQUE", in: "_xlfn.UNIQUE(A1:A5)", want: "UNIQUE(A1:A5)"},
+		{name: "strip BYCOL lambda params", in: "_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))", want: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))"},
+		{name: "strip MAKEARRAY lambda params", in: "_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))", want: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))"},
 		{name: "strip nested", in: "_xlfn.MAXIFS(A1:A5,B1:B5,_xlfn.IFS(C1>0,1))", want: "MAXIFS(A1:A5,B1:B5,IFS(C1>0,1))"},
 		{name: "strip nested dynamic array functions", in: `_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(A1:A10,A1:A10<>"")))`, want: `SORT(UNIQUE(FILTER(A1:A10,A1:A10<>"")))`},
 		{name: "strip mixed", in: "SUM(_xlfn.MAXIFS(A1:A5,B1:B5,1))", want: "SUM(MAXIFS(A1:A5,B1:B5,1))"},
@@ -149,6 +155,8 @@ func TestAddStripRoundTrip_WithXlpmPrefixes(t *testing.T) {
 		"LET(x,5,y,x+1,y*2)",
 		"MAP(A1:A3,LAMBDA(x,x+1))",
 		"BYROW(A1:B2,LAMBDA(r,SUM(r)))",
+		"BYCOL(A1:B2,LAMBDA(c,SUM(c)))",
+		"MAKEARRAY(2,2,LAMBDA(r,c,r+c))",
 	}
 
 	for _, f := range formulas {
@@ -172,6 +180,8 @@ func TestIsDynamicArrayFormula(t *testing.T) {
 		{formula: "FILTER(A1:A5,A1:A5<>\"\")", want: true},
 		{formula: "_xlfn.ANCHORARRAY(A1)", want: true},
 		{formula: "_xlfn.SINGLE(A1)", want: true},
+		{formula: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))", want: true},
+		{formula: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))", want: true},
 		{formula: "XLOOKUP(A1,B:B,C:C)", want: true},
 	}
 

@@ -378,6 +378,22 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 				"B2": 4,
 			},
 		},
+		{
+			name:    "bycol lambda",
+			formula: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))",
+			wantXML: `<f>_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))</f>`,
+			setupCells: map[string]any{
+				"A1": 1,
+				"B1": 2,
+				"A2": 3,
+				"B2": 4,
+			},
+		},
+		{
+			name:    "makearray lambda",
+			formula: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))",
+			wantXML: `<f>_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))</f>`,
+		},
 	}
 
 	for _, tt := range tests {

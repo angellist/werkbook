@@ -48,8 +48,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | BITOR | Returns the bitwise OR of two integers. | Math & Trig | 27 |
 | BITRSHIFT | Returns a number shifted right by a requested number of bits. | Math & Trig | 27 |
 | BITXOR | Returns the bitwise XOR of two integers. | Math & Trig | 27 |
-| BYCOL | Applies a lambda to each column of an array. | Logical | 24 |
-| BYROW | Applies a lambda to each row of an array. | Logical | 25 |
+| BYCOL | Applies a lambda to each column of an array. | Logical | 29 |
+| BYROW | Applies a lambda to each row of an array. | Logical | 26 |
 | CEILING | Rounds a number up to the nearest multiple of a significance. | Math & Trig | 51 |
 | CEILING.MATH | Rounds a number up using Excel's CEILING.MATH rules. | Math & Trig | 37 |
 | CEILING.PRECISE | Rounds a number up to the nearest significance, ignoring the sign of the significance. | Math & Trig | 37 |
@@ -252,10 +252,10 @@ Werkbook supports **446** spreadsheet formula functions.
 | LOGNORM.INV | Returns the inverse of the lognormal cumulative distribution. | Statistical | 31 |
 | LOOKUP | Looks up a value in a one-dimensional range and returns the matching result. | Lookup & Reference | 24 |
 | LOWER | Converts text to lowercase. | Text | 48 |
-| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 24 |
+| MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 32 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 26 |
-| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 76 |
-| MAX | Returns the largest numeric value. | Statistical | 39 |
+| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
+| MAX | Returns the largest numeric value. | Statistical | 38 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
