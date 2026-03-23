@@ -3,6 +3,8 @@
 [![Go](https://github.com/jpoz/werkbook/actions/workflows/go.yml/badge.svg)](https://github.com/jpoz/werkbook/actions/workflows/go.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jpoz/werkbook.svg)](https://pkg.go.dev/github.com/jpoz/werkbook)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jpoz/werkbook)](https://goreportcard.com/report/github.com/jpoz/werkbook)
+[![Latest Release](https://img.shields.io/github/v/release/jpoz/werkbook)](https://github.com/jpoz/werkbook/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/jpoz/werkbook)](https://github.com/jpoz/werkbook)
 
 A Go library for reading, writing and calculating spreadsheets (.xlsx) with a built-in formula engine. Zero external dependencies.
 
@@ -87,35 +89,6 @@ fmt.Println(v)
 
 Werkbook includes a built-in formula engine. See [FORMULAS.md](FORMULAS.md) for the current list of supported and unsupported functions.
 
-## Compatibility
-
-Werkbook targets `.xlsx` workbook interoperability and spreadsheet formula behavior compatibility.
-
-## Local interop loop
-
-When working in the sibling workspace with `../testdata`, use:
-
-```bash
-make interop ONLY=exceljs/02_lookup_model
-make interop-full ONLY=exceljs/02_lookup_model
-```
-
-`interop` is the fast loop for community-only code changes. `interop-full` regenerates fixtures, refreshes Excel-backed specs, reruns parity, and syncs the current issue queue into [`testdata_issues/`](/Users/jpoz/Developer/werkbook/community/testdata_issues).
-
-## Excel smoke test
-
-To verify that representative modern formula families still open and save cleanly in Microsoft Excel on macOS, run:
-
-```bash
-make excel-smoke
-```
-
-This is opt-in and requires scriptable Microsoft Excel. To run only specific workbook families, set `WERKBOOK_EXCEL_SMOKE_CASES` to a comma-separated list such as:
-
-```bash
-WERKBOOK_EXCEL_SMOKE=1 WERKBOOK_EXCEL_SMOKE_CASES=spill-core,spill-lambda gotestsum -- -run TestExcelSmokeFormulaFamilies ./...
-```
-
 ## License
 
-No license has been granted yet. Until a `LICENSE` file is added, all rights are reserved.
+[MIT](LICENSE)

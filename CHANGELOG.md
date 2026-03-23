@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.8.1
+
+- Added MIT license
+
+## v0.8.0
+
+### New formula functions (9 functions)
+
+#### Higher-order array functions (6)
+- `MAP`, `REDUCE`, `SCAN`
+- `BYROW`, `BYCOL`, `MAKEARRAY`
+
+#### Information functions (3)
+- `SHEET`, `SHEETS`, `AREAS`
+
+### Features
+
+- **Dynamic array roundtrip**: Preserve dynamic array metadata (spill ranges, formulas) through read/write cycles
+- **Spill array aggregation**: Range-based functions (SUM, AVERAGE, etc.) now correctly include spill array values
+
+### Bug fixes
+
+- **Dynamic array serialization**: Simplified and corrected dynamic array formula serialization in OOXML output
+- **RANDARRAY spill handling**: Fixed spill range evaluation for RANDARRAY
+
+### Test coverage
+
+- Added comprehensive tests for 50+ formula functions covering financial, statistical, lookup, text, date, math, and database categories
+
 ## v0.7.1
 
 ### Security

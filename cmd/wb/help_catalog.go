@@ -235,6 +235,24 @@ func wbToolSpec() toolSpec {
 				},
 			},
 			{
+				Name:             "check",
+				Path:             []string{"check"},
+				Summary:          "Compare cached formula values against recalculated results",
+				Description:      "Verify werkbook's calculation engine against known xlsx files. Opens the file, reads the cached formula values (as computed by the original spreadsheet application), recalculates every formula using werkbook, and reports any differences. This is useful for validating that werkbook produces the same results as the source application.",
+				Usage:            "wb check [flags] <file>",
+				RequiresFile:     true,
+				SupportedFormats: []string{FormatText, FormatJSON},
+				Flags: []flagSpec{
+					{Name: "--sheet", ValueName: "name", Description: "Check only the named sheet.", Default: "all sheets"},
+					{Name: "--tolerance", ValueName: "N", Description: "Numeric tolerance for floating-point comparison.", Default: "0 (exact)"},
+				},
+				Examples: []string{
+					"wb check data.xlsx",
+					"wb check --sheet Sheet1 data.xlsx",
+					"wb check --tolerance 0.0001 data.xlsx",
+				},
+			},
+			{
 				Name:             "dep",
 				Path:             []string{"dep"},
 				Summary:          "Show cell dependency graph",

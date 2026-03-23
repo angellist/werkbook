@@ -76,6 +76,8 @@ func run(args []string) int {
 		return cmdCreate(cmdArgs, globals)
 	case "calc":
 		return cmdCalc(cmdArgs, globals)
+	case "check":
+		return cmdCheck(cmdArgs, globals)
 	case "dep":
 		return cmdDep(cmdArgs, globals)
 	case "formula":
@@ -215,7 +217,9 @@ func nextSuggestedCommands(command string) []string {
 	case "create":
 		return []string{"wb info <file>", "wb read <file>"}
 	case "calc":
-		return []string{"wb read <file>", "wb dep <file>"}
+		return []string{"wb read <file>", "wb check <file>", "wb dep <file>"}
+	case "check":
+		return []string{"wb calc <file>", "wb read <file>"}
 	case "dep":
 		return []string{"wb read <file>", "wb formula list"}
 	case "formula":

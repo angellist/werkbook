@@ -79,6 +79,10 @@ func renderTextSuccess(command string, data any) string {
 		if d, ok := data.(createData); ok {
 			return renderCreateText(d)
 		}
+	case "check":
+		if d, ok := data.(checkData); ok {
+			return renderCheckText(d)
+		}
 	case "formula":
 		if d, ok := data.(formulaListData); ok {
 			return renderFormulaListText(d)
