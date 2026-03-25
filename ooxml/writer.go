@@ -247,6 +247,13 @@ func writeWorkbookXML(zw *zip.Writer, data *WorkbookData) error {
 	if len(data.DefinedNames) > 0 {
 		wb.DefinedNames = &xlsxDefinedNames{}
 		for _, dn := range data.DefinedNames {
+			// Skip defined names that reference external workbooks (e.g.
+			// '[1]Sheet'!$A$1). werkbook does not preserve external link
+			// metadata, so writing these produces dangling references that
+			// Excel flags as corrupt.
+			if strings.Contains(dn.Value, "[") {
+				continue
+			}
 			xdn := xlsxDefinedName{
 				Name:  dn.Name,
 				Value: dn.Value,
@@ -256,6 +263,9 @@ func writeWorkbookXML(zw *zip.Writer, data *WorkbookData) error {
 				xdn.LocalSheetID = &id
 			}
 			wb.DefinedNames.DefinedName = append(wb.DefinedNames.DefinedName, xdn)
+		}
+		if len(wb.DefinedNames.DefinedName) == 0 {
+			wb.DefinedNames = nil
 		}
 	}
 	if workbookNeedsFutureFunctionsMetadata(data) {
