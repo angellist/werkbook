@@ -251,7 +251,7 @@ func writeWorkbookXML(zw *zip.Writer, data *WorkbookData) error {
 			// '[1]Sheet'!$A$1). werkbook does not preserve external link
 			// metadata, so writing these produces dangling references that
 			// Excel flags as corrupt.
-			if strings.Contains(dn.Value, "[") {
+			if isExternalRef(dn.Value) {
 				continue
 			}
 			xdn := xlsxDefinedName{
@@ -272,6 +272,13 @@ func writeWorkbookXML(zw *zip.Writer, data *WorkbookData) error {
 		wb.ExtLst = &xlsxExtLst{InnerXML: futureFunctionsWorkbookExtXML}
 	}
 	return writeXML(zw, "xl/workbook.xml", wb)
+}
+
+// isExternalRef returns true if a defined name value references an external
+// workbook. External refs start with [n] or '[n] (e.g. "[1]Sheet!$A$1" or
+// "'[1]Sheet'!$A$1").
+func isExternalRef(value string) bool {
+	return strings.HasPrefix(value, "[") || strings.HasPrefix(value, "'[")
 }
 
 func writeWorkbookRels(zw *zip.Writer, sheetCount int, hasSST, hasDynamicArrayMetadata bool) error {

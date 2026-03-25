@@ -131,6 +131,173 @@ func TestShiftFormulaRefs(t *testing.T) {
 	}
 }
 
+func TestExpandSharedFormulasHorizontal(t *testing.T) {
+	// Shared formula that expands across columns (e.g. a summary row).
+	sd := SheetData{
+		Rows: []RowData{
+			{Num: 5, Cells: []CellData{
+				{Ref: "B5", Formula: "SUM(B1:B4)", FormulaType: "shared", FormulaRef: "B5:D5", SharedIndex: 0},
+				{Ref: "C5", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "D5", Formula: "", FormulaType: "shared", SharedIndex: 0},
+			}},
+		},
+	}
+
+	expandSharedFormulas(&sd)
+
+	if got := sd.Rows[0].Cells[0].Formula; got != "SUM(B1:B4)" {
+		t.Errorf("B5 formula = %q, want SUM(B1:B4)", got)
+	}
+	if got := sd.Rows[0].Cells[1].Formula; got != "SUM(C1:C4)" {
+		t.Errorf("C5 formula = %q, want SUM(C1:C4)", got)
+	}
+	if got := sd.Rows[0].Cells[2].Formula; got != "SUM(D1:D4)" {
+		t.Errorf("D5 formula = %q, want SUM(D1:D4)", got)
+	}
+}
+
+func TestExpandSharedFormulasNoSharedCells(t *testing.T) {
+	// No shared formulas at all — should be a no-op.
+	sd := SheetData{
+		Rows: []RowData{
+			{Num: 1, Cells: []CellData{
+				{Ref: "A1", Formula: "1+2", SharedIndex: -1},
+				{Ref: "B1", Value: "hello", SharedIndex: -1},
+			}},
+		},
+	}
+
+	expandSharedFormulas(&sd)
+
+	if got := sd.Rows[0].Cells[0].Formula; got != "1+2" {
+		t.Errorf("A1 formula = %q, want 1+2", got)
+	}
+	if got := sd.Rows[0].Cells[1].Value; got != "hello" {
+		t.Errorf("B1 value = %q, want hello", got)
+	}
+}
+
+func TestExpandSharedFormulasOrphanChild(t *testing.T) {
+	// Child references a shared index with no master — should be left without a formula.
+	sd := SheetData{
+		Rows: []RowData{
+			{Num: 1, Cells: []CellData{
+				{Ref: "A1", Formula: "", FormulaType: "shared", SharedIndex: 99},
+			}},
+		},
+	}
+
+	expandSharedFormulas(&sd)
+
+	if got := sd.Rows[0].Cells[0].Formula; got != "" {
+		t.Errorf("orphan child formula = %q, want empty", got)
+	}
+}
+
+func TestShiftFormulaRefsQuotedSheet(t *testing.T) {
+	tests := []struct {
+		name     string
+		formula  string
+		dCol     int
+		dRow     int
+		expected string
+	}{
+		{"quoted sheet ref", "'My Sheet'!A1+B1", 0, 1, "'My Sheet'!A2+B2"},
+		{"shift left", "C1", -1, 0, "B1"},
+		{"mixed abs col shift", "$A1+B$2", 1, 1, "$A2+C$2"},
+		{"multi-letter column", "AA1+AB1", 0, 1, "AA2+AB2"},
+		{"function with refs", "SUM(A1:A10,B1)", 1, 0, "SUM(B1:B10,C1)"},
+		{"no cell refs", "1+2+3", 0, 1, "1+2+3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shiftFormulaRefs(tt.formula, tt.dCol, tt.dRow)
+			if got != tt.expected {
+				t.Errorf("shiftFormulaRefs(%q, %d, %d) = %q, want %q",
+					tt.formula, tt.dCol, tt.dRow, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseCellRefForShift(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		wantErr bool
+		prefix  string
+		absCol  bool
+		col     int
+		absRow  bool
+		row     int
+	}{
+		{"simple", "A1", false, "", false, 1, false, 1},
+		{"abs col", "$B3", false, "", true, 2, false, 3},
+		{"abs row", "C$5", false, "", false, 3, true, 5},
+		{"fully abs", "$D$10", false, "", true, 4, true, 10},
+		{"sheet prefix", "Sheet1!A1", false, "Sheet1!", false, 1, false, 1},
+		{"quoted sheet", "'My Sheet'!B2", false, "'My Sheet'!", false, 2, false, 2},
+		{"column only", "F", false, "", false, 6, false, 0},
+		{"no column", "", true, "", false, 0, false, 0},
+		{"dollar only", "$", true, "", false, 0, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseCellRefForShift(tt.raw)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseCellRefForShift(%q) error = %v, wantErr %v", tt.raw, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if got.prefix != tt.prefix {
+				t.Errorf("prefix = %q, want %q", got.prefix, tt.prefix)
+			}
+			if got.absCol != tt.absCol {
+				t.Errorf("absCol = %v, want %v", got.absCol, tt.absCol)
+			}
+			if got.col != tt.col {
+				t.Errorf("col = %d, want %d", got.col, tt.col)
+			}
+			if got.absRow != tt.absRow {
+				t.Errorf("absRow = %v, want %v", got.absRow, tt.absRow)
+			}
+			if got.row != tt.row {
+				t.Errorf("row = %d, want %d", got.row, tt.row)
+			}
+		})
+	}
+}
+
+func TestBuildCellRefString(t *testing.T) {
+	tests := []struct {
+		name string
+		p    cellRefParts
+		col  int
+		row  int
+		want string
+	}{
+		{"simple", cellRefParts{}, 1, 1, "A1"},
+		{"abs col", cellRefParts{absCol: true}, 2, 3, "$B3"},
+		{"abs row", cellRefParts{absRow: true}, 3, 5, "C$5"},
+		{"fully abs", cellRefParts{absCol: true, absRow: true}, 4, 10, "$D$10"},
+		{"with prefix", cellRefParts{prefix: "Sheet1!"}, 1, 1, "Sheet1!A1"},
+		{"column only", cellRefParts{}, 6, 0, "F"},
+		{"multi-letter col", cellRefParts{}, 27, 1, "AA1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildCellRefString(tt.p, tt.col, tt.row)
+			if got != tt.want {
+				t.Errorf("buildCellRefString(%+v, %d, %d) = %q, want %q", tt.p, tt.col, tt.row, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCellRefToCoordinates(t *testing.T) {
 	tests := []struct {
 		ref     string

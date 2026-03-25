@@ -2,6 +2,7 @@ package ooxml
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jpoz/werkbook/formula"
@@ -183,7 +184,7 @@ func parseCellRefForShift(raw string) (cellRefParts, error) {
 	if i == colStart {
 		return p, fmt.Errorf("no column in %q", raw)
 	}
-	p.col = colLettersToNumber(s[colStart:i])
+	p.col = formula.ColLettersToNumber(s[colStart:i])
 
 	if i < len(s) && s[i] == '$' {
 		p.absRow = true
@@ -209,51 +210,14 @@ func buildCellRefString(p cellRefParts, col, row int) string {
 	if p.absCol {
 		b.WriteByte('$')
 	}
-	b.WriteString(colNumberToLetters(col))
+	b.WriteString(formula.ColNumberToLetters(col))
 	if p.absRow {
 		b.WriteByte('$')
 	}
 	if row > 0 {
-		b.WriteString(itoa(row))
+		b.WriteString(strconv.Itoa(row))
 	}
 	return b.String()
-}
-
-// colLettersToNumber converts column letters to a 1-based number.
-func colLettersToNumber(s string) int {
-	col := 0
-	for _, c := range strings.ToUpper(s) {
-		col = col*26 + int(c-'A') + 1
-	}
-	return col
-}
-
-// colNumberToLetters converts a 1-based column number to letters.
-func colNumberToLetters(col int) string {
-	var buf [3]byte
-	i := len(buf)
-	for col > 0 {
-		col--
-		i--
-		buf[i] = byte('A' + col%26)
-		col /= 26
-	}
-	return string(buf[i:])
-}
-
-// itoa is a simple int-to-string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var buf [10]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
 }
 
 // cellRefToCoordinates extracts (col, row) from a cell reference string like "F7".
@@ -265,7 +229,7 @@ func cellRefToCoordinates(ref string) (int, int, error) {
 	if i == 0 || i == len(ref) {
 		return 0, 0, fmt.Errorf("invalid cell ref %q", ref)
 	}
-	col := colLettersToNumber(ref[:i])
+	col := formula.ColLettersToNumber(ref[:i])
 	row := 0
 	for j := i; j < len(ref); j++ {
 		if ref[j] < '0' || ref[j] > '9' {
