@@ -1939,6 +1939,39 @@ func TestEvalSUMPRODUCTWithLiftedTextAndDateFunctions(t *testing.T) {
 	}
 }
 
+func TestEvalSUMPRODUCTDoesNotLeakArrayContextIntoNestedIFArgs(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("completed"),
+			{Col: 1, Row: 2}: StringVal("completed"),
+			{Col: 1, Row: 3}: StringVal("completed"),
+			{Col: 2, Row: 1}: NumberVal(5),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(10),
+			{Col: 3, Row: 1}: NumberVal(0),
+			{Col: 3, Row: 2}: NumberVal(5),
+			{Col: 3, Row: 3}: NumberVal(0),
+			{Col: 4, Row: 1}: NumberVal(1),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     5,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, `SUMPRODUCT((A1:A3="completed")*IF(B1:B3-C1:C3*D1>0,B1:B3-C1:C3*D1,0))`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Fatalf("nested IF SUMPRODUCT = %v (%g), want 0", got.Type, got.Num)
+	}
+}
+
 func TestEvalElementWiseLiftedScalarFunctions(t *testing.T) {
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{

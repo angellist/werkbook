@@ -89,6 +89,10 @@ func (c *compiler) addRange(addr RangeAddr) uint32 {
 }
 
 func (c *compiler) compileNode(node Node) error {
+	return c.compileNodeCtx(node, false)
+}
+
+func (c *compiler) compileNodeCtx(node Node, inArrayCtx bool) error {
 	switch n := node.(type) {
 	case *NumberLit:
 		idx := c.addNumConst(n.Value)
@@ -157,7 +161,7 @@ func (c *compiler) compileNode(node Node) error {
 		return fmt.Errorf("union references are only supported inside AREAS")
 
 	case *UnaryExpr:
-		if err := c.compileNode(n.Operand); err != nil {
+		if err := c.compileNodeCtx(n.Operand, inArrayCtx); err != nil {
 			return err
 		}
 		switch n.Op {
@@ -170,10 +174,10 @@ func (c *compiler) compileNode(node Node) error {
 		}
 
 	case *BinaryExpr:
-		if err := c.compileNode(n.Left); err != nil {
+		if err := c.compileNodeCtx(n.Left, inArrayCtx); err != nil {
 			return err
 		}
-		if err := c.compileNode(n.Right); err != nil {
+		if err := c.compileNodeCtx(n.Right, inArrayCtx); err != nil {
 			return err
 		}
 		op, err := binaryOpCode(n.Op)
@@ -183,7 +187,7 @@ func (c *compiler) compileNode(node Node) error {
 		c.emit(op, 0)
 
 	case *PostfixExpr:
-		if err := c.compileNode(n.Operand); err != nil {
+		if err := c.compileNodeCtx(n.Operand, inArrayCtx); err != nil {
 			return err
 		}
 		switch n.Op {
@@ -194,131 +198,9 @@ func (c *compiler) compileNode(node Node) error {
 		}
 
 	case *FuncCall:
-		name := strings.ToUpper(n.Name)
-		// The _xludf. prefix means "user-defined function" in the
-		// saved formula format. These are not real functions and
-		// must always produce #NAME?. We emit a runtime error instead of
-		// a compile error so that wrapping functions like IFERROR can
-		// catch the #NAME? value.
-		if strings.HasPrefix(name, "_XLUDF.") {
-			c.emit(OpPushError, uint32(ErrValNAME))
-			return nil
+		if err := c.compileFuncCall(n, inArrayCtx); err != nil {
+			return err
 		}
-		// Strip OOXML prefixes (_xlfn., _xlfn._xlws.) so formulas read
-		// from XLSX files compile correctly even if the prefix wasn't
-		// removed earlier.
-		name = strings.TrimPrefix(name, "_XLFN._XLWS.")
-		name = strings.TrimPrefix(name, "_XLFN.")
-		funcID := LookupFunc(name)
-		if funcID < 0 {
-			return fmt.Errorf("unknown function %q", n.Name)
-		}
-		argc := len(n.Args)
-		if argc > 255 {
-			return fmt.Errorf("function %q has %d arguments (max 255)", n.Name, argc)
-		}
-		if name == "AREAS" && argc == 1 {
-			if union, ok := n.Args[0].(*UnionRef); ok {
-				idx := c.addNumConst(float64(len(union.Areas)))
-				c.emit(OpPushNum, idx)
-				return nil
-			}
-		}
-		// COLUMN and ROW need the cell reference coordinates, not the resolved
-		// cell value.  When the single argument is a direct cell reference, push
-		// a ValueRef (address only) so the function can extract col/row.
-		if (name == "AREAS" || name == "COLUMN" || name == "ROW" || name == "ISFORMULA" || name == "FORMULATEXT" || name == "ANCHORARRAY" || name == "ISREF") && argc == 1 {
-			if cr, ok := n.Args[0].(*CellRef); ok && !cr.DotNotation && cr.SheetEnd == "" {
-				idx := c.addRef(CellAddr{Sheet: cr.Sheet, Col: cr.Col, Row: cr.Row})
-				c.emit(OpLoadCellRef, idx)
-				c.emit(OpCall, uint32(funcID)<<8|uint32(argc))
-				return nil
-			}
-			// For ISREF, range references are also references.
-			if name == "ISREF" {
-				if rr, ok := n.Args[0].(*RangeRef); ok {
-					idx := c.addRef(CellAddr{Sheet: rr.From.Sheet, Col: rr.From.Col, Row: rr.From.Row})
-					c.emit(OpLoadCellRef, idx)
-					c.emit(OpCall, uint32(funcID)<<8|uint32(argc))
-					return nil
-				}
-				// INDIRECT (and OFFSET) are ref-returning functions.
-				// When wrapped in ISREF, compile the inner call normally
-				// and then use OpRefResultToBool: non-error → TRUE,
-				// error → FALSE.
-				if fc, ok := n.Args[0].(*FuncCall); ok {
-					inner := strings.ToUpper(fc.Name)
-					inner = strings.TrimPrefix(inner, "_XLFN._XLWS.")
-					inner = strings.TrimPrefix(inner, "_XLFN.")
-					if inner == "INDIRECT" || inner == "OFFSET" {
-						if err := c.compileNode(fc); err != nil {
-							return err
-						}
-						c.emit(OpRefResultToBool, 0)
-						return nil
-					}
-				}
-			}
-		}
-		// OFFSET needs its first argument as a raw reference (ValueRef
-		// for single cells, ValueArray+RangeOrigin for ranges) so it can
-		// compute the offset address.  Remaining arguments are compiled
-		// normally.
-		if name == "OFFSET" && argc >= 1 {
-			first := n.Args[0]
-			switch ref := first.(type) {
-			case *CellRef:
-				idx := c.addRef(CellAddr{Sheet: ref.Sheet, Col: ref.Col, Row: ref.Row})
-				c.emit(OpLoadCellRef, idx)
-			default:
-				// Range references already produce ValueArray with RangeOrigin.
-				if err := c.compileNode(first); err != nil {
-					return err
-				}
-			}
-			for _, arg := range n.Args[1:] {
-				if err := c.compileNode(arg); err != nil {
-					return err
-				}
-			}
-			operand := uint32(funcID)<<8 | uint32(argc)
-			c.emit(OpCall, operand)
-			break
-		}
-		arrayCtx := IsArrayFunc(name)
-		if arrayCtx {
-			c.emit(OpEnterArrayCtx, 0)
-		}
-		for i, arg := range n.Args {
-			if !arrayCtx {
-				switch ArgEvalModeForFuncArg(name, i) {
-				case FuncArgEvalArray:
-					c.emit(OpEnterArrayCtx, 0)
-					if err := c.compileNode(arg); err != nil {
-						return err
-					}
-					c.emit(OpLeaveArrayCtx, 0)
-					continue
-				case FuncArgEvalDirectRange:
-					if isDirectRangeRefNode(arg) {
-						c.emit(OpEnterArrayCtx, 0)
-						if err := c.compileNode(arg); err != nil {
-							return err
-						}
-						c.emit(OpLeaveArrayCtx, 0)
-						continue
-					}
-				}
-			}
-			if err := c.compileNode(arg); err != nil {
-				return err
-			}
-		}
-		if arrayCtx {
-			c.emit(OpLeaveArrayCtx, 0)
-		}
-		operand := uint32(funcID)<<8 | uint32(argc)
-		c.emit(OpCall, operand)
 
 	case *ArrayLit:
 		rows := len(n.Rows)
@@ -331,7 +213,7 @@ func (c *compiler) compileNode(node Node) error {
 		}
 		for _, row := range n.Rows {
 			for _, elem := range row {
-				if err := c.compileNode(elem); err != nil {
+				if err := c.compileNodeCtx(elem, inArrayCtx); err != nil {
 					return err
 				}
 			}
@@ -344,7 +226,7 @@ func (c *compiler) compileNode(node Node) error {
 		for _, arr := range n.Arrays {
 			// Evaluate arrays in array context to prevent implicit intersection
 			c.emit(OpEnterArrayCtx, 0)
-			if err := c.compileNode(arr); err != nil {
+			if err := c.compileNodeCtx(arr, true); err != nil {
 				return err
 			}
 			c.emit(OpLeaveArrayCtx, 0)
@@ -373,12 +255,12 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *ReduceExpr:
 		// Push initial value
-		if err := c.compileNode(n.InitialValue); err != nil {
+		if err := c.compileNodeCtx(n.InitialValue, inArrayCtx); err != nil {
 			return err
 		}
 		// Push array in array context
 		c.emit(OpEnterArrayCtx, 0)
-		if err := c.compileNode(n.Array); err != nil {
+		if err := c.compileNodeCtx(n.Array, true); err != nil {
 			return err
 		}
 		c.emit(OpLeaveArrayCtx, 0)
@@ -405,12 +287,12 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *ScanExpr:
 		// Push initial value
-		if err := c.compileNode(n.InitialValue); err != nil {
+		if err := c.compileNodeCtx(n.InitialValue, inArrayCtx); err != nil {
 			return err
 		}
 		// Push array in array context
 		c.emit(OpEnterArrayCtx, 0)
-		if err := c.compileNode(n.Array); err != nil {
+		if err := c.compileNodeCtx(n.Array, true); err != nil {
 			return err
 		}
 		c.emit(OpLeaveArrayCtx, 0)
@@ -438,7 +320,7 @@ func (c *compiler) compileNode(node Node) error {
 	case *ByRowExpr:
 		// Push array in array context
 		c.emit(OpEnterArrayCtx, 0)
-		if err := c.compileNode(n.Array); err != nil {
+		if err := c.compileNodeCtx(n.Array, true); err != nil {
 			return err
 		}
 		c.emit(OpLeaveArrayCtx, 0)
@@ -466,7 +348,7 @@ func (c *compiler) compileNode(node Node) error {
 	case *ByColExpr:
 		// Push array in array context
 		c.emit(OpEnterArrayCtx, 0)
-		if err := c.compileNode(n.Array); err != nil {
+		if err := c.compileNodeCtx(n.Array, true); err != nil {
 			return err
 		}
 		c.emit(OpLeaveArrayCtx, 0)
@@ -493,10 +375,10 @@ func (c *compiler) compileNode(node Node) error {
 
 	case *MakeArrayExpr:
 		// Compile rows and cols expressions
-		if err := c.compileNode(n.Rows); err != nil {
+		if err := c.compileNodeCtx(n.Rows, inArrayCtx); err != nil {
 			return err
 		}
-		if err := c.compileNode(n.Cols); err != nil {
+		if err := c.compileNodeCtx(n.Cols, inArrayCtx); err != nil {
 			return err
 		}
 		// Compile lambda body as sub-formula
@@ -526,6 +408,149 @@ func (c *compiler) compileNode(node Node) error {
 	default:
 		return fmt.Errorf("unsupported AST node type %T", node)
 	}
+	return nil
+}
+
+func (c *compiler) compileFuncCall(n *FuncCall, inArrayCtx bool) error {
+	name := strings.ToUpper(n.Name)
+	// The _xludf. prefix means "user-defined function" in the
+	// saved formula format. These are not real functions and
+	// must always produce #NAME?. We emit a runtime error instead of
+	// a compile error so that wrapping functions like IFERROR can
+	// catch the #NAME? value.
+	if strings.HasPrefix(name, "_XLUDF.") {
+		c.emit(OpPushError, uint32(ErrValNAME))
+		return nil
+	}
+	// Strip OOXML prefixes (_xlfn., _xlfn._xlws.) so formulas read
+	// from XLSX files compile correctly even if the prefix wasn't
+	// removed earlier.
+	name = strings.TrimPrefix(name, "_XLFN._XLWS.")
+	name = strings.TrimPrefix(name, "_XLFN.")
+	funcID := LookupFunc(name)
+	if funcID < 0 {
+		return fmt.Errorf("unknown function %q", n.Name)
+	}
+	argc := len(n.Args)
+	if argc > 255 {
+		return fmt.Errorf("function %q has %d arguments (max 255)", n.Name, argc)
+	}
+
+	// Array-forcing behavior should apply to the direct SUMPRODUCT/INDEX/etc.
+	// argument expressions, but it must not leak into nested non-array
+	// function arguments. Suspending the inherited array context here matches
+	// Excel's legacy implicit-intersection behavior for formulas like:
+	//   SUMPRODUCT(mask*IF(range-range*scalar>0, range-range*scalar, 0))
+	suspendInheritedArrayCtx := inArrayCtx && !IsArrayFunc(name)
+	if suspendInheritedArrayCtx {
+		c.emit(OpLeaveArrayCtx, 0)
+		defer c.emit(OpEnterArrayCtx, 0)
+		inArrayCtx = false
+	}
+
+	if name == "AREAS" && argc == 1 {
+		if union, ok := n.Args[0].(*UnionRef); ok {
+			idx := c.addNumConst(float64(len(union.Areas)))
+			c.emit(OpPushNum, idx)
+			return nil
+		}
+	}
+	// COLUMN and ROW need the cell reference coordinates, not the resolved
+	// cell value.  When the single argument is a direct cell reference, push
+	// a ValueRef (address only) so the function can extract col/row.
+	if (name == "AREAS" || name == "COLUMN" || name == "ROW" || name == "ISFORMULA" || name == "FORMULATEXT" || name == "ANCHORARRAY" || name == "ISREF") && argc == 1 {
+		if cr, ok := n.Args[0].(*CellRef); ok && !cr.DotNotation && cr.SheetEnd == "" {
+			idx := c.addRef(CellAddr{Sheet: cr.Sheet, Col: cr.Col, Row: cr.Row})
+			c.emit(OpLoadCellRef, idx)
+			c.emit(OpCall, uint32(funcID)<<8|uint32(argc))
+			return nil
+		}
+		// For ISREF, range references are also references.
+		if name == "ISREF" {
+			if rr, ok := n.Args[0].(*RangeRef); ok {
+				idx := c.addRef(CellAddr{Sheet: rr.From.Sheet, Col: rr.From.Col, Row: rr.From.Row})
+				c.emit(OpLoadCellRef, idx)
+				c.emit(OpCall, uint32(funcID)<<8|uint32(argc))
+				return nil
+			}
+			// INDIRECT (and OFFSET) are ref-returning functions.
+			// When wrapped in ISREF, compile the inner call normally
+			// and then use OpRefResultToBool: non-error → TRUE,
+			// error → FALSE.
+			if fc, ok := n.Args[0].(*FuncCall); ok {
+				inner := strings.ToUpper(fc.Name)
+				inner = strings.TrimPrefix(inner, "_XLFN._XLWS.")
+				inner = strings.TrimPrefix(inner, "_XLFN.")
+				if inner == "INDIRECT" || inner == "OFFSET" {
+					if err := c.compileNodeCtx(fc, inArrayCtx); err != nil {
+						return err
+					}
+					c.emit(OpRefResultToBool, 0)
+					return nil
+				}
+			}
+		}
+	}
+	// OFFSET needs its first argument as a raw reference (ValueRef
+	// for single cells, ValueArray+RangeOrigin for ranges) so it can
+	// compute the offset address.  Remaining arguments are compiled
+	// normally.
+	if name == "OFFSET" && argc >= 1 {
+		first := n.Args[0]
+		switch ref := first.(type) {
+		case *CellRef:
+			idx := c.addRef(CellAddr{Sheet: ref.Sheet, Col: ref.Col, Row: ref.Row})
+			c.emit(OpLoadCellRef, idx)
+		default:
+			// Range references already produce ValueArray with RangeOrigin.
+			if err := c.compileNodeCtx(first, inArrayCtx); err != nil {
+				return err
+			}
+		}
+		for _, arg := range n.Args[1:] {
+			if err := c.compileNodeCtx(arg, inArrayCtx); err != nil {
+				return err
+			}
+		}
+		operand := uint32(funcID)<<8 | uint32(argc)
+		c.emit(OpCall, operand)
+		return nil
+	}
+
+	arrayCtx := IsArrayFunc(name)
+	if arrayCtx {
+		c.emit(OpEnterArrayCtx, 0)
+	}
+	for i, arg := range n.Args {
+		if !arrayCtx {
+			switch ArgEvalModeForFuncArg(name, i) {
+			case FuncArgEvalArray:
+				c.emit(OpEnterArrayCtx, 0)
+				if err := c.compileNodeCtx(arg, true); err != nil {
+					return err
+				}
+				c.emit(OpLeaveArrayCtx, 0)
+				continue
+			case FuncArgEvalDirectRange:
+				if isDirectRangeRefNode(arg) {
+					c.emit(OpEnterArrayCtx, 0)
+					if err := c.compileNodeCtx(arg, true); err != nil {
+						return err
+					}
+					c.emit(OpLeaveArrayCtx, 0)
+					continue
+				}
+			}
+		}
+		if err := c.compileNodeCtx(arg, inArrayCtx || arrayCtx); err != nil {
+			return err
+		}
+	}
+	if arrayCtx {
+		c.emit(OpLeaveArrayCtx, 0)
+	}
+	operand := uint32(funcID)<<8 | uint32(argc)
+	c.emit(OpCall, operand)
 	return nil
 }
 

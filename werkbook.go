@@ -324,6 +324,7 @@ func fileFromData(data *ooxml.WorkbookData) (*File, error) {
 				c.value = v
 				c.formula = formula.StripXlfnPrefixes(cd.Formula)
 				c.isArrayFormula = cd.IsArrayFormula
+				c.dynamicArraySpill = cd.IsDynamicArray && cd.FormulaRef != ""
 				c.formulaRef = cd.FormulaRef
 				// Trust the file's cached value for formula cells that have one.
 				if cd.Formula != "" && v.Type != TypeEmpty {

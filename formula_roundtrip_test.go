@@ -188,7 +188,7 @@ func TestDynamicArrayFormulaPrefixesInXML(t *testing.T) {
 	}
 
 	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
-	want := `<f>_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(B1:B10,B1:B10&lt;&gt;&#34;&#34;)))</f>`
+	want := `_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(B1:B10,B1:B10&lt;&gt;&#34;&#34;)))`
 	if !strings.Contains(sheetXML, want) {
 		t.Fatalf("dynamic array formula XML missing expected prefixes\nwant: %s\nxml: %s", want, sheetXML)
 	}
@@ -355,12 +355,12 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "lambda",
 			formula: "LAMBDA(x,x+1)",
-			wantXML: `<f>_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)</f>`,
+			wantXML: `_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)`,
 		},
 		{
 			name:    "map lambda",
 			formula: "MAP(A1:A3,LAMBDA(x,x+1))",
-			wantXML: `<f>_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))</f>`,
+			wantXML: `_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"A2": 2,
@@ -370,7 +370,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "byrow lambda",
 			formula: "BYROW(A1:B2,LAMBDA(r,SUM(r)))",
-			wantXML: `<f>_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))</f>`,
+			wantXML: `_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"B1": 2,
@@ -381,7 +381,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "bycol lambda",
 			formula: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))",
-			wantXML: `<f>_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))</f>`,
+			wantXML: `_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"B1": 2,
@@ -392,7 +392,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "makearray lambda",
 			formula: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))",
-			wantXML: `<f>_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))</f>`,
+			wantXML: `_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))`,
 		},
 	}
 
@@ -472,7 +472,7 @@ func TestOfficeEraFormulaPrefixesRestoredOnResave(t *testing.T) {
 	}
 }
 
-func TestDynamicArrayFormulaSerializationAvoidsMetadataXML(t *testing.T) {
+func TestDynamicArrayFormulaSerializationIncludesMetadataXML(t *testing.T) {
 	f := werkbook.New(werkbook.FirstSheet("Out - Ledger Summary"))
 	s := f.Sheet("Out - Ledger Summary")
 	if _, err := f.NewSheet("treasury-ledger"); err != nil {
@@ -500,30 +500,27 @@ func TestDynamicArrayFormulaSerializationAvoidsMetadataXML(t *testing.T) {
 	}
 
 	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
-	if !strings.Contains(sheetXML, `<c r="A2" t="str"><f>_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(`) {
-		t.Fatalf("expected A2 to be written as a plain formula string cell, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `r="A2"`) || !strings.Contains(sheetXML, `cm="1"`) || !strings.Contains(sheetXML, `ref="A2" ca="1">_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(`) {
+		t.Fatalf("expected A2 to be written with dynamic-array metadata, XML: %s", sheetXML)
 	}
-	if strings.Contains(sheetXML, `cm="1"`) {
-		t.Fatalf("expected dynamic-array cells to omit cm metadata, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `r="D2" t="e" cm="1"`) || !strings.Contains(sheetXML, `ref="D2" ca="1">_xlfn.SINGLE(`) {
+		t.Fatalf("expected D2 SINGLE formula to carry dynamic-array metadata, XML: %s", sheetXML)
 	}
-	if strings.Contains(sheetXML, `<f t="array"`) {
-		t.Fatalf("expected dynamic-array cells to omit legacy array markup, XML: %s", sheetXML)
-	}
-	if !strings.Contains(sheetXML, `<c r="D2" t="e"><f>_xlfn.SINGLE(`) {
-		t.Fatalf("expected D2 SINGLE formula to use _xlfn prefix and normal error typing, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `cm="1"`) || !strings.Contains(sheetXML, `<f t="array"`) {
+		t.Fatalf("expected dynamic-array metadata in sheet XML: %s", sheetXML)
 	}
 
 	workbookRels := string(readSheetXML(t, path, "xl/_rels/workbook.xml.rels"))
-	if strings.Contains(workbookRels, `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"`) {
-		t.Fatalf("expected workbook relationships to omit sheet metadata, XML: %s", workbookRels)
+	if !strings.Contains(workbookRels, `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"`) {
+		t.Fatalf("expected workbook relationships to include sheet metadata, XML: %s", workbookRels)
 	}
 
 	contentTypes := string(readSheetXML(t, path, "[Content_Types].xml"))
-	if strings.Contains(contentTypes, `PartName="/xl/metadata.xml"`) {
-		t.Fatalf("expected content types to omit metadata.xml, XML: %s", contentTypes)
+	if !strings.Contains(contentTypes, `PartName="/xl/metadata.xml"`) {
+		t.Fatalf("expected content types to include metadata.xml, XML: %s", contentTypes)
 	}
-	if zipHasEntry(t, path, "xl/metadata.xml") {
-		t.Fatal("metadata.xml should not be written for dynamic array formulas")
+	if !zipHasEntry(t, path, "xl/metadata.xml") {
+		t.Fatal("metadata.xml should be written for dynamic array formulas")
 	}
 
 	r, err := os.Open(path)
@@ -777,10 +774,11 @@ func TestEmptyFormulaIgnored(t *testing.T) {
 	}
 }
 
-// assertFormulaXMLRoundTrip verifies the exact serialized <f> fragment and
-// then reopens the workbook to ensure StripXlfnPrefixes restores the user-
-// facing formula text. This keeps the regression anchored to raw OOXML
-// without calling external spreadsheet apps.
+// assertFormulaXMLRoundTrip verifies that the serialized worksheet XML
+// contains the expected formula fragment and then reopens the workbook to
+// ensure StripXlfnPrefixes restores the user-facing formula text. This keeps
+// the regression anchored to raw OOXML without calling external spreadsheet
+// apps.
 func assertFormulaXMLRoundTrip(t *testing.T, userFormula, wantXML string, setupCells map[string]any) {
 	t.Helper()
 

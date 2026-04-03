@@ -434,7 +434,9 @@ var directRangeArgStartFuncs = map[string]int{
 // required for functions like FILTER whose include argument is commonly a
 // boolean range expression rather than a plain range reference.
 var arrayArgFuncs = map[string]map[int]bool{
-	"FILTER": {0: true, 1: true},
+	"FILTER":  {0: true, 1: true},
+	"IFERROR": {0: true, 1: true},
+	"IFNA":    {0: true, 1: true},
 }
 
 // arrayFirstArgFuncs evaluate the first argument in array context because it is

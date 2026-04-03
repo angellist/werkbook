@@ -178,3 +178,124 @@ func TestImportedDynamicArrayPlaceholdersDoNotBlockSpill(t *testing.T) {
 		t.Fatalf("saved cache %s!C1 = %q, want 30", calcSheet, got)
 	}
 }
+
+func TestImportedPlainDynamicArrayFormulaDoesNotSpillWithoutMetadata(t *testing.T) {
+	const (
+		dataSheet    = "Data"
+		spillSheet   = "Spill"
+		calcSheet    = "Calc"
+		spillAnchor  = "B2"
+		userFormula  = `FILTER(Data!B2:B6,Data!A2:A6)`
+		ooxmlFormula = `_xlfn._xlws.FILTER(Data!B2:B6,Data!A2:A6)`
+	)
+
+	fixture := &ooxml.WorkbookData{
+		Styles: []ooxml.StyleData{{}},
+		Sheets: []ooxml.SheetData{
+			{
+				Name: dataSheet,
+				Rows: []ooxml.RowData{
+					{Num: 1, Cells: []ooxml.CellData{
+						{Ref: "A1", Type: "s", Value: "Include"},
+						{Ref: "B1", Type: "s", Value: "Amount"},
+					}},
+					{Num: 2, Cells: []ooxml.CellData{
+						{Ref: "A2", Type: "b", Value: "1"},
+						{Ref: "B2", Value: "10"},
+					}},
+					{Num: 3, Cells: []ooxml.CellData{
+						{Ref: "A3", Type: "b", Value: "0"},
+						{Ref: "B3", Value: "20"},
+					}},
+					{Num: 4, Cells: []ooxml.CellData{
+						{Ref: "A4", Type: "b", Value: "1"},
+						{Ref: "B4", Value: "30"},
+					}},
+					{Num: 5, Cells: []ooxml.CellData{
+						{Ref: "A5", Type: "b", Value: "0"},
+						{Ref: "B5", Value: "40"},
+					}},
+					{Num: 6, Cells: []ooxml.CellData{
+						{Ref: "A6", Type: "b", Value: "1"},
+						{Ref: "B6", Value: "50"},
+					}},
+				},
+			},
+			{
+				Name: spillSheet,
+				Rows: []ooxml.RowData{
+					{Num: 1, Cells: []ooxml.CellData{{Ref: "B1", Type: "s", Value: "Filtered"}}},
+					{Num: 2, Cells: []ooxml.CellData{{
+						Ref:     spillAnchor,
+						Value:   "10",
+						Formula: ooxmlFormula,
+					}}},
+					{Num: 3, Cells: []ooxml.CellData{{Ref: "B3"}}},
+				},
+			},
+			{
+				Name: calcSheet,
+				Rows: []ooxml.RowData{{Num: 1, Cells: []ooxml.CellData{
+					{Ref: "A1", Value: "10", Formula: `SUM(Spill!B:B)`},
+					{Ref: "B1", Value: "1", Formula: `COUNT(Spill!B:B)`},
+					{Ref: "C1", Value: "0", Formula: `Spill!B3`},
+				}}},
+			},
+		},
+	}
+
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "plain-dynamic-array-source.xlsx")
+	var buf bytes.Buffer
+	if err := ooxml.WriteWorkbook(&buf, fixture); err != nil {
+		t.Fatalf("WriteWorkbook fixture: %v", err)
+	}
+	if err := os.WriteFile(srcPath, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("WriteFile fixture: %v", err)
+	}
+
+	srcSpillXML := string(readSheetXML(t, srcPath, "xl/worksheets/sheet2.xml"))
+	for _, unexpected := range []string{`cm="1"`, `<f t="array"`, `aca="1"`} {
+		if strings.Contains(srcSpillXML, unexpected) {
+			t.Fatalf("fixture workbook unexpectedly wrote dynamic-array metadata %q\nxml: %s", unexpected, srcSpillXML)
+		}
+	}
+
+	f, err := werkbook.Open(srcPath)
+	if err != nil {
+		t.Fatalf("Open fixture: %v", err)
+	}
+
+	got, err := f.Sheet(spillSheet).GetFormula(spillAnchor)
+	if err != nil {
+		t.Fatalf("GetFormula(%s): %v", spillAnchor, err)
+	}
+	if got != userFormula {
+		t.Fatalf("formula round-trip = %q, want %q", got, userFormula)
+	}
+
+	f.Recalculate()
+
+	assertNumber := func(sheetName, cell string, want float64) {
+		t.Helper()
+		val, err := f.Sheet(sheetName).GetValue(cell)
+		if err != nil {
+			t.Fatalf("GetValue(%s!%s): %v", sheetName, cell, err)
+		}
+		if val.Type != werkbook.TypeNumber || val.Number != want {
+			t.Fatalf("%s!%s = %#v, want %g", sheetName, cell, val, want)
+		}
+	}
+
+	assertNumber(spillSheet, "B2", 10)
+	val, err := f.Sheet(spillSheet).GetValue("B3")
+	if err != nil {
+		t.Fatalf("GetValue(%s!B3): %v", spillSheet, err)
+	}
+	if val.Type != werkbook.TypeEmpty {
+		t.Fatalf("%s!B3 = %#v, want empty", spillSheet, val)
+	}
+	assertNumber(calcSheet, "A1", 10)
+	assertNumber(calcSheet, "B1", 1)
+	assertNumber(calcSheet, "C1", 0)
+}

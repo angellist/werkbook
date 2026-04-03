@@ -70,6 +70,7 @@ func (s *Sheet) SetValue(cell string, v any) error {
 	c.value = val
 	c.formula = ""
 	c.isArrayFormula = false
+	c.dynamicArraySpill = false
 	c.formulaRef = ""
 	c.compiled = nil
 	c.rawValue = formula.Value{}
@@ -100,6 +101,7 @@ func (s *Sheet) SetFormula(cell string, f string) error {
 	}
 	c.formula = f
 	c.isArrayFormula = false
+	c.dynamicArraySpill = formula.IsDynamicArrayFormula(f)
 	c.formulaRef = ""
 	c.compiled = nil
 	c.value = Value{}
@@ -325,7 +327,7 @@ func (s *Sheet) spillFormulaValueAt(col, row int) (formula.Value, bool) {
 			continue
 		}
 		for anchorCol, cell := range sheetRow.cells {
-			if anchorCol > col || cell.formula == "" || cell.isArrayFormula || !formula.IsDynamicArrayFormula(cell.formula) {
+			if anchorCol > col || cell.formula == "" || cell.isArrayFormula || !cell.dynamicArraySpill {
 				continue
 			}
 			raw := cell.rawValue
@@ -532,7 +534,11 @@ func (s *Sheet) toSheetData(styleMap map[string]int, styles *[]ooxml.StyleData) 
 				continue
 			}
 			ref, _ := CoordinatesToCellName(cn, rn)
-			cd := cellToData(ref, c.value, c.formula, c.isArrayFormula, c.formulaRef)
+			formulaRef := c.formulaRef
+			if c.dynamicArraySpill && !c.isArrayFormula {
+				formulaRef = dynamicArrayFormulaRef(ref, cn, rn, c)
+			}
+			cd := cellToData(ref, c.value, c.formula, c.isArrayFormula, formulaRef)
 
 			if c.style != nil {
 				stData := styleToStyleData(c.style)
@@ -562,6 +568,33 @@ func (s *Sheet) toSheetData(styleMap map[string]int, styles *[]ooxml.StyleData) 
 		}
 	}
 	return sd
+}
+
+func dynamicArrayFormulaRef(anchorRef string, anchorCol, anchorRow int, c *Cell) string {
+	if c == nil {
+		return anchorRef
+	}
+	if c.formulaRef != "" {
+		return c.formulaRef
+	}
+	raw := c.rawValue
+	if raw.Type != formula.ValueArray || raw.NoSpill {
+		return anchorRef
+	}
+	spillCols := 0
+	for _, row := range raw.Array {
+		if len(row) > spillCols {
+			spillCols = len(row)
+		}
+	}
+	if len(raw.Array) == 0 || spillCols == 0 {
+		return anchorRef
+	}
+	endRef, err := CoordinatesToCellName(anchorCol+spillCols-1, anchorRow+len(raw.Array)-1)
+	if err != nil || endRef == anchorRef {
+		return anchorRef
+	}
+	return anchorRef + ":" + endRef
 }
 
 func (s *Sheet) adjustMergedRows(deletedRow int) {
@@ -961,7 +994,7 @@ func (fr *fileResolver) GetRangeValues(addr formula.RangeAddr) [][]formula.Value
 			if anchorCol > logicalToCol {
 				continue
 			}
-			if cell.formula == "" || cell.isArrayFormula || !formula.IsDynamicArrayFormula(cell.formula) {
+			if cell.formula == "" || cell.isArrayFormula || !cell.dynamicArraySpill {
 				continue
 			}
 			raw := cell.rawValue
