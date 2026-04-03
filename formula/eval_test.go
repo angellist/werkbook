@@ -1634,6 +1634,58 @@ func TestEvalIFNA(t *testing.T) {
 	}
 }
 
+func TestEvalErrorWrappersRespectImplicitIntersectionInScalarContext(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(11),
+			{Col: 2, Row: 1}: NumberVal(22),
+			{Col: 1, Row: 2}: NumberVal(202),
+			{Col: 1, Row: 3}: NumberVal(303),
+		},
+	}
+
+	tests := []struct {
+		name    string
+		formula string
+		ctx     *EvalContext
+		want    Value
+	}{
+		{
+			name:    "iferror_full_row",
+			formula: `IFERROR(1/0,1:1)`,
+			ctx: &EvalContext{
+				CurrentCol:     2,
+				CurrentRow:     2,
+				CurrentSheet:   "Sheet1",
+				IsArrayFormula: false,
+			},
+			want: NumberVal(22),
+		},
+		{
+			name:    "ifna_full_row",
+			formula: `IFNA(#N/A,1:1)`,
+			ctx: &EvalContext{
+				CurrentCol:     2,
+				CurrentRow:     2,
+				CurrentSheet:   "Sheet1",
+				IsArrayFormula: false,
+			},
+			want: NumberVal(22),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, tt.ctx)
+			if err != nil {
+				t.Fatalf("Eval(%q): %v", tt.formula, err)
+			}
+			assertLookupValueEqual(t, got, tt.want)
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 3D sheet references — parse, compile, and evaluate correctly
 // ---------------------------------------------------------------------------
@@ -1936,6 +1988,41 @@ func TestEvalSUMPRODUCTWithLiftedTextAndDateFunctions(t *testing.T) {
 	}
 	if got.Type != ValueNumber || got.Num != 150002.07 {
 		t.Errorf("reduced Excel diff SUMPRODUCT = %v (%g), want 150002.07", got.Type, got.Num)
+	}
+}
+
+func TestEvalSUMPRODUCTInheritsArrayContextIntoNestedIFArgs(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("completed"),
+			{Col: 1, Row: 2}: StringVal("completed"),
+			{Col: 1, Row: 3}: StringVal("completed"),
+			{Col: 2, Row: 1}: NumberVal(5),
+			{Col: 2, Row: 2}: NumberVal(5),
+			{Col: 2, Row: 3}: NumberVal(10),
+			{Col: 3, Row: 1}: NumberVal(0),
+			{Col: 3, Row: 2}: NumberVal(5),
+			{Col: 3, Row: 3}: NumberVal(0),
+			{Col: 4, Row: 1}: NumberVal(1),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     5,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, `SUMPRODUCT((A1:A3="completed")*IF(B1:B3-C1:C3*D1>0,B1:B3-C1:C3*D1,0))`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	// With IF inheriting array context from SUMPRODUCT, the formula evaluates
+	// element-wise: row1=5, row2=0, row3=10 → SUMPRODUCT = 15.
+	if got.Type != ValueNumber || got.Num != 15 {
+		t.Fatalf("nested IF SUMPRODUCT = %v (%g), want 15", got.Type, got.Num)
 	}
 }
 

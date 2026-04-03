@@ -55,12 +55,13 @@ func (f *File) CloneSheetFrom(src *Sheet, dstName string) (*Sheet, error) {
 
 func cloneCell(src *Cell) *Cell {
 	clone := &Cell{
-		col:            src.col,
-		value:          src.value,
-		formula:        src.formula,
-		isArrayFormula: src.isArrayFormula,
-		formulaRef:     src.formulaRef,
-		style:          cloneStyle(src.style),
+		col:               src.col,
+		value:             src.value,
+		formula:           src.formula,
+		isArrayFormula:    src.isArrayFormula,
+		dynamicArraySpill: src.dynamicArraySpill,
+		formulaRef:        src.formulaRef,
+		style:             cloneStyle(src.style),
 	}
 	if clone.formula != "" {
 		clone.dirty = true

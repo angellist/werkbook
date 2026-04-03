@@ -437,6 +437,16 @@ var arrayArgFuncs = map[string]map[int]bool{
 	"FILTER": {0: true, 1: true},
 }
 
+// inheritedArrayArgFuncs evaluate the listed argument positions in array
+// context only when the call appears inside an outer array-forcing expression.
+// This preserves element-wise wrappers like IFERROR/IFNA inside SUMPRODUCT
+// without changing their normal legacy scalar implicit-intersection behavior.
+var inheritedArrayArgFuncs = map[string]map[int]bool{
+	"IF":      {0: true, 1: true, 2: true},
+	"IFERROR": {0: true, 1: true},
+	"IFNA":    {0: true, 1: true},
+}
+
 // arrayFirstArgFuncs evaluate the first argument in array context because it is
 // semantically an array input.
 var arrayFirstArgFuncs = map[string]bool{
@@ -493,4 +503,9 @@ func ArgEvalModeForFuncArg(name string, argIndex int) FuncArgEvalMode {
 		return FuncArgEvalDirectRange
 	}
 	return FuncArgEvalDefault
+}
+
+func inheritedArrayEvalForFuncArg(name string, argIndex int) bool {
+	positions, ok := inheritedArrayArgFuncs[strings.ToUpper(name)]
+	return ok && positions[argIndex]
 }

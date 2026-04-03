@@ -188,7 +188,7 @@ func TestDynamicArrayFormulaPrefixesInXML(t *testing.T) {
 	}
 
 	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
-	want := `<f>_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(B1:B10,B1:B10&lt;&gt;&#34;&#34;)))</f>`
+	want := `_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(B1:B10,B1:B10&lt;&gt;&#34;&#34;)))`
 	if !strings.Contains(sheetXML, want) {
 		t.Fatalf("dynamic array formula XML missing expected prefixes\nwant: %s\nxml: %s", want, sheetXML)
 	}
@@ -355,12 +355,12 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "lambda",
 			formula: "LAMBDA(x,x+1)",
-			wantXML: `<f>_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)</f>`,
+			wantXML: `_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)`,
 		},
 		{
 			name:    "map lambda",
 			formula: "MAP(A1:A3,LAMBDA(x,x+1))",
-			wantXML: `<f>_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))</f>`,
+			wantXML: `_xlfn.MAP(A1:A3,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"A2": 2,
@@ -370,7 +370,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "byrow lambda",
 			formula: "BYROW(A1:B2,LAMBDA(r,SUM(r)))",
-			wantXML: `<f>_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))</f>`,
+			wantXML: `_xlfn.BYROW(A1:B2,_xlfn.LAMBDA(_xlpm.r,SUM(_xlpm.r)))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"B1": 2,
@@ -381,7 +381,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "bycol lambda",
 			formula: "BYCOL(A1:B2,LAMBDA(c,SUM(c)))",
-			wantXML: `<f>_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))</f>`,
+			wantXML: `_xlfn.BYCOL(A1:B2,_xlfn.LAMBDA(_xlpm.c,SUM(_xlpm.c)))`,
 			setupCells: map[string]any{
 				"A1": 1,
 				"B1": 2,
@@ -392,7 +392,7 @@ func TestLambdaFamilyFormulasUseXlpmPrefixesInXML(t *testing.T) {
 		{
 			name:    "makearray lambda",
 			formula: "MAKEARRAY(2,2,LAMBDA(r,c,r+c))",
-			wantXML: `<f>_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))</f>`,
+			wantXML: `_xlfn.MAKEARRAY(2,2,_xlfn.LAMBDA(_xlpm.r,_xlpm.c,_xlpm.r+_xlpm.c))`,
 		},
 	}
 
@@ -472,7 +472,7 @@ func TestOfficeEraFormulaPrefixesRestoredOnResave(t *testing.T) {
 	}
 }
 
-func TestDynamicArrayFormulaSerializationAvoidsMetadataXML(t *testing.T) {
+func TestDynamicArrayFormulaSerializationIncludesMetadataXML(t *testing.T) {
 	f := werkbook.New(werkbook.FirstSheet("Out - Ledger Summary"))
 	s := f.Sheet("Out - Ledger Summary")
 	if _, err := f.NewSheet("treasury-ledger"); err != nil {
@@ -500,30 +500,27 @@ func TestDynamicArrayFormulaSerializationAvoidsMetadataXML(t *testing.T) {
 	}
 
 	sheetXML := string(readSheetXML(t, path, "xl/worksheets/sheet1.xml"))
-	if !strings.Contains(sheetXML, `<c r="A2" t="str"><f>_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(`) {
-		t.Fatalf("expected A2 to be written as a plain formula string cell, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `r="A2"`) || !strings.Contains(sheetXML, `cm="1"`) || !strings.Contains(sheetXML, `ref="A2" ca="1">_xlfn._xlws.SORT(_xlfn.UNIQUE(_xlfn._xlws.FILTER(`) {
+		t.Fatalf("expected A2 to be written with dynamic-array metadata, XML: %s", sheetXML)
 	}
-	if strings.Contains(sheetXML, `cm="1"`) {
-		t.Fatalf("expected dynamic-array cells to omit cm metadata, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `r="D2" t="e" cm="1"`) || !strings.Contains(sheetXML, `ref="D2" ca="1">_xlfn.SINGLE(`) {
+		t.Fatalf("expected D2 SINGLE formula to carry dynamic-array metadata, XML: %s", sheetXML)
 	}
-	if strings.Contains(sheetXML, `<f t="array"`) {
-		t.Fatalf("expected dynamic-array cells to omit legacy array markup, XML: %s", sheetXML)
-	}
-	if !strings.Contains(sheetXML, `<c r="D2" t="e"><f>_xlfn.SINGLE(`) {
-		t.Fatalf("expected D2 SINGLE formula to use _xlfn prefix and normal error typing, XML: %s", sheetXML)
+	if !strings.Contains(sheetXML, `cm="1"`) || !strings.Contains(sheetXML, `<f t="array"`) {
+		t.Fatalf("expected dynamic-array metadata in sheet XML: %s", sheetXML)
 	}
 
 	workbookRels := string(readSheetXML(t, path, "xl/_rels/workbook.xml.rels"))
-	if strings.Contains(workbookRels, `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"`) {
-		t.Fatalf("expected workbook relationships to omit sheet metadata, XML: %s", workbookRels)
+	if !strings.Contains(workbookRels, `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata"`) {
+		t.Fatalf("expected workbook relationships to include sheet metadata, XML: %s", workbookRels)
 	}
 
 	contentTypes := string(readSheetXML(t, path, "[Content_Types].xml"))
-	if strings.Contains(contentTypes, `PartName="/xl/metadata.xml"`) {
-		t.Fatalf("expected content types to omit metadata.xml, XML: %s", contentTypes)
+	if !strings.Contains(contentTypes, `PartName="/xl/metadata.xml"`) {
+		t.Fatalf("expected content types to include metadata.xml, XML: %s", contentTypes)
 	}
-	if zipHasEntry(t, path, "xl/metadata.xml") {
-		t.Fatal("metadata.xml should not be written for dynamic array formulas")
+	if !zipHasEntry(t, path, "xl/metadata.xml") {
+		t.Fatal("metadata.xml should be written for dynamic array formulas")
 	}
 
 	r, err := os.Open(path)
@@ -722,6 +719,160 @@ func TestOpenSavePreservesImportedDynamicArrayMetadata(t *testing.T) {
 	}
 }
 
+func TestOpenSaveRecomputesImportedDynamicArraySpillRefAfterRecalc(t *testing.T) {
+	const (
+		dataSheet    = "Data"
+		spillSheet   = "Spill"
+		spillAnchor  = "B2"
+		originalRef  = "B2:B4"
+		updatedRef   = "B2:B3"
+		userFormula  = `FILTER(Data!B2:B6,Data!A2:A6)`
+		ooxmlFormula = `_xlfn._xlws.FILTER(Data!B2:B6,Data!A2:A6)`
+	)
+
+	fixture := &ooxml.WorkbookData{
+		Styles: []ooxml.StyleData{{}},
+		Sheets: []ooxml.SheetData{
+			{
+				Name: dataSheet,
+				Rows: []ooxml.RowData{
+					{Num: 1, Cells: []ooxml.CellData{
+						{Ref: "A1", Type: "s", Value: "Include"},
+						{Ref: "B1", Type: "s", Value: "Amount"},
+					}},
+					{Num: 2, Cells: []ooxml.CellData{
+						{Ref: "A2", Type: "b", Value: "1"},
+						{Ref: "B2", Value: "10"},
+					}},
+					{Num: 3, Cells: []ooxml.CellData{
+						{Ref: "A3", Type: "b", Value: "1"},
+						{Ref: "B3", Value: "20"},
+					}},
+					{Num: 4, Cells: []ooxml.CellData{
+						{Ref: "A4", Type: "b", Value: "1"},
+						{Ref: "B4", Value: "30"},
+					}},
+					{Num: 5, Cells: []ooxml.CellData{
+						{Ref: "A5", Type: "b", Value: "0"},
+						{Ref: "B5", Value: "40"},
+					}},
+					{Num: 6, Cells: []ooxml.CellData{
+						{Ref: "A6", Type: "b", Value: "0"},
+						{Ref: "B6", Value: "50"},
+					}},
+				},
+			},
+			{
+				Name: spillSheet,
+				Rows: []ooxml.RowData{
+					{Num: 2, Cells: []ooxml.CellData{{
+						Ref:            spillAnchor,
+						Type:           "str",
+						Value:          "10",
+						Formula:        ooxmlFormula,
+						FormulaType:    "array",
+						FormulaRef:     originalRef,
+						IsDynamicArray: true,
+					}}},
+					{Num: 3, Cells: []ooxml.CellData{{Ref: "B3"}}},
+					{Num: 4, Cells: []ooxml.CellData{{Ref: "B4"}}},
+				},
+			},
+		},
+	}
+
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "dynamic-array-source.xlsx")
+	var buf bytes.Buffer
+	if err := ooxml.WriteWorkbook(&buf, fixture); err != nil {
+		t.Fatalf("WriteWorkbook fixture: %v", err)
+	}
+	if err := os.WriteFile(srcPath, buf.Bytes(), 0o600); err != nil {
+		t.Fatalf("WriteFile fixture: %v", err)
+	}
+
+	f, err := werkbook.Open(srcPath)
+	if err != nil {
+		t.Fatalf("Open fixture: %v", err)
+	}
+	if got, err := f.Sheet(spillSheet).GetFormula(spillAnchor); err != nil {
+		t.Fatalf("GetFormula(%s): %v", spillAnchor, err)
+	} else if got != userFormula {
+		t.Fatalf("formula round-trip = %q, want %q", got, userFormula)
+	}
+
+	if err := f.Sheet(dataSheet).SetValue("A4", false); err != nil {
+		t.Fatalf("SetValue(A4): %v", err)
+	}
+
+	if val, err := f.Sheet(spillSheet).GetValue(spillAnchor); err != nil {
+		t.Fatalf("GetValue(%s): %v", spillAnchor, err)
+	} else if val.Type != werkbook.TypeNumber || val.Number != 10 {
+		t.Fatalf("%s value = %#v, want 10", spillAnchor, val)
+	}
+	if val, err := f.Sheet(spillSheet).GetValue("B3"); err != nil {
+		t.Fatalf("GetValue(B3): %v", err)
+	} else if val.Type != werkbook.TypeNumber || val.Number != 20 {
+		t.Fatalf("B3 value = %#v, want 20 after spill shrink", val)
+	}
+	if val, err := f.Sheet(spillSheet).GetValue("B4"); err != nil {
+		t.Fatalf("GetValue(B4): %v", err)
+	} else if val.Type != werkbook.TypeEmpty {
+		t.Fatalf("B4 value = %#v, want empty after spill shrink", val)
+	}
+
+	dstPath := filepath.Join(dir, "dynamic-array-roundtrip.xlsx")
+	if err := f.SaveAs(dstPath); err != nil {
+		t.Fatalf("SaveAs round-trip workbook: %v", err)
+	}
+
+	dstSheetXML := string(readSheetXML(t, dstPath, "xl/worksheets/sheet2.xml"))
+	if strings.Contains(dstSheetXML, `ref="`+originalRef+`"`) {
+		t.Fatalf("saved worksheet still contains stale spill ref %q\nxml: %s", originalRef, dstSheetXML)
+	}
+	if !strings.Contains(dstSheetXML, `ref="`+updatedRef+`"`) {
+		t.Fatalf("saved worksheet missing updated spill ref %q\nxml: %s", updatedRef, dstSheetXML)
+	}
+
+	r, err := os.Open(dstPath)
+	if err != nil {
+		t.Fatalf("Open round-trip xlsx: %v", err)
+	}
+	defer r.Close()
+	info, err := r.Stat()
+	if err != nil {
+		t.Fatalf("Stat round-trip xlsx: %v", err)
+	}
+	data, err := ooxml.ReadWorkbook(r, info.Size())
+	if err != nil {
+		t.Fatalf("ReadWorkbook round-trip: %v", err)
+	}
+
+	foundAnchor := false
+	for _, sd := range data.Sheets {
+		if sd.Name != spillSheet {
+			continue
+		}
+		for _, rd := range sd.Rows {
+			for _, cd := range rd.Cells {
+				if cd.Ref != spillAnchor {
+					continue
+				}
+				foundAnchor = true
+				if !cd.IsDynamicArray {
+					t.Fatalf("expected %s to remain a dynamic array anchor: %#v", spillAnchor, cd)
+				}
+				if cd.FormulaRef != updatedRef {
+					t.Fatalf("FormulaRef = %q, want %q", cd.FormulaRef, updatedRef)
+				}
+			}
+		}
+	}
+	if !foundAnchor {
+		t.Fatalf("%s not found in parsed round-trip workbook data", spillAnchor)
+	}
+}
+
 func TestFormulaAndValueCoexist(t *testing.T) {
 	f := werkbook.New()
 	s := f.Sheet("Sheet1")
@@ -777,10 +928,11 @@ func TestEmptyFormulaIgnored(t *testing.T) {
 	}
 }
 
-// assertFormulaXMLRoundTrip verifies the exact serialized <f> fragment and
-// then reopens the workbook to ensure StripXlfnPrefixes restores the user-
-// facing formula text. This keeps the regression anchored to raw OOXML
-// without calling external spreadsheet apps.
+// assertFormulaXMLRoundTrip verifies that the serialized worksheet XML
+// contains the expected formula fragment and then reopens the workbook to
+// ensure StripXlfnPrefixes restores the user-facing formula text. This keeps
+// the regression anchored to raw OOXML without calling external spreadsheet
+// apps.
 func assertFormulaXMLRoundTrip(t *testing.T, userFormula, wantXML string, setupCells map[string]any) {
 	t.Helper()
 
