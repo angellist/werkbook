@@ -1085,8 +1085,8 @@ func TestEvalConcatNumberFormatting(t *testing.T) {
 		want    string
 	}{
 		{name: "one_third", formula: `1/3&""`, want: "0.333333333333333"},
-		{name: "small_number", formula: `0.000001&""`, want: "1E-06"},
-		{name: "large_number", formula: `1000000000000000&""`, want: "1E+15"},
+		{name: "small_number", formula: `0.000001&""`, want: "0.000001"},
+		{name: "large_number", formula: `1000000000000000&""`, want: "1000000000000000"},
 		{name: "normal_number", formula: `3.14&""`, want: "3.14"},
 		{name: "integer", formula: `42&""`, want: "42"},
 		{name: "zero", formula: `0&""`, want: "0"},

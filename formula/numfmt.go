@@ -348,18 +348,24 @@ func formatGeneral(n float64) string {
 	abs := math.Abs(n)
 	// Very large or very small numbers use scientific notation.
 	if abs >= 1e11 || (abs > 0 && abs < 1e-4) {
-		s := strconv.FormatFloat(n, 'E', -1, 64)
-		// Go produces "E+11"; ensure "+" sign is present for positive exponents
-		// and strip unnecessary leading zeros from the exponent.
-		// Go's 'E' format already uses uppercase E and includes +/-.
-		// Trim leading zeros in exponent: E+011 -> E+11, E-010 -> E-10
+		// Excel General format uses 5 digits after the decimal point
+		// (6 significant digits total) for scientific notation.
+		s := strconv.FormatFloat(n, 'E', 5, 64)
+		// Trim trailing zeros after the decimal point in the coefficient.
 		if idx := strings.IndexByte(s, 'E'); idx >= 0 {
-			sign := s[idx+1] // '+' or '-'
-			exp := strings.TrimLeft(s[idx+2:], "0")
+			coeff := s[:idx]
+			expPart := s[idx:]
+			if dotIdx := strings.IndexByte(coeff, '.'); dotIdx >= 0 {
+				coeff = strings.TrimRight(coeff, "0")
+				coeff = strings.TrimRight(coeff, ".")
+			}
+			// Strip leading zeros from the exponent and ensure sign is present.
+			sign := expPart[1] // '+' or '-'
+			exp := strings.TrimLeft(expPart[2:], "0")
 			if exp == "" {
 				exp = "0"
 			}
-			s = s[:idx+1] + string(sign) + exp
+			s = coeff + "E" + string(sign) + exp
 		}
 		return s
 	}
@@ -524,13 +530,21 @@ func formatDateTime(serial float64, format string, date1904 bool) string {
 	if hour12 == 0 {
 		hour12 = 12
 	}
+	// Determine the case of AM/PM from the original format string.
+	ampmLower := isAMPMLowercase(format)
 	ampm := "AM"
 	if hour >= 12 {
 		ampm = "PM"
 	}
+	if ampmLower {
+		ampm = strings.ToLower(ampm)
+	}
 	ap := "A"
 	if hour >= 12 {
 		ap = "P"
+	}
+	if ampmLower {
+		ap = strings.ToLower(ap)
 	}
 
 	minute := t.Minute()
@@ -815,6 +829,40 @@ func countRun(s string, i int, ch byte) int {
 	return count
 }
 
+// isAMPMLowercase scans the raw format string (skipping quoted/escaped regions)
+// for an AM/PM or A/P marker and returns true when that marker is lowercase.
+// Excel rules: AM/PM (any case) always produces uppercase output.
+// Only the short form a/p (lowercase) produces lowercase output; A/P is uppercase.
+func isAMPMLowercase(format string) bool {
+	inQuote := false
+	upper := strings.ToUpper(format)
+	for i := 0; i < len(format); i++ {
+		ch := format[i]
+		if ch == '"' {
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
+		if ch == '\\' && i+1 < len(format) {
+			i++
+			continue
+		}
+		uCh := upper[i]
+		if uCh == 'A' {
+			if i+4 < len(upper) && upper[i:i+5] == "AM/PM" {
+				// AM/PM always produces uppercase regardless of case in format.
+				return false
+			}
+			if i+2 < len(upper) && upper[i:i+3] == "A/P" {
+				return format[i] == 'a'
+			}
+		}
+	}
+	return false
+}
+
 // isLiteralPassthrough returns true for characters that are passed through as-is
 // in format strings without needing quotes or backslash.
 func isLiteralPassthrough(ch byte) bool {
@@ -884,13 +932,21 @@ func formatElapsedTime(serial float64, format string) string {
 			code := upper[i+1 : i+end]
 			i += end + 1
 			switch code {
-			case "H", "HH":
+			case "H":
 				result.WriteString(strconv.Itoa(totalHours))
-			case "M", "MM":
+			case "HH":
+				result.WriteString(fmt.Sprintf("%02d", totalHours))
+			case "M":
 				result.WriteString(strconv.Itoa(totalMinutes))
-			case "S", "SS":
+			case "MM":
+				result.WriteString(fmt.Sprintf("%02d", totalMinutes))
+			case "S":
 				result.WriteString(strconv.Itoa(int(totalSeconds)))
-				// Handle fractional seconds after [s]/[ss].
+				// Handle fractional seconds after [s].
+				i = writeElapsedFracSeconds(format, i, totalSeconds, &result)
+			case "SS":
+				result.WriteString(fmt.Sprintf("%02d", int(totalSeconds)))
+				// Handle fractional seconds after [ss].
 				i = writeElapsedFracSeconds(format, i, totalSeconds, &result)
 			}
 			continue
@@ -1629,8 +1685,15 @@ func formatNumberSection(n float64, format string) string {
 		intStr = "0"
 	}
 
-	// Apply comma grouping.
-	if hasCommaGrouping && trailingCommas == 0 {
+	// Apply comma grouping. Count total commas to see if there are
+	// grouping commas in addition to any trailing scaling commas.
+	totalCommas := 0
+	for _, tok := range tokens {
+		if tok.kind == tokComma {
+			totalCommas++
+		}
+	}
+	if hasCommaGrouping && totalCommas > trailingCommas {
 		intStr = addCommaGrouping(intStr)
 	}
 
@@ -1812,6 +1875,9 @@ func formatNumberSection(n float64, format string) string {
 				} else if decZeros > 0 {
 					result.WriteByte('.')
 					result.WriteString(decStr)
+				} else {
+					// Trailing dot with no decimal placeholders (e.g. "0.").
+					result.WriteByte('.')
 				}
 				decWritten = true
 				_ = decWritten

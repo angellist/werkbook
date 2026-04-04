@@ -198,6 +198,9 @@ func fnLEFT(args []Value) (Value, error) {
 		}
 		return Value{Type: ValueArray, Array: result}, nil
 	}
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
 	s := ValueToString(args[0])
 	n := 1
 	if len(args) == 2 {
@@ -242,6 +245,9 @@ func fnMID(args []Value) (Value, error) {
 	if len(args) != 3 {
 		return ErrorVal(ErrValVALUE), nil
 	}
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
 	s := ValueToString(args[0])
 	startNum, e := CoerceNum(args[1])
 	if e != nil {
@@ -270,6 +276,9 @@ func fnMID(args []Value) (Value, error) {
 func fnRIGHT(args []Value) (Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return ErrorVal(ErrValVALUE), nil
+	}
+	if args[0].Type == ValueError {
+		return args[0], nil
 	}
 	s := ValueToString(args[0])
 	n := 1
@@ -352,6 +361,11 @@ func fnTEXTWith1904(args []Value, date1904 bool) (Value, error) {
 	}
 	format := ValueToString(args[1])
 	v := args[0]
+
+	// An empty format string always returns an empty string in Excel.
+	if format == "" {
+		return StringVal(""), nil
+	}
 
 	// Reject format strings containing lowercase 'e+' or 'e-'
 	// (only uppercase 'E' triggers scientific notation).
@@ -634,6 +648,12 @@ func fnENCODEURL(args []Value) (Value, error) {
 func fnEXACT(args []Value) (Value, error) {
 	if len(args) != 2 {
 		return ErrorVal(ErrValVALUE), nil
+	}
+	if args[0].Type == ValueError {
+		return args[0], nil
+	}
+	if args[1].Type == ValueError {
+		return args[1], nil
 	}
 	return BoolVal(ValueToString(args[0]) == ValueToString(args[1])), nil
 }

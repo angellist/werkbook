@@ -674,3 +674,64 @@ func TestParseCellData_InvalidSSTIndex(t *testing.T) {
 		t.Errorf("invalid SST index: Value = %q, want empty", cd.Value)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// decodeXMLEntities
+// ---------------------------------------------------------------------------
+
+func TestDecodeXMLEntities(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no entities", `SUMIF(A1:A10,">10",B1:B10)`, `SUMIF(A1:A10,">10",B1:B10)`},
+		{"gt entity", `SUMIF(A1:A10,"&gt;10",B1:B10)`, `SUMIF(A1:A10,">10",B1:B10)`},
+		{"lt entity", `COUNTIF(A1:A10,"&lt;5")`, `COUNTIF(A1:A10,"<5")`},
+		{"lt gt entities", `COUNTIF(A1:A10,"&lt;&gt;")`, `COUNTIF(A1:A10,"<>")`},
+		{"gte entity", `SUMIF(A1:A10,"&gt;=20",B1:B10)`, `SUMIF(A1:A10,">=20",B1:B10)`},
+		{"amp entity", `CONCATENATE("A&amp;B")`, `CONCATENATE("A&B")`},
+		{"quot entity", `IF(A1&gt;0,&quot;yes&quot;,&quot;no&quot;)`, `IF(A1>0,"yes","no")`},
+		{"apos entity", `IF(A1&gt;0,&apos;yes&apos;,&apos;no&apos;)`, `IF(A1>0,'yes','no')`},
+		{"double encoded gt", `SUMIF(A1:A10,"&amp;gt;10",B1:B10)`, `SUMIF(A1:A10,">10",B1:B10)`},
+		{"double encoded lt", `COUNTIF(A1:A10,"&amp;lt;5")`, `COUNTIF(A1:A10,"<5")`},
+		{"empty string", "", ""},
+		{"no ampersand", "SUM(A1:A10)", "SUM(A1:A10)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := decodeXMLEntities(tt.in)
+			if got != tt.want {
+				t.Errorf("decodeXMLEntities(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseCellData_FormulaXMLEntities(t *testing.T) {
+	// Simulate a formula that contains literal XML entities (as might
+	// happen with a double-encoding bug in a third-party XLSX writer).
+	c := xlsxC{
+		R:  "B6",
+		FE: &xlsxF{Text: `SUMIF(A1:A10,"&gt;10",B1:B10)`},
+		V:  "5",
+	}
+	cd := parseCellData(c, nil)
+	want := `SUMIF(A1:A10,">10",B1:B10)`
+	if cd.Formula != want {
+		t.Errorf("parseCellData formula = %q, want %q", cd.Formula, want)
+	}
+}
+
+func TestParseCellData_FormulaLtGtEntities(t *testing.T) {
+	c := xlsxC{
+		R:  "B11",
+		FE: &xlsxF{Text: `COUNTIF(A1:A10,"&lt;&gt;")`},
+		V:  "9",
+	}
+	cd := parseCellData(c, nil)
+	want := `COUNTIF(A1:A10,"<>")`
+	if cd.Formula != want {
+		t.Errorf("parseCellData formula = %q, want %q", cd.Formula, want)
+	}
+}

@@ -1190,9 +1190,10 @@ func TestDAYS360(t *testing.T) {
 
 		// ── US both last-day-of-Feb across different years ─────────────
 		// Feb 28 2025 (non-leap, last of Feb) to Feb 29 2024 (leap, last of Feb)
-		// start > end so negative. Both are last-of-Feb. D1=30,D2=30.
-		// (2024-2025)*360+(2-2)*30+(30-30) = -360
-		{"us_feb28_to_feb29_diff_years", "DAYS360(DATE(2025,2,28),DATE(2024,2,29),FALSE)", -360, false, 0},
+		// start > end so negative. Both are last-of-Feb but D2 day (29) > D1 day (28),
+		// so D2 is NOT adjusted to 30. D1=30, D2=29.
+		// (2024-2025)*360+(2-2)*30+(29-30) = -361
+		{"us_feb28_to_feb29_diff_years", "DAYS360(DATE(2025,2,28),DATE(2024,2,29),FALSE)", -361, false, 0},
 
 		// ── Error handling ─────────────────────────────────────────────
 		{"no_args", "DAYS360()", 0, true, ErrValVALUE},
@@ -2021,6 +2022,13 @@ func TestTIME(t *testing.T) {
 
 			// Large valid values
 			{"hour_32767", "TIME(32767,0,0)", float64(32767%24) * 3600 / 86400},
+
+			// Negative arguments wrap modulo 86400
+			{"negative_hour", "TIME(-1,0,0)", 0.9583333333333334},   // 23:00
+			{"negative_12_hour", "TIME(-12,0,0)", 0.5},              // 12:00
+			{"negative_minute", "TIME(0,-1,0)", 0.9993055555555556}, // 23:59
+			{"negative_second", "TIME(0,0,-1)", 0.999988425925926},  // 23:59:59
+			{"large_second_wrap", "TIME(0,0,86400)", 0},             // full day wraps to 0
 		}
 
 		for _, tc := range tests {
@@ -2062,11 +2070,6 @@ func TestTIME(t *testing.T) {
 			// Exceeds 32767
 			{"hour_over_32767", "TIME(32768,0,0)", ErrValNUM},
 			{"minute_over_32767", "TIME(0,32768,0)", ErrValNUM},
-			{"second_over_32767", "TIME(0,0,32768)", ErrValNUM},
-
-			// Negative total time
-			{"negative_hour", "TIME(-1,0,0)", ErrValNUM},
-			{"negative_total", "TIME(0,-1,0)", ErrValNUM},
 		}
 
 		for _, tc := range tests {

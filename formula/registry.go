@@ -445,6 +445,39 @@ var inheritedArrayArgFuncs = map[string]map[int]bool{
 	"IF":      {0: true, 1: true, 2: true},
 	"IFERROR": {0: true, 1: true},
 	"IFNA":    {0: true, 1: true},
+
+	// Scalar math/info functions that lift to arrays via LiftUnary.
+	// They must inherit array context so that expressions like
+	// SUMPRODUCT(ABS(range1-range2)) evaluate the subtraction
+	// element-wise instead of implicitly intersecting.
+	"ABS":   {0: true},
+	"INT":   {0: true},
+	"SIGN":  {0: true},
+	"SQRT":  {0: true},
+	"LN":    {0: true},
+	"LOG10": {0: true},
+	"EXP":   {0: true},
+	"FACT":  {0: true},
+	"SIN":   {0: true},
+	"COS":   {0: true},
+	"TAN":   {0: true},
+	"ASIN":  {0: true},
+	"ACOS":  {0: true},
+	"ATAN":  {0: true},
+	"SINH":  {0: true},
+	"COSH":  {0: true},
+	"TANH":  {0: true},
+
+	// Info functions that also lift to arrays.
+	"ISNUMBER": {0: true},
+	"ISTEXT":   {0: true},
+	"ISBLANK":  {0: true},
+	"ISERROR":  {0: true},
+	"ISERR":    {0: true},
+	"ISNA":     {0: true},
+	"NOT":      {0: true},
+	"N":        {0: true},
+	"TYPE":     {0: true},
 }
 
 // arrayFirstArgFuncs evaluate the first argument in array context because it is

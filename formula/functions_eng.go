@@ -629,6 +629,11 @@ func fnComplex(args []Value) (Value, error) {
 		return ErrorVal(ErrValVALUE), nil
 	}
 
+	// COMPLEX does not accept boolean arguments.
+	if args[0].Type == ValueBool || args[1].Type == ValueBool {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
 	realNum, e := CoerceNum(args[0])
 	if e != nil {
 		return *e, nil
@@ -1796,17 +1801,14 @@ func fnImabs(args []Value) (Value, error) {
 		}), nil
 	}
 
+	// IMABS does not accept boolean arguments.
+	if args[0].Type == ValueBool {
+		return ErrorVal(ErrValVALUE), nil
+	}
+
 	// Numeric input: treat as real number with 0 imaginary part.
 	if args[0].Type == ValueNumber {
 		return NumberVal(math.Abs(args[0].Num)), nil
-	}
-
-	// Boolean: TRUE=1, FALSE=0, both are real numbers.
-	if args[0].Type == ValueBool {
-		if args[0].Bool {
-			return NumberVal(1), nil
-		}
-		return NumberVal(0), nil
 	}
 
 	if args[0].Type != ValueString {
@@ -1841,13 +1843,13 @@ func fnImaginary(args []Value) (Value, error) {
 		}), nil
 	}
 
-	// Numeric input: treat as real number with 0 imaginary part.
-	if args[0].Type == ValueNumber {
-		return NumberVal(0), nil
+	// IMAGINARY does not accept boolean arguments.
+	if args[0].Type == ValueBool {
+		return ErrorVal(ErrValVALUE), nil
 	}
 
-	// Boolean: TRUE=1, FALSE=0, both are real numbers.
-	if args[0].Type == ValueBool {
+	// Numeric input: treat as real number with 0 imaginary part.
+	if args[0].Type == ValueNumber {
 		return NumberVal(0), nil
 	}
 

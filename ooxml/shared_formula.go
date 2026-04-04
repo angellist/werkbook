@@ -200,6 +200,14 @@ func parseCellRefForShift(raw string) (cellRefParts, error) {
 		p.row = row
 	}
 
+	// If the token has no row digits and the column number exceeds Excel's
+	// maximum (16384 / XFD), this is almost certainly a named reference
+	// (e.g. "FocusPattern") rather than a column-only cell reference.
+	// Reject it so that shiftFormulaRefs leaves it untouched.
+	if p.row == 0 && p.col > 16384 {
+		return p, fmt.Errorf("likely named reference %q (col %d exceeds max)", raw, p.col)
+	}
+
 	return p, nil
 }
 
