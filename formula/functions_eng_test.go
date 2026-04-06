@@ -2416,9 +2416,7 @@ func TestIMREAL(t *testing.T) {
 			{"IMREAL(-7)", -7},
 			{"IMREAL(3.14)", 3.14},
 
-			// Boolean: TRUE=1, FALSE=0
-			{"IMREAL(TRUE)", 1},
-			{"IMREAL(FALSE)", 0},
+			// Boolean: removed — Excel returns #VALUE! (tested in error cases)
 
 			// j suffix
 			{`IMREAL("3-4j")`, 3},
@@ -2457,6 +2455,10 @@ func TestIMREAL(t *testing.T) {
 			formula string
 			wantErr ErrorValue
 		}{
+			// Boolean arguments
+			{`IMREAL(TRUE)`, ErrValVALUE},
+			{`IMREAL(FALSE)`, ErrValVALUE},
+
 			// Invalid complex number strings
 			{`IMREAL("invalid")`, ErrValNUM},
 			{`IMREAL("")`, ErrValNUM},

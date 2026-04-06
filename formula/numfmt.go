@@ -1584,11 +1584,18 @@ func formatFraction(n float64, format string) string {
 	//   tokDigitSpace (?): show space for digit, replace each middle literal char with a space
 	//   tokDigit (0):      show '0', show middle literals as-is
 	wholeType := tokDigit // default to '0' behavior
+	wholeHasMandatory := false
 	if hasWhole {
+		first := true
 		for i := wholeStart; i < wholeEnd; i++ {
 			if isDigitTok(tokens[i].kind) {
-				wholeType = tokens[i].kind
-				break
+				if first {
+					wholeType = tokens[i].kind
+					first = false
+				}
+				if tokens[i].kind == tokDigit || tokens[i].kind == tokDigitSpace {
+					wholeHasMandatory = true
+				}
 			}
 		}
 	}
@@ -1615,9 +1622,11 @@ func formatFraction(n float64, format string) string {
 		// Fraction is zero: show whole number, handle fraction area based on
 		// placeholder types.
 		result.WriteString(prefix)
-		// For # whole with wholePart=0, don't force zero on the whole digit
-		// (the numerator's 0 placeholder will show the zero instead).
-		if wholePart == 0 && wholeType == tokDigitOpt && numHasZero {
+		// For pure-# whole with wholePart=0, don't force zero on the whole
+		// digit (the numerator's 0 placeholder will show the zero instead).
+		// But if the whole section also has mandatory placeholders (0 or ?),
+		// force zero so those placeholders display correctly.
+		if wholePart == 0 && wholeType == tokDigitOpt && numHasZero && !wholeHasMandatory {
 			formatWholeDigits(&result, false)
 		} else {
 			formatWholeDigits(&result, true)
@@ -1627,8 +1636,8 @@ func formatFraction(n float64, format string) string {
 			// When forceZero causes the whole digit to display (? or 0 types),
 			// the middle literal should show as-is. When # suppresses, middle
 			// is also suppressed.
-			if wholePart == 0 && wholeType == tokDigitOpt {
-				// # whole suppresses middle entirely.
+			if wholePart == 0 && wholeType == tokDigitOpt && !wholeHasMandatory {
+				// Pure # whole suppresses middle entirely.
 			} else {
 				result.WriteString(middle)
 			}
@@ -2123,11 +2132,25 @@ func tokenizeNumberFormat(format string) []numFmtToken {
 			tokens = append(tokens, numFmtToken{kind: tokPercent, value: "%"})
 			i++
 		case 'E':
-			// Scientific notation: E+ or E- (uppercase only; lowercase 'e' is treated as literal).
+			// Scientific notation: E+, E-, or E followed directly by digit
+			// placeholders (uppercase only; lowercase 'e' is treated as literal).
 			if i+1 < len(format) && (format[i+1] == '+' || format[i+1] == '-') {
 				tokens = append(tokens, numFmtToken{kind: tokExponent, value: format[i : i+2]})
 				i += 2
 				// Emit the exponent digit placeholders as tokens so formatScientific can count them.
+				for i < len(format) && (format[i] == '0' || format[i] == '#') {
+					if format[i] == '0' {
+						tokens = append(tokens, numFmtToken{kind: tokDigit, value: "0"})
+					} else {
+						tokens = append(tokens, numFmtToken{kind: tokDigitOpt, value: "#"})
+					}
+					i++
+				}
+			} else if i+1 < len(format) && (format[i+1] == '0' || format[i+1] == '#') {
+				// E followed directly by digit placeholders (no sign): behaves
+				// like E- (sign shown only for negative exponents).
+				tokens = append(tokens, numFmtToken{kind: tokExponent, value: "E-"})
+				i++
 				for i < len(format) && (format[i] == '0' || format[i] == '#') {
 					if format[i] == '0' {
 						tokens = append(tokens, numFmtToken{kind: tokDigit, value: "0"})
@@ -2377,8 +2400,9 @@ func addCommaGrouping(s string) string {
 
 // formatScientific formats a number in scientific notation based on the format tokens.
 func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
-	// Count mantissa decimal places.
+	// Count mantissa decimal places and required (non-optional) decimal places.
 	decPlaces := 0
+	minDecPlaces := 0
 	inDecimal := false
 	for i, tok := range tokens {
 		if i >= sciIdx {
@@ -2390,6 +2414,9 @@ func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
 		}
 		if inDecimal && (tok.kind == tokDigit || tok.kind == tokDigitOpt || tok.kind == tokDigitSpace) {
 			decPlaces++
+			if tok.kind == tokDigit {
+				minDecPlaces = decPlaces // required '0' placeholder
+			}
 		}
 	}
 
@@ -2461,6 +2488,27 @@ func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
 
 	// Format mantissa.
 	mStr := fmt.Sprintf("%.*f", decPlaces, mantissa)
+	// Strip optional trailing zeros: '#' placeholders suppress trailing zeros,
+	// but '0' placeholders require them. Strip down to minDecPlaces.
+	if decPlaces > minDecPlaces {
+		if dotIdx := strings.IndexByte(mStr, '.'); dotIdx >= 0 {
+			fracPart := mStr[dotIdx+1:]
+			trimmed := strings.TrimRight(fracPart, "0")
+			if len(trimmed) < minDecPlaces {
+				trimmed = fracPart[:minDecPlaces]
+			}
+			if len(trimmed) == 0 {
+				mStr = mStr[:dotIdx+1] // keep trailing dot
+			} else {
+				mStr = mStr[:dotIdx+1] + trimmed
+			}
+		}
+	}
+	// If the format has a decimal point but no decimal digit placeholders
+	// (e.g. "0.E0"), append the trailing dot that Sprintf omits.
+	if decPlaces == 0 && inDecimal && !strings.ContainsRune(mStr, '.') {
+		mStr += "."
+	}
 	result.WriteString(mStr)
 
 	// Middle literals: after the last coefficient digit, before E.

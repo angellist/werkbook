@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -9,6 +10,58 @@ import (
 
 	werkbook "github.com/jpoz/werkbook"
 )
+
+// checkConfig holds optional configuration for the check command, typically
+// loaded from a JSON file via --config.
+type checkConfig struct {
+	Tolerance      float64  `json:"tolerance"`
+	IgnoreFormulas []string `json:"ignore_formulas"`
+	IgnoreFiles    []string `json:"ignore_files"`
+}
+
+func loadCheckConfig(path string) (checkConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return checkConfig{}, fmt.Errorf("reading config %q: %v", path, err)
+	}
+	var cfg checkConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return checkConfig{}, fmt.Errorf("parsing config %q: %v", path, err)
+	}
+	// Normalize ignore_formulas to upper case for case-insensitive matching.
+	for i, f := range cfg.IgnoreFormulas {
+		cfg.IgnoreFormulas[i] = strings.ToUpper(f)
+	}
+	return cfg, nil
+}
+
+// shouldIgnoreFile returns true if filePath matches any ignore_files glob pattern.
+func (c *checkConfig) shouldIgnoreFile(filePath string) bool {
+	for _, pattern := range c.IgnoreFiles {
+		if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+			return true
+		}
+		// Also try matching against the full path for patterns with directories.
+		if matched, _ := filepath.Match(pattern, filePath); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldIgnoreFormula returns true if the formula contains any ignored function name.
+func (c *checkConfig) shouldIgnoreFormula(formula string) bool {
+	if len(c.IgnoreFormulas) == 0 {
+		return false
+	}
+	upper := strings.ToUpper(formula)
+	for _, fn := range c.IgnoreFormulas {
+		if strings.Contains(upper, fn+"(") {
+			return true
+		}
+	}
+	return false
+}
 
 type checkDiff struct {
 	Sheet   string `json:"sheet"`
@@ -54,6 +107,8 @@ func cmdCheck(args []string, globals globalFlags) int {
 
 	var sheetFlag string
 	var toleranceFlag float64
+	var toleranceSet bool
+	var configPath string
 
 	i := 0
 	var paths []string
@@ -77,6 +132,14 @@ func cmdCheck(args []string, globals globalFlags) int {
 				writeError(cmd, errUsage(fmt.Sprintf("invalid --tolerance value: %s", args[i+1])), globals)
 				return ExitUsage
 			}
+			toleranceSet = true
+			i += 2
+		case "--config":
+			if i+1 >= len(args) {
+				writeError(cmd, errUsage("--config requires a value"), globals)
+				return ExitUsage
+			}
+			configPath = args[i+1]
 			i += 2
 		default:
 			if len(args[i]) > 0 && args[i][0] != '-' {
@@ -87,6 +150,22 @@ func cmdCheck(args []string, globals globalFlags) int {
 				return ExitUsage
 			}
 		}
+	}
+
+	// Load config file if provided.
+	var cfg checkConfig
+	if configPath != "" {
+		var err error
+		cfg, err = loadCheckConfig(configPath)
+		if err != nil {
+			writeError(cmd, errUsage(err.Error()), globals)
+			return ExitUsage
+		}
+	}
+
+	// CLI --tolerance overrides config file tolerance.
+	if toleranceSet {
+		cfg.Tolerance = toleranceFlag
 	}
 
 	if len(paths) == 0 {
@@ -107,13 +186,16 @@ func cmdCheck(args []string, globals globalFlags) int {
 
 	// Single file: use the original single-file output for backward compatibility.
 	if len(filePaths) == 1 {
-		return cmdCheckSingle(filePaths[0], sheetFlag, toleranceFlag, cmd, globals)
+		return cmdCheckSingle(filePaths[0], sheetFlag, &cfg, cmd, globals)
 	}
 
 	// Multiple files: aggregate results.
 	multi := checkMultiData{}
 	for _, fp := range filePaths {
-		result, skipped, ferr := checkFile(fp, sheetFlag, toleranceFlag)
+		if cfg.shouldIgnoreFile(fp) {
+			continue
+		}
+		result, skipped, ferr := checkFile(fp, sheetFlag, &cfg)
 		if ferr != "" {
 			multi.Errors++
 			multi.FileErrors = append(multi.FileErrors, fileError{File: fp, Error: ferr})
@@ -165,8 +247,12 @@ func expandXLSXPaths(paths []string) ([]string, error) {
 	return result, nil
 }
 
-func cmdCheckSingle(filePath, sheetFlag string, toleranceFlag float64, cmd string, globals globalFlags) int {
-	result, _, ferr := checkFile(filePath, sheetFlag, toleranceFlag)
+func cmdCheckSingle(filePath, sheetFlag string, cfg *checkConfig, cmd string, globals globalFlags) int {
+	if cfg.shouldIgnoreFile(filePath) {
+		writeSuccess(cmd, checkData{File: filePath}, globals)
+		return ExitSuccess
+	}
+	result, _, ferr := checkFile(filePath, sheetFlag, cfg)
 	if ferr != "" {
 		writeError(cmd, &ErrorInfo{Code: ErrCodeFileOpenFailed, Message: ferr}, globals)
 		return ExitFileIO
@@ -176,7 +262,7 @@ func cmdCheckSingle(filePath, sheetFlag string, toleranceFlag float64, cmd strin
 	return ExitSuccess
 }
 
-func checkFile(filePath, sheetFlag string, toleranceFlag float64) (result checkData, skipped bool, errMsg string) {
+func checkFile(filePath, sheetFlag string, cfg *checkConfig) (result checkData, skipped bool, errMsg string) {
 	defer func() {
 		if r := recover(); r != nil {
 			result = checkData{}
@@ -220,7 +306,7 @@ func checkFile(filePath, sheetFlag string, toleranceFlag float64) (result checkD
 		for row := range s.Rows() {
 			for _, cell := range row.Cells() {
 				formula := cell.Formula()
-				if formula == "" || isVolatileFormula(formula) {
+				if formula == "" || isVolatileFormula(formula) || cfg.shouldIgnoreFormula(formula) {
 					continue
 				}
 				ref, err := werkbook.CoordinatesToCellName(cell.Col(), row.Num())
@@ -295,7 +381,7 @@ func checkFile(filePath, sheetFlag string, toleranceFlag float64) (result checkD
 
 				computed, _ := s.GetValue(ref)
 
-				if valuesEqual(entry.value, computed, toleranceFlag) {
+				if valuesEqual(entry.value, computed, cfg.Tolerance) {
 					matches++
 				} else {
 					diffs = append(diffs, checkDiff{

@@ -245,11 +245,13 @@ func wbToolSpec() toolSpec {
 				Flags: []flagSpec{
 					{Name: "--sheet", ValueName: "name", Description: "Check only the named sheet.", Default: "all sheets"},
 					{Name: "--tolerance", ValueName: "N", Description: "Numeric tolerance for floating-point comparison.", Default: "0 (exact)"},
+					{Name: "--config", ValueName: "path", Description: "JSON config file with tolerance, ignore_formulas, and ignore_files.", Default: "none"},
 				},
 				Examples: []string{
 					"wb check data.xlsx",
 					"wb check --sheet Sheet1 data.xlsx",
 					"wb check --tolerance 0.0001 data.xlsx",
+					"wb check --config check.json ./testdata",
 					"wb check ./testdata",
 					"wb check file1.xlsx file2.xlsx ./more_files",
 				},

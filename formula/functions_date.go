@@ -563,17 +563,21 @@ func fnTIME(args []Value) (Value, error) {
 	minute = math.Trunc(minute)
 	second = math.Trunc(second)
 
-	// Returns #NUM! if hour or minute exceeds 32767.
-	if hour > 32767 || minute > 32767 {
+	// Excel returns #NUM! when any individual argument's absolute value
+	// exceeds 32767.
+	if math.Abs(hour) > 32767 || math.Abs(minute) > 32767 || math.Abs(second) > 32767 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
 	totalSeconds := hour*3600 + minute*60 + second
-	// Wrap negative values modulo 86400 (Excel wraps around the day).
-	totalSeconds = math.Mod(totalSeconds, 86400)
+
+	// Excel returns #NUM! when the resulting total is negative.
 	if totalSeconds < 0 {
-		totalSeconds += 86400
+		return ErrorVal(ErrValNUM), nil
 	}
+
+	// Wrap large values modulo 86400 (Excel wraps around the day).
+	totalSeconds = math.Mod(totalSeconds, 86400)
 
 	result := totalSeconds / 86400
 	return NumberVal(result), nil

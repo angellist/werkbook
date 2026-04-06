@@ -2023,12 +2023,9 @@ func TestTIME(t *testing.T) {
 			// Large valid values
 			{"hour_32767", "TIME(32767,0,0)", float64(32767%24) * 3600 / 86400},
 
-			// Negative arguments wrap modulo 86400
-			{"negative_hour", "TIME(-1,0,0)", 0.9583333333333334},   // 23:00
-			{"negative_12_hour", "TIME(-12,0,0)", 0.5},              // 12:00
-			{"negative_minute", "TIME(0,-1,0)", 0.9993055555555556}, // 23:59
-			{"negative_second", "TIME(0,0,-1)", 0.999988425925926},  // 23:59:59
-			{"large_second_wrap", "TIME(0,0,86400)", 0},             // full day wraps to 0
+			// Mixed negative args where total seconds is still positive
+			{"mixed_neg_min", "TIME(1,-30,0)", 1800.0 / 86400.0},  // 0:30
+			{"mixed_neg_sec", "TIME(0,30,-1)", 1799.0 / 86400.0},  // 0:29:59
 		}
 
 		for _, tc := range tests {
@@ -2070,6 +2067,14 @@ func TestTIME(t *testing.T) {
 			// Exceeds 32767
 			{"hour_over_32767", "TIME(32768,0,0)", ErrValNUM},
 			{"minute_over_32767", "TIME(0,32768,0)", ErrValNUM},
+			{"second_over_32767", "TIME(0,0,32768)", ErrValNUM},
+			{"second_86400", "TIME(0,0,86400)", ErrValNUM},
+
+			// Negative args producing negative total
+			{"negative_hour", "TIME(-1,0,0)", ErrValNUM},
+			{"negative_12_hour", "TIME(-12,0,0)", ErrValNUM},
+			{"negative_minute", "TIME(0,-1,0)", ErrValNUM},
+			{"negative_second", "TIME(0,0,-1)", ErrValNUM},
 		}
 
 		for _, tc := range tests {

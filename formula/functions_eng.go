@@ -1895,12 +1895,9 @@ func fnImreal(args []Value) (Value, error) {
 		return NumberVal(args[0].Num), nil
 	}
 
-	// Boolean: TRUE=1, FALSE=0.
+	// Boolean: Excel returns #VALUE! for boolean arguments.
 	if args[0].Type == ValueBool {
-		if args[0].Bool {
-			return NumberVal(1), nil
-		}
-		return NumberVal(0), nil
+		return ErrorVal(ErrValVALUE), nil
 	}
 
 	if args[0].Type != ValueString {
