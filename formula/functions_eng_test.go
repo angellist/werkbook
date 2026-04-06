@@ -473,11 +473,6 @@ func TestCOMPLEX(t *testing.T) {
 			{`COMPLEX("3","4")`, "3+4i"},
 			{`COMPLEX("1.5","2.5")`, "1.5+2.5i"},
 
-			// Boolean coercion (TRUE=1, FALSE=0)
-			{"COMPLEX(TRUE,FALSE)", "1"},
-			{"COMPLEX(FALSE,TRUE)", "i"},
-			{"COMPLEX(TRUE,TRUE)", "1+i"},
-
 			// i suffix explicit
 			{`COMPLEX(3,4,"i")`, "3+4i"},
 
@@ -519,6 +514,11 @@ func TestCOMPLEX(t *testing.T) {
 
 			// Both non-numeric
 			{`COMPLEX("abc","def")`, ErrValVALUE},
+
+			// Boolean arguments rejected
+			{"COMPLEX(TRUE,FALSE)", ErrValVALUE},
+			{"COMPLEX(FALSE,TRUE)", ErrValVALUE},
+			{"COMPLEX(TRUE,TRUE)", ErrValVALUE},
 		}
 		for _, tt := range errTests {
 			t.Run(tt.formula, func(t *testing.T) {
@@ -2168,10 +2168,6 @@ func TestIMAGINARY(t *testing.T) {
 			{"IMAGINARY(-7)", 0},
 			{"IMAGINARY(3.14)", 0},
 
-			// Boolean treated as real number
-			{"IMAGINARY(TRUE)", 0},
-			{"IMAGINARY(FALSE)", 0},
-
 			// Unit imaginary with real part
 			{`IMAGINARY("3+i")`, 1},
 			{`IMAGINARY("3-i")`, -1},
@@ -2210,6 +2206,10 @@ func TestIMAGINARY(t *testing.T) {
 			{`IMAGINARY("3+4")`, ErrValNUM},
 			{`IMAGINARY("3+4k")`, ErrValNUM},
 			{`IMAGINARY("+")`, ErrValNUM},
+
+			// Boolean arguments rejected
+			{"IMAGINARY(TRUE)", ErrValVALUE},
+			{"IMAGINARY(FALSE)", ErrValVALUE},
 		}
 		for _, tt := range errTests {
 			t.Run(tt.formula, func(t *testing.T) {
@@ -2300,10 +2300,6 @@ func TestIMABS(t *testing.T) {
 			{`IMABS("1+i")`, math.Sqrt(2)},
 			{`IMABS("1-i")`, math.Sqrt(2)},
 
-			// Boolean: TRUE=1, FALSE=0
-			{"IMABS(TRUE)", 1},
-			{"IMABS(FALSE)", 0},
-
 			// Combined with COMPLEX
 			{`IMABS(COMPLEX(3,4))`, 5},
 			{`IMABS(COMPLEX(0,0))`, 0},
@@ -2340,6 +2336,10 @@ func TestIMABS(t *testing.T) {
 			{`IMABS("3+4")`, ErrValNUM},
 			{`IMABS("3+4k")`, ErrValNUM},
 			{`IMABS("+")`, ErrValNUM},
+
+			// Boolean arguments rejected
+			{"IMABS(TRUE)", ErrValVALUE},
+			{"IMABS(FALSE)", ErrValVALUE},
 		}
 		for _, tt := range errTests {
 			t.Run(tt.formula, func(t *testing.T) {
@@ -2416,9 +2416,7 @@ func TestIMREAL(t *testing.T) {
 			{"IMREAL(-7)", -7},
 			{"IMREAL(3.14)", 3.14},
 
-			// Boolean: TRUE=1, FALSE=0
-			{"IMREAL(TRUE)", 1},
-			{"IMREAL(FALSE)", 0},
+			// Boolean: removed — Excel returns #VALUE! (tested in error cases)
 
 			// j suffix
 			{`IMREAL("3-4j")`, 3},
@@ -2457,6 +2455,10 @@ func TestIMREAL(t *testing.T) {
 			formula string
 			wantErr ErrorValue
 		}{
+			// Boolean arguments
+			{`IMREAL(TRUE)`, ErrValVALUE},
+			{`IMREAL(FALSE)`, ErrValVALUE},
+
 			// Invalid complex number strings
 			{`IMREAL("invalid")`, ErrValNUM},
 			{`IMREAL("")`, ErrValNUM},

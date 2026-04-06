@@ -198,7 +198,7 @@ func parseCellData(xc xlsxC, sst []string) CellData {
 	}
 	cd := CellData{
 		Ref:            xc.R,
-		Formula:        xc.F(),
+		Formula:        decodeXMLEntities(xc.F()),
 		FormulaType:    formulaType(xc.FE),
 		FormulaRef:     formulaRef(xc.FE),
 		IsArrayFormula: isArrayFormula,
@@ -221,11 +221,11 @@ func parseCellData(xc xlsxC, sst []string) CellData {
 	case "inlineStr":
 		cd.Type = "inlineStr"
 		if xc.IS != nil {
-			cd.Value = xc.IS.T
+			cd.Value = decodeOOXMLEscapes(xc.IS.T)
 		}
 	case "str":
 		cd.Type = "str"
-		cd.Value = xc.V
+		cd.Value = decodeOOXMLEscapes(xc.V)
 	case "d":
 		cd.Type = "d"
 		cd.Value = xc.V
@@ -377,16 +377,50 @@ func readSST(files map[string]*zip.File) ([]string, error) {
 
 // siToString extracts the plain text from a shared string item.
 // It handles both simple <t> elements and rich text <r><t> elements.
+// OOXML escape sequences like _x0001_ are decoded to the corresponding
+// Unicode characters.
 func siToString(si xlsxSI) string {
 	if si.T != nil {
-		return *si.T
+		return decodeOOXMLEscapes(*si.T)
 	}
 	// Rich text: concatenate all <r><t> values.
 	var sb strings.Builder
 	for _, r := range si.R {
 		sb.WriteString(r.T)
 	}
-	return sb.String()
+	return decodeOOXMLEscapes(sb.String())
+}
+
+// decodeXMLEntities decodes the five standard XML character entities
+// (&amp; &lt; &gt; &quot; &apos;) that may survive in formula strings.
+// Go's encoding/xml decoder normally handles these automatically, but
+// some third-party XLSX writers double-encode entities (e.g. writing
+// &amp;gt; in the XML, which the XML parser decodes to the literal
+// string "&gt;" instead of ">"). This function provides a safety net
+// for such files.
+func decodeXMLEntities(s string) string {
+	if !strings.Contains(s, "&") {
+		return s
+	}
+	// Apply replacements from longest to shortest entity name to avoid
+	// partial matches (e.g. "&amp;lt;" should not become "&<;").
+	// Process &amp; last so that sequences like "&amp;gt;" in the input
+	// are decoded in two passes: first the others leave "&amp;gt;" alone
+	// (no match), then &amp; -> & yields "&gt;", but we loop until stable.
+	//
+	// Iterative approach: keep decoding until no more entities remain.
+	for {
+		prev := s
+		s = strings.ReplaceAll(s, "&lt;", "<")
+		s = strings.ReplaceAll(s, "&gt;", ">")
+		s = strings.ReplaceAll(s, "&quot;", "\"")
+		s = strings.ReplaceAll(s, "&apos;", "'")
+		s = strings.ReplaceAll(s, "&amp;", "&")
+		if s == prev {
+			break
+		}
+	}
+	return s
 }
 
 // decodeOOXMLEscapes replaces _xHHHH_ escape sequences in OOXML attribute

@@ -317,7 +317,15 @@ func needsQuoting(name string) bool {
 }
 
 // ColNumberToLetters converts a 1-based column number to column letters (e.g. 1→"A", 27→"AA").
+// Values <= 0 return "" and values beyond the Excel maximum (16384 / "XFD") are clamped.
 func ColNumberToLetters(col int) string {
+	if col <= 0 {
+		return ""
+	}
+	// Excel columns go up to XFD = 16384; clamp to avoid buffer overrun.
+	if col > 16384 {
+		col = 16384
+	}
 	var buf [3]byte
 	i := len(buf)
 	for col > 0 {

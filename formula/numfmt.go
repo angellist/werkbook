@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ---------------------------------------------------------------------------
@@ -347,19 +348,28 @@ func sectionContainsAt(section string) bool {
 func formatGeneral(n float64) string {
 	abs := math.Abs(n)
 	// Very large or very small numbers use scientific notation.
-	if abs >= 1e11 || (abs > 0 && abs < 1e-4) {
-		s := strconv.FormatFloat(n, 'E', -1, 64)
-		// Go produces "E+11"; ensure "+" sign is present for positive exponents
-		// and strip unnecessary leading zeros from the exponent.
-		// Go's 'E' format already uses uppercase E and includes +/-.
-		// Trim leading zeros in exponent: E+011 -> E+11, E-010 -> E-10
+	// Excel General format uses decimal for numbers that fit within ~11
+	// characters, otherwise scientific. Values >= 1e-9 are shown as decimal
+	// (e.g. 0.000000001 = 11 chars). Below 1e-9, scientific notation is used.
+	if abs >= 1e11 || (abs > 0 && abs < 1e-9) {
+		// Excel General format uses 5 digits after the decimal point
+		// (6 significant digits total) for scientific notation.
+		s := strconv.FormatFloat(n, 'E', 5, 64)
+		// Trim trailing zeros after the decimal point in the coefficient.
 		if idx := strings.IndexByte(s, 'E'); idx >= 0 {
-			sign := s[idx+1] // '+' or '-'
-			exp := strings.TrimLeft(s[idx+2:], "0")
+			coeff := s[:idx]
+			expPart := s[idx:]
+			if dotIdx := strings.IndexByte(coeff, '.'); dotIdx >= 0 {
+				coeff = strings.TrimRight(coeff, "0")
+				coeff = strings.TrimRight(coeff, ".")
+			}
+			// Strip leading zeros from the exponent and ensure sign is present.
+			sign := expPart[1] // '+' or '-'
+			exp := strings.TrimLeft(expPart[2:], "0")
 			if exp == "" {
 				exp = "0"
 			}
-			s = s[:idx+1] + string(sign) + exp
+			s = coeff + "E" + string(sign) + exp
 		}
 		return s
 	}
@@ -368,6 +378,48 @@ func formatGeneral(n float64) string {
 	}
 	// Use %g-like formatting but with up to 10 significant digits.
 	s := strconv.FormatFloat(n, 'G', 10, 64)
+	// For small numbers (1e-9 to 1e-4) Go's G format may produce scientific
+	// notation, but Excel General format uses decimal notation for these.
+	// Convert to decimal if that happened.
+	if abs < 1e-4 && abs >= 1e-9 && (strings.ContainsRune(s, 'E') || strings.ContainsRune(s, 'e')) {
+		s = strconv.FormatFloat(n, 'f', -1, 64)
+		// Trim to 10 significant digits.
+		if len(s) > 0 {
+			neg := s[0] == '-'
+			digits := s
+			if neg {
+				digits = s[1:]
+			}
+			// Count significant digits (skip leading "0." and zeros).
+			sigCount := 0
+			pastLeading := false
+			cutIdx := -1
+			for i, ch := range digits {
+				if ch == '.' {
+					continue
+				}
+				if ch != '0' {
+					pastLeading = true
+				}
+				if pastLeading {
+					sigCount++
+					if sigCount > 10 {
+						cutIdx = i
+						break
+					}
+				}
+			}
+			if cutIdx >= 0 {
+				digits = digits[:cutIdx]
+				digits = strings.TrimRight(digits, "0")
+				if neg {
+					s = "-" + digits
+				} else {
+					s = digits
+				}
+			}
+		}
+	}
 	return s
 }
 
@@ -507,6 +559,42 @@ func stripLiterals(format string) string {
 
 // formatDateTime formats a date serial number as a date/time string.
 func formatDateTime(serial float64, format string, date1904 bool) string {
+	// Determine if there's an AM/PM marker.
+	stripped := stripLiterals(format)
+	upperStripped := strings.ToUpper(stripped)
+	hasAMPM := strings.Contains(upperStripped, "AM/PM") || strings.Contains(upperStripped, "A/P")
+
+	// Compute time components from the fractional day part. We round the
+	// total seconds to the displayed precision (whole seconds when no
+	// sub-second display, or N decimal places for ss.000-style formats)
+	// to avoid truncation artifacts like 52526.999... showing as :26.
+	// We compute h:m:s directly instead of via time.Time because the
+	// float64 round-trip loses precision at high serial magnitudes.
+	fracSecDigits := countFractionalSecondDigits(upperStripped)
+	frac := serial - math.Floor(serial)
+	if frac < 0 {
+		frac += 1
+	}
+	totalSeconds := frac * 86400
+	// Round to the display precision.
+	var roundedTotal float64
+	if fracSecDigits == 0 {
+		roundedTotal = math.Round(totalSeconds)
+	} else {
+		p := math.Pow(10, float64(fracSecDigits))
+		roundedTotal = math.Round(totalSeconds*p) / p
+	}
+	wholeSec := int(roundedTotal)
+	fracSeconds := roundedTotal - float64(wholeSec)
+	if wholeSec >= 86400 {
+		wholeSec = 0
+		fracSeconds = 0
+	}
+	hour := wholeSec / 3600
+	minute := (wholeSec % 3600) / 60
+	second := wholeSec % 60
+
+	// We still need time.Time for date components (year, month, day, weekday).
 	var t time.Time
 	if date1904 {
 		t = SerialToTime1904(serial)
@@ -514,31 +602,26 @@ func formatDateTime(serial float64, format string, date1904 bool) string {
 		t = SerialToTime(serial)
 	}
 
-	// Determine if there's an AM/PM marker.
-	stripped := stripLiterals(format)
-	upperStripped := strings.ToUpper(stripped)
-	hasAMPM := strings.Contains(upperStripped, "AM/PM") || strings.Contains(upperStripped, "A/P")
-
-	hour := t.Hour()
 	hour12 := hour % 12
 	if hour12 == 0 {
 		hour12 = 12
 	}
+	// Determine the case of AM/PM from the original format string.
+	ampmLower := isAMPMLowercase(format)
 	ampm := "AM"
 	if hour >= 12 {
 		ampm = "PM"
+	}
+	if ampmLower {
+		ampm = strings.ToLower(ampm)
 	}
 	ap := "A"
 	if hour >= 12 {
 		ap = "P"
 	}
-
-	minute := t.Minute()
-	second := t.Second()
-	// Fractional seconds from the serial number.
-	frac := serial - math.Floor(serial)
-	totalSeconds := frac * 86400
-	fracSeconds := totalSeconds - math.Floor(totalSeconds)
+	if ampmLower {
+		ap = strings.ToLower(ap)
+	}
 
 	day := t.Day()
 	month := int(t.Month())
@@ -736,6 +819,33 @@ func formatDateTime(serial float64, format string, date1904 bool) string {
 	return result.String()
 }
 
+// countFractionalSecondDigits returns how many fractional-second digits the
+// format displays (e.g. "SS.000" returns 3, "SS.00" returns 2). Returns 0
+// if the format has no sub-second display. Expects upper-cased, literal-stripped input.
+func countFractionalSecondDigits(upper string) int {
+	for i := 0; i < len(upper); i++ {
+		if upper[i] == 'S' {
+			// Skip the run of S characters.
+			j := i
+			for j < len(upper) && upper[j] == 'S' {
+				j++
+			}
+			// Check for '.' followed by '0's.
+			if j < len(upper) && upper[j] == '.' {
+				k := j + 1
+				for k < len(upper) && upper[k] == '0' {
+					k++
+				}
+				if k > j+1 {
+					return k - j - 1
+				}
+			}
+			i = j - 1
+		}
+	}
+	return 0
+}
+
 // computeMContexts pre-scans the format to determine for each 'm'/'M' run
 // whether it represents minutes (true) or months (false).
 // 'm' after 'h' and before 's' means minutes; otherwise months.
@@ -815,6 +925,40 @@ func countRun(s string, i int, ch byte) int {
 	return count
 }
 
+// isAMPMLowercase scans the raw format string (skipping quoted/escaped regions)
+// for an AM/PM or A/P marker and returns true when that marker is lowercase.
+// Excel rules: AM/PM (any case) always produces uppercase output.
+// Only the short form a/p (lowercase) produces lowercase output; A/P is uppercase.
+func isAMPMLowercase(format string) bool {
+	inQuote := false
+	upper := strings.ToUpper(format)
+	for i := 0; i < len(format); i++ {
+		ch := format[i]
+		if ch == '"' {
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
+		if ch == '\\' && i+1 < len(format) {
+			i++
+			continue
+		}
+		uCh := upper[i]
+		if uCh == 'A' {
+			if i+4 < len(upper) && upper[i:i+5] == "AM/PM" {
+				// AM/PM always produces uppercase regardless of case in format.
+				return false
+			}
+			if i+2 < len(upper) && upper[i:i+3] == "A/P" {
+				return format[i] == 'a'
+			}
+		}
+	}
+	return false
+}
+
 // isLiteralPassthrough returns true for characters that are passed through as-is
 // in format strings without needing quotes or backslash.
 func isLiteralPassthrough(ch byte) bool {
@@ -884,13 +1028,21 @@ func formatElapsedTime(serial float64, format string) string {
 			code := upper[i+1 : i+end]
 			i += end + 1
 			switch code {
-			case "H", "HH":
+			case "H":
 				result.WriteString(strconv.Itoa(totalHours))
-			case "M", "MM":
+			case "HH":
+				result.WriteString(fmt.Sprintf("%02d", totalHours))
+			case "M":
 				result.WriteString(strconv.Itoa(totalMinutes))
-			case "S", "SS":
+			case "MM":
+				result.WriteString(fmt.Sprintf("%02d", totalMinutes))
+			case "S":
 				result.WriteString(strconv.Itoa(int(totalSeconds)))
-				// Handle fractional seconds after [s]/[ss].
+				// Handle fractional seconds after [s].
+				i = writeElapsedFracSeconds(format, i, totalSeconds, &result)
+			case "SS":
+				result.WriteString(fmt.Sprintf("%02d", int(totalSeconds)))
+				// Handle fractional seconds after [ss].
 				i = writeElapsedFracSeconds(format, i, totalSeconds, &result)
 			}
 			continue
@@ -1426,6 +1578,28 @@ func formatFraction(n float64, format string) string {
 		return result
 	}
 
+	// Detect the whole-part placeholder type (first digit token in whole range).
+	// This controls behavior when wholePart is zero:
+	//   tokDigitOpt (#):   suppress digit AND suppress middle literals entirely
+	//   tokDigitSpace (?): show space for digit, replace each middle literal char with a space
+	//   tokDigit (0):      show '0', show middle literals as-is
+	wholeType := tokDigit // default to '0' behavior
+	wholeHasMandatory := false
+	if hasWhole {
+		first := true
+		for i := wholeStart; i < wholeEnd; i++ {
+			if isDigitTok(tokens[i].kind) {
+				if first {
+					wholeType = tokens[i].kind
+					first = false
+				}
+				if tokens[i].kind == tokDigit || tokens[i].kind == tokDigitSpace {
+					wholeHasMandatory = true
+				}
+			}
+		}
+	}
+
 	// Build output.
 	var result strings.Builder
 	if negative {
@@ -1445,32 +1619,56 @@ func formatFraction(n float64, format string) string {
 	}
 
 	if hasWhole && bestNum == 0 {
-		// Fraction is zero — show just the whole number with surrounding literals.
+		// Fraction is zero: show whole number, handle fraction area based on
+		// placeholder types.
 		result.WriteString(prefix)
-		formatWholeDigits(&result, true)
+		// For pure-# whole with wholePart=0, don't force zero on the whole
+		// digit (the numerator's 0 placeholder will show the zero instead).
+		// But if the whole section also has mandatory placeholders (0 or ?),
+		// force zero so those placeholders display correctly.
+		if wholePart == 0 && wholeType == tokDigitOpt && numHasZero && !wholeHasMandatory {
+			formatWholeDigits(&result, false)
+		} else {
+			formatWholeDigits(&result, true)
+		}
 		if numHasZero {
-			// Numerator has mandatory '0' digits — show the fraction with zeros.
-			result.WriteString(middle)
+			// Numerator has mandatory '0' digits: show the fraction with zeros.
+			// When forceZero causes the whole digit to display (? or 0 types),
+			// the middle literal should show as-is. When # suppresses, middle
+			// is also suppressed.
+			if wholePart == 0 && wholeType == tokDigitOpt && !wholeHasMandatory {
+				// Pure # whole suppresses middle entirely.
+			} else {
+				result.WriteString(middle)
+			}
 			writeFrac(0, true)
-		} else if numHasQ || denHasQ {
-			// Replace middle + fraction with spaces to maintain width.
+		} else if wholeType == tokDigitSpace || numHasQ || denHasQ {
+			// Whole is ? type, or fraction uses ? placeholders: pad fraction area with spaces.
 			fracWidth := len(middle) + numPlaces + len(preSlash) + 1 + len(postSlash) + denPlaces
 			result.WriteString(strings.Repeat(" ", fracWidth))
 		}
 		result.WriteString(suffix)
 	} else if hasWhole {
 		result.WriteString(prefix)
-		if wholePart == 0 && (numHasQ || denHasQ) {
-			// When the whole part is zero and the fraction uses ?
-			// (space-padded) placeholders, suppress the whole digits (as #
-			// normally does for zero) but still emit the middle separator
-			// so the fraction stays aligned.  E.g. "# ?/?" with 0.25 → " 1/4".
-			result.WriteString(middle)
-		} else {
-			formatWholeDigits(&result, false)
-			if wholePart != 0 {
+		if wholePart == 0 {
+			switch wholeType {
+			case tokDigitOpt: // # whole suppressed
+				formatWholeDigits(&result, false)
+				// If numerator has ? placeholders, replace middle with spaces
+				// (keeps alignment). Otherwise suppress middle entirely.
+				if numHasQ {
+					result.WriteString(strings.Repeat(" ", len(middle)))
+				}
+			case tokDigitSpace: // ? whole: space-pad digit and replace middle chars with spaces
+				formatWholeDigits(&result, false)
+				result.WriteString(strings.Repeat(" ", len(middle)))
+			default: // 0 whole: show '0' and show middle as-is
+				formatWholeDigits(&result, false)
 				result.WriteString(middle)
 			}
+		} else {
+			formatWholeDigits(&result, false)
+			result.WriteString(middle)
 		}
 		writeFrac(bestNum, false)
 		result.WriteString(suffix)
@@ -1525,7 +1723,6 @@ func formatNumberSection(n float64, format string) string {
 	// Determine format properties.
 	percentCount := 0
 	hasScientific := false
-	hasCommaGrouping := false
 	sciIdx := -1
 
 	for i, tok := range tokens {
@@ -1535,11 +1732,12 @@ func formatNumberSection(n float64, format string) string {
 		case tokExponent:
 			hasScientific = true
 			sciIdx = i
-		case tokComma:
-			// Comma adjacent to digit placeholders = grouping.
-			hasCommaGrouping = true
 		}
 	}
+
+	// Classify commas: grouping, scaling, or literal.
+	commaClasses := classifyCommas(tokens)
+	hasCommaGrouping := hasGroupingCommas(commaClasses)
 
 	// Apply percentage: each % multiplies by 100.
 	for pc := 0; pc < percentCount; pc++ {
@@ -1602,9 +1800,9 @@ func formatNumberSection(n float64, format string) string {
 	totalDecPlaces := decZeros + decHashes + decSpaces
 	_ = decIdx
 
-	// Check for trailing commas (scaling): commas at end of digit sequence divide by 1000.
-	trailingCommas := countTrailingCommas(tokens)
-	for tc := 0; tc < trailingCommas; tc++ {
+	// Apply scaling commas: each scaling comma divides by 1000.
+	scalingCommas := countScalingCommas(commaClasses)
+	for tc := 0; tc < scalingCommas; tc++ {
 		n /= 1000
 	}
 
@@ -1629,8 +1827,8 @@ func formatNumberSection(n float64, format string) string {
 		intStr = "0"
 	}
 
-	// Apply comma grouping.
-	if hasCommaGrouping && trailingCommas == 0 {
+	// Apply comma grouping if any commas were classified as grouping commas.
+	if hasCommaGrouping {
 		intStr = addCommaGrouping(intStr)
 	}
 
@@ -1678,7 +1876,7 @@ func formatNumberSection(n float64, format string) string {
 		rawDigits := strings.ReplaceAll(intStr, ",", "")
 		if len(rawDigits) < intDigits {
 			padded := strings.Repeat("0", intDigits-len(rawDigits)) + rawDigits
-			if hasCommaGrouping && trailingCommas == 0 {
+			if hasCommaGrouping {
 				padded = addCommaGrouping(padded)
 			}
 			// Replace leading zeros (and their adjacent commas) with spaces.
@@ -1768,7 +1966,7 @@ func formatNumberSection(n float64, format string) string {
 
 		// Now build result from tokens.
 		placeholderIdx := 0
-		for _, tok := range tokens {
+		for ti, tok := range tokens {
 			switch tok.kind {
 			case tokLiteral:
 				result.WriteString(tok.value)
@@ -1782,7 +1980,10 @@ func formatNumberSection(n float64, format string) string {
 				}
 				placeholderIdx++
 			case tokComma:
-				// skip
+				if isLiteralComma(commaClasses, ti) {
+					result.WriteByte(',')
+				}
+				// grouping and scaling commas are handled elsewhere; skip.
 			case tokPercent:
 				result.WriteByte('%')
 			case tokDecimal:
@@ -1795,7 +1996,7 @@ func formatNumberSection(n float64, format string) string {
 	}
 
 	if !hasInterleavedLiterals {
-		for _, tok := range tokens {
+		for ti, tok := range tokens {
 			switch tok.kind {
 			case tokLiteral:
 				result.WriteString(tok.value)
@@ -1812,11 +2013,17 @@ func formatNumberSection(n float64, format string) string {
 				} else if decZeros > 0 {
 					result.WriteByte('.')
 					result.WriteString(decStr)
+				} else {
+					// Trailing dot with no decimal placeholders (e.g. "0.").
+					result.WriteByte('.')
 				}
 				decWritten = true
 				_ = decWritten
 			case tokComma:
-				// Already handled via comma grouping; skip.
+				if isLiteralComma(commaClasses, ti) {
+					result.WriteByte(',')
+				}
+				// grouping and scaling commas are handled elsewhere; skip.
 			case tokPercent:
 				result.WriteByte('%')
 			case tokExponent:
@@ -1884,21 +2091,24 @@ func tokenizeNumberFormat(format string) []numFmtToken {
 		// Backslash escape.
 		if ch == '\\' && i+1 < len(format) {
 			i++
-			tokens = append(tokens, numFmtToken{kind: tokLiteral, value: string(format[i])})
-			i++
+			_, size := utf8.DecodeRuneInString(format[i:])
+			tokens = append(tokens, numFmtToken{kind: tokLiteral, value: format[i : i+size]})
+			i += size
 			continue
 		}
 
 		// Underscore (space placeholder) — skip next char, emit space.
 		if ch == '_' && i+1 < len(format) {
+			_, size := utf8.DecodeRuneInString(format[i+1:])
 			tokens = append(tokens, numFmtToken{kind: tokLiteral, value: " "})
-			i += 2
+			i += 1 + size
 			continue
 		}
 
 		// Asterisk (repeat fill char) — skip next char.
 		if ch == '*' && i+1 < len(format) {
-			i += 2
+			_, size := utf8.DecodeRuneInString(format[i+1:])
+			i += 1 + size
 			continue
 		}
 
@@ -1922,11 +2132,25 @@ func tokenizeNumberFormat(format string) []numFmtToken {
 			tokens = append(tokens, numFmtToken{kind: tokPercent, value: "%"})
 			i++
 		case 'E':
-			// Scientific notation: E+ or E- (uppercase only; lowercase 'e' is treated as literal).
+			// Scientific notation: E+, E-, or E followed directly by digit
+			// placeholders (uppercase only; lowercase 'e' is treated as literal).
 			if i+1 < len(format) && (format[i+1] == '+' || format[i+1] == '-') {
 				tokens = append(tokens, numFmtToken{kind: tokExponent, value: format[i : i+2]})
 				i += 2
 				// Emit the exponent digit placeholders as tokens so formatScientific can count them.
+				for i < len(format) && (format[i] == '0' || format[i] == '#') {
+					if format[i] == '0' {
+						tokens = append(tokens, numFmtToken{kind: tokDigit, value: "0"})
+					} else {
+						tokens = append(tokens, numFmtToken{kind: tokDigitOpt, value: "#"})
+					}
+					i++
+				}
+			} else if i+1 < len(format) && (format[i+1] == '0' || format[i+1] == '#') {
+				// E followed directly by digit placeholders (no sign): behaves
+				// like E- (sign shown only for negative exponents).
+				tokens = append(tokens, numFmtToken{kind: tokExponent, value: "E-"})
+				i++
 				for i < len(format) && (format[i] == '0' || format[i] == '#') {
 					if format[i] == '0' {
 						tokens = append(tokens, numFmtToken{kind: tokDigit, value: "0"})
@@ -1940,13 +2164,18 @@ func tokenizeNumberFormat(format string) []numFmtToken {
 				i++
 			}
 		default:
-			// Check for common literal characters.
-			if isFormatLiteral(ch) {
-				tokens = append(tokens, numFmtToken{kind: tokLiteral, value: string(ch)})
+			// Multi-byte UTF-8 characters (currency symbols like £, ¥, etc.)
+			// must be consumed as a full rune to avoid double-encoding.
+			if ch >= 0x80 {
+				_, size := utf8.DecodeRuneInString(format[i:])
+				tokens = append(tokens, numFmtToken{kind: tokLiteral, value: format[i : i+size]})
+				i += size
+			} else if isFormatLiteral(ch) {
+				tokens = append(tokens, numFmtToken{kind: tokLiteral, value: string(rune(ch))})
 				i++
 			} else {
-				// Unknown char — treat as literal.
-				tokens = append(tokens, numFmtToken{kind: tokLiteral, value: string(ch)})
+				// Unknown ASCII char — treat as literal.
+				tokens = append(tokens, numFmtToken{kind: tokLiteral, value: string(rune(ch))})
 				i++
 			}
 		}
@@ -1996,30 +2225,136 @@ func hasInvalidLowercaseE(format string) bool {
 	return false
 }
 
-// countTrailingCommas counts commas at the end of the digit sequence (scaling commas).
-func countTrailingCommas(tokens []numFmtToken) int {
-	// Find the last digit/decimal token, then count consecutive commas after it.
+// commaClass classifies a comma token's role in a number format.
+type commaClass byte
+
+const (
+	commaGrouping commaClass = iota // between digit placeholders: triggers thousands grouping
+	commaScaling                    // trailing or adjacent to decimal point: divides by 1000
+	commaLiteral                    // before first digit placeholder: emitted as literal text
+)
+
+// classifyCommas determines the role of each tokComma in the token stream.
+// It returns a map from token index to commaClass.
+//
+// Excel rules:
+//   - A comma BEFORE the first digit placeholder is a literal comma.
+//   - A comma immediately before the decimal point (with no digit placeholder
+//     between the comma and the decimal) is a scaling comma.
+//   - A comma after the last digit placeholder (trailing) is a scaling comma.
+//   - A comma between digit placeholders (digit on both sides) is a grouping comma.
+func classifyCommas(tokens []numFmtToken) map[int]commaClass {
+	result := make(map[int]commaClass)
+
+	// Find the index of the first and last digit placeholder, and the decimal point.
+	firstDigitIdx := -1
 	lastDigitIdx := -1
+	decimalIdx := -1
 	for i, tok := range tokens {
-		if tok.kind == tokDigit || tok.kind == tokDigitOpt || tok.kind == tokDigitSpace || tok.kind == tokDecimal {
+		switch tok.kind {
+		case tokDigit, tokDigitOpt, tokDigitSpace:
+			if firstDigitIdx < 0 {
+				firstDigitIdx = i
+			}
 			lastDigitIdx = i
+		case tokDecimal:
+			if decimalIdx < 0 {
+				decimalIdx = i
+			}
 		}
 	}
-	if lastDigitIdx < 0 {
-		return 0
+
+	for i, tok := range tokens {
+		if tok.kind != tokComma {
+			continue
+		}
+
+		// Rule 1: comma before the first digit placeholder is literal.
+		if firstDigitIdx < 0 || i < firstDigitIdx {
+			result[i] = commaLiteral
+			continue
+		}
+
+		// Rule 2: comma immediately before the decimal point (no digit
+		// placeholder between this comma and the decimal) is scaling.
+		if decimalIdx >= 0 && i < decimalIdx {
+			hasDigitBetween := false
+			for j := i + 1; j < decimalIdx; j++ {
+				if tokens[j].kind == tokDigit || tokens[j].kind == tokDigitOpt || tokens[j].kind == tokDigitSpace {
+					hasDigitBetween = true
+					break
+				}
+			}
+			if !hasDigitBetween {
+				result[i] = commaScaling
+				continue
+			}
+		}
+
+		// Rule 3: comma after the last digit placeholder is scaling (trailing).
+		if i > lastDigitIdx {
+			result[i] = commaScaling
+			continue
+		}
+
+		// Rule 4: comma has digit placeholders on both sides = grouping.
+		hasDigitBefore := false
+		for j := i - 1; j >= 0; j-- {
+			if tokens[j].kind == tokDigit || tokens[j].kind == tokDigitOpt || tokens[j].kind == tokDigitSpace {
+				hasDigitBefore = true
+				break
+			}
+			if tokens[j].kind == tokDecimal {
+				break
+			}
+		}
+		hasDigitAfter := false
+		for j := i + 1; j < len(tokens); j++ {
+			if tokens[j].kind == tokDigit || tokens[j].kind == tokDigitOpt || tokens[j].kind == tokDigitSpace {
+				hasDigitAfter = true
+				break
+			}
+			if tokens[j].kind == tokDecimal {
+				break
+			}
+		}
+
+		if hasDigitBefore && hasDigitAfter {
+			result[i] = commaGrouping
+		} else {
+			// Fallback: treat as literal if it doesn't clearly fit another role.
+			result[i] = commaLiteral
+		}
 	}
 
+	return result
+}
+
+// countScalingCommas counts commas that act as scaling divisors (divide by 1000 each).
+func countScalingCommas(commaClasses map[int]commaClass) int {
 	count := 0
-	for i := lastDigitIdx + 1; i < len(tokens); i++ {
-		if tokens[i].kind == tokComma {
+	for _, cls := range commaClasses {
+		if cls == commaScaling {
 			count++
-		} else if tokens[i].kind == tokPercent || tokens[i].kind == tokLiteral {
-			break
-		} else {
-			break
 		}
 	}
 	return count
+}
+
+// hasGroupingCommas returns true if any comma is classified as a grouping comma.
+func hasGroupingCommas(commaClasses map[int]commaClass) bool {
+	for _, cls := range commaClasses {
+		if cls == commaGrouping {
+			return true
+		}
+	}
+	return false
+}
+
+// isLiteralComma returns true if the comma at the given token index is a literal.
+func isLiteralComma(commaClasses map[int]commaClass, idx int) bool {
+	cls, ok := commaClasses[idx]
+	return ok && cls == commaLiteral
 }
 
 // roundToPlaces rounds n to the given number of decimal places.
@@ -2065,8 +2400,9 @@ func addCommaGrouping(s string) string {
 
 // formatScientific formats a number in scientific notation based on the format tokens.
 func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
-	// Count mantissa decimal places.
+	// Count mantissa decimal places and required (non-optional) decimal places.
 	decPlaces := 0
+	minDecPlaces := 0
 	inDecimal := false
 	for i, tok := range tokens {
 		if i >= sciIdx {
@@ -2078,6 +2414,9 @@ func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
 		}
 		if inDecimal && (tok.kind == tokDigit || tok.kind == tokDigitOpt || tok.kind == tokDigitSpace) {
 			decPlaces++
+			if tok.kind == tokDigit {
+				minDecPlaces = decPlaces // required '0' placeholder
+			}
 		}
 	}
 
@@ -2149,6 +2488,27 @@ func formatScientific(n float64, tokens []numFmtToken, sciIdx int) string {
 
 	// Format mantissa.
 	mStr := fmt.Sprintf("%.*f", decPlaces, mantissa)
+	// Strip optional trailing zeros: '#' placeholders suppress trailing zeros,
+	// but '0' placeholders require them. Strip down to minDecPlaces.
+	if decPlaces > minDecPlaces {
+		if dotIdx := strings.IndexByte(mStr, '.'); dotIdx >= 0 {
+			fracPart := mStr[dotIdx+1:]
+			trimmed := strings.TrimRight(fracPart, "0")
+			if len(trimmed) < minDecPlaces {
+				trimmed = fracPart[:minDecPlaces]
+			}
+			if len(trimmed) == 0 {
+				mStr = mStr[:dotIdx+1] // keep trailing dot
+			} else {
+				mStr = mStr[:dotIdx+1] + trimmed
+			}
+		}
+	}
+	// If the format has a decimal point but no decimal digit placeholders
+	// (e.g. "0.E0"), append the trailing dot that Sprintf omits.
+	if decPlaces == 0 && inDecimal && !strings.ContainsRune(mStr, '.') {
+		mStr += "."
+	}
 	result.WriteString(mStr)
 
 	// Middle literals: after the last coefficient digit, before E.

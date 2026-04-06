@@ -39,6 +39,8 @@ func (v Value) Raw() any {
 		return v.String
 	case TypeBool:
 		return v.Bool
+	case TypeError:
+		return v.String
 	default:
 		return nil
 	}

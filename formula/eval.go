@@ -833,32 +833,90 @@ func CoerceNum(v Value) (float64, *Value) {
 	}
 }
 
-// numberToString formats a number for concatenation:
-// - At most 15 significant digits
-// - Scientific notation (capital E with +/- sign) for abs >= 1e15 or abs < 1e-4 (nonzero)
+// numberToString formats a number for concatenation using Excel's rules:
+// - At most 15 significant digits (via Go's 'G' format with precision 15)
+// - Prefer plain decimal notation; only use scientific notation for
+//   extremely large numbers (exponent > 20) or extremely small numbers
+//   (more than 9 leading zeros after the decimal point, i.e. exponent < -9).
 func numberToString(f float64) string {
 	if f == 0 {
 		return "0"
 	}
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return strconv.FormatFloat(f, 'G', 15, 64)
+	}
 
-	abs := math.Abs(f)
+	// Format with 15 significant digits. Go's 'G' may produce scientific
+	// notation (e.g. "1E+15") for numbers outside [1e-4, 1e15).
+	s := strconv.FormatFloat(f, 'G', 15, 64)
 
-	// Use scientific notation for very large or very small numbers.
-	if abs >= 1e15 || (abs < 1e-4 && abs > 0) {
-		s := strconv.FormatFloat(f, 'E', -1, 64)
-		// FormatFloat 'E' already uses capital E and +/- sign.
-		// Trim to 15 significant digits if needed.
-		// Re-format with 'G' precision 15 then convert to E notation.
-		s = strconv.FormatFloat(f, 'G', 15, 64)
-		// Go's 'G' uses 'E' notation automatically for large/small, with capital E.
-		// But we need to ensure the format uses capital E with explicit sign.
-		// 'G' may output e.g. "1E+15" or "1E-06" which is what we want.
+	// If already in plain decimal, nothing more to do.
+	eIdx := strings.IndexByte(s, 'E')
+	if eIdx < 0 {
 		return s
 	}
 
-	// For normal range numbers, use up to 15 significant digits.
-	s := strconv.FormatFloat(f, 'G', 15, 64)
-	return s
+	// Parse the exponent to decide whether to expand to decimal form.
+	exp, err := strconv.Atoi(s[eIdx+1:])
+	if err != nil {
+		return s
+	}
+
+	// Keep scientific notation for very large or very small values.
+	if exp > 20 || exp < -9 {
+		return s
+	}
+
+	// Convert the G-formatted scientific notation to plain decimal.
+	return sciToDecimal(s[:eIdx], exp)
+}
+
+// sciToDecimal expands a mantissa string (e.g. "1.23456") with the given
+// base-10 exponent into plain decimal notation. It assumes the mantissa
+// has already been rounded to the desired number of significant digits.
+func sciToDecimal(mantissa string, exp int) string {
+	neg := len(mantissa) > 0 && mantissa[0] == '-'
+	if neg {
+		mantissa = mantissa[1:]
+	}
+
+	// Strip the decimal point to get a pure digit string and record where
+	// the original decimal point was.
+	dotIdx := strings.IndexByte(mantissa, '.')
+	var digits string
+	if dotIdx >= 0 {
+		digits = mantissa[:dotIdx] + mantissa[dotIdx+1:]
+	} else {
+		digits = mantissa
+	}
+
+	// The decimal point position (counted from the left of digits) is 1 + exp
+	// because the mantissa is normalised as d.ddd...
+	decPos := 1 + exp
+	n := len(digits)
+
+	var result string
+	switch {
+	case decPos >= n:
+		// All digits sit before the decimal point; pad with trailing zeros.
+		result = digits + strings.Repeat("0", decPos-n)
+	case decPos <= 0:
+		// All digits sit after the decimal point; pad with leading zeros.
+		result = "0." + strings.Repeat("0", -decPos) + digits
+	default:
+		result = digits[:decPos] + "." + digits[decPos:]
+	}
+
+	// Trim unnecessary trailing zeros / decimal point.
+	if strings.IndexByte(result, '.') >= 0 {
+		result = strings.TrimRight(result, "0")
+		result = strings.TrimRight(result, ".")
+	}
+
+	if neg {
+		return "-" + result
+	}
+	return result
 }
 
 func ValueToString(v Value) string {

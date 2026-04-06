@@ -41,6 +41,7 @@ type compiler struct {
 	strIdx map[string]uint32
 	refIdx map[CellAddr]uint32
 	rngIdx map[RangeAddr]uint32
+
 }
 
 func (c *compiler) emit(op OpCode, operand uint32) {

@@ -1,14 +1,67 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 
 	werkbook "github.com/jpoz/werkbook"
 )
+
+// checkConfig holds optional configuration for the check command, typically
+// loaded from a JSON file via --config.
+type checkConfig struct {
+	Tolerance      float64  `json:"tolerance"`
+	IgnoreFormulas []string `json:"ignore_formulas"`
+	IgnoreFiles    []string `json:"ignore_files"`
+}
+
+func loadCheckConfig(path string) (checkConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return checkConfig{}, fmt.Errorf("reading config %q: %v", path, err)
+	}
+	var cfg checkConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return checkConfig{}, fmt.Errorf("parsing config %q: %v", path, err)
+	}
+	// Normalize ignore_formulas to upper case for case-insensitive matching.
+	for i, f := range cfg.IgnoreFormulas {
+		cfg.IgnoreFormulas[i] = strings.ToUpper(f)
+	}
+	return cfg, nil
+}
+
+// shouldIgnoreFile returns true if filePath matches any ignore_files glob pattern.
+func (c *checkConfig) shouldIgnoreFile(filePath string) bool {
+	for _, pattern := range c.IgnoreFiles {
+		if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+			return true
+		}
+		// Also try matching against the full path for patterns with directories.
+		if matched, _ := filepath.Match(pattern, filePath); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldIgnoreFormula returns true if the formula contains any ignored function name.
+func (c *checkConfig) shouldIgnoreFormula(formula string) bool {
+	if len(c.IgnoreFormulas) == 0 {
+		return false
+	}
+	upper := strings.ToUpper(formula)
+	for _, fn := range c.IgnoreFormulas {
+		if strings.Contains(upper, fn+"(") {
+			return true
+		}
+	}
+	return false
+}
 
 type checkDiff struct {
 	Sheet   string `json:"sheet"`
@@ -26,6 +79,22 @@ type checkData struct {
 	Diffs      []checkDiff `json:"diffs,omitempty"`
 }
 
+type checkMultiData struct {
+	Files      int         `json:"files"`
+	Skipped    int         `json:"skipped"`
+	Formulas   int         `json:"formulas"`
+	Matches    int         `json:"matches"`
+	Mismatches int         `json:"mismatches"`
+	Errors     int         `json:"errors"`
+	Results    []checkData `json:"results"`
+	FileErrors []fileError `json:"file_errors,omitempty"`
+}
+
+type fileError struct {
+	File  string `json:"file"`
+	Error string `json:"error"`
+}
+
 func cmdCheck(args []string, globals globalFlags) int {
 	cmd := "check"
 
@@ -38,9 +107,11 @@ func cmdCheck(args []string, globals globalFlags) int {
 
 	var sheetFlag string
 	var toleranceFlag float64
+	var toleranceSet bool
+	var configPath string
 
 	i := 0
-	var filePath string
+	var paths []string
 	for i < len(args) {
 		switch args[i] {
 		case "--sheet":
@@ -61,10 +132,18 @@ func cmdCheck(args []string, globals globalFlags) int {
 				writeError(cmd, errUsage(fmt.Sprintf("invalid --tolerance value: %s", args[i+1])), globals)
 				return ExitUsage
 			}
+			toleranceSet = true
+			i += 2
+		case "--config":
+			if i+1 >= len(args) {
+				writeError(cmd, errUsage("--config requires a value"), globals)
+				return ExitUsage
+			}
+			configPath = args[i+1]
 			i += 2
 		default:
-			if filePath == "" && len(args[i]) > 0 && args[i][0] != '-' {
-				filePath = args[i]
+			if len(args[i]) > 0 && args[i][0] != '-' {
+				paths = append(paths, args[i])
 				i++
 			} else {
 				writeError(cmd, errUsage("unknown flag: "+args[i]), globals)
@@ -73,29 +152,135 @@ func cmdCheck(args []string, globals globalFlags) int {
 		}
 	}
 
-	if filePath == "" {
-		writeError(cmd, errUsage("file path required"), globals)
+	// Load config file if provided.
+	var cfg checkConfig
+	if configPath != "" {
+		var err error
+		cfg, err = loadCheckConfig(configPath)
+		if err != nil {
+			writeError(cmd, errUsage(err.Error()), globals)
+			return ExitUsage
+		}
+	}
+
+	// CLI --tolerance overrides config file tolerance.
+	if toleranceSet {
+		cfg.Tolerance = toleranceFlag
+	}
+
+	if len(paths) == 0 {
+		writeError(cmd, errUsage("file or directory path required"), globals)
 		return ExitUsage
 	}
 
+	// Expand paths: directories become all .xlsx files within them.
+	filePaths, err := expandXLSXPaths(paths)
+	if err != nil {
+		writeError(cmd, errUsage(err.Error()), globals)
+		return ExitUsage
+	}
+	if len(filePaths) == 0 {
+		writeError(cmd, errUsage("no .xlsx files found in the provided paths"), globals)
+		return ExitUsage
+	}
+
+	// Single file: use the original single-file output for backward compatibility.
+	if len(filePaths) == 1 {
+		return cmdCheckSingle(filePaths[0], sheetFlag, &cfg, cmd, globals)
+	}
+
+	// Multiple files: aggregate results.
+	multi := checkMultiData{}
+	for _, fp := range filePaths {
+		if cfg.shouldIgnoreFile(fp) {
+			continue
+		}
+		result, skipped, ferr := checkFile(fp, sheetFlag, &cfg)
+		if ferr != "" {
+			multi.Errors++
+			multi.FileErrors = append(multi.FileErrors, fileError{File: fp, Error: ferr})
+			continue
+		}
+		if skipped {
+			multi.Skipped++
+			continue
+		}
+		multi.Files++
+		multi.Formulas += result.Formulas
+		multi.Matches += result.Matches
+		multi.Mismatches += result.Mismatches
+		multi.Results = append(multi.Results, result)
+	}
+
+	writeSuccess(cmd, multi, globals)
+	if multi.Mismatches > 0 || multi.Errors > 0 {
+		return ExitValidate
+	}
+	return ExitSuccess
+}
+
+// expandXLSXPaths takes a list of file/directory paths and returns all .xlsx file paths.
+func expandXLSXPaths(paths []string) ([]string, error) {
+	var result []string
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, fmt.Errorf("cannot access %q: %v", p, err)
+		}
+		if !info.IsDir() {
+			result = append(result, p)
+			continue
+		}
+		err = filepath.Walk(p, func(path string, fi os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !fi.IsDir() && strings.EqualFold(filepath.Ext(path), ".xlsx") && !strings.HasPrefix(fi.Name(), "~$") {
+				result = append(result, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("walking directory %q: %v", p, err)
+		}
+	}
+	return result, nil
+}
+
+func cmdCheckSingle(filePath, sheetFlag string, cfg *checkConfig, cmd string, globals globalFlags) int {
+	if cfg.shouldIgnoreFile(filePath) {
+		writeSuccess(cmd, checkData{File: filePath}, globals)
+		return ExitSuccess
+	}
+	result, _, ferr := checkFile(filePath, sheetFlag, cfg)
+	if ferr != "" {
+		writeError(cmd, &ErrorInfo{Code: ErrCodeFileOpenFailed, Message: ferr}, globals)
+		return ExitFileIO
+	}
+
+	writeSuccess(cmd, result, globals)
+	return ExitSuccess
+}
+
+func checkFile(filePath, sheetFlag string, cfg *checkConfig) (result checkData, skipped bool, errMsg string) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = checkData{}
+			skipped = false
+			errMsg = fmt.Sprintf("panic processing %q: %v", filePath, r)
+		}
+	}()
+
 	f, err := werkbook.Open(filePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeError(cmd, errFileNotFound(filePath, err), globals)
-		} else if errors.Is(err, werkbook.ErrEncryptedFile) {
-			writeError(cmd, errEncryptedFile(filePath), globals)
-		} else {
-			writeError(cmd, errFileOpen(filePath, err), globals)
-		}
-		return ExitFileIO
+		return checkData{}, false, fmt.Sprintf("could not open %q: %v", filePath, err)
 	}
 
 	// Determine which sheets to check.
 	var sheetNames []string
 	if sheetFlag != "" {
 		if f.Sheet(sheetFlag) == nil {
-			writeError(cmd, errSheetNotFound(sheetFlag), globals)
-			return ExitValidate
+			return checkData{}, false, fmt.Sprintf("sheet %q not found in %q", sheetFlag, filePath)
 		}
 		sheetNames = []string{sheetFlag}
 	} else {
@@ -121,7 +306,7 @@ func cmdCheck(args []string, globals globalFlags) int {
 		for row := range s.Rows() {
 			for _, cell := range row.Cells() {
 				formula := cell.Formula()
-				if formula == "" {
+				if formula == "" || isVolatileFormula(formula) || cfg.shouldIgnoreFormula(formula) {
 					continue
 				}
 				ref, err := werkbook.CoordinatesToCellName(cell.Col(), row.Num())
@@ -133,6 +318,37 @@ func cmdCheck(args []string, globals globalFlags) int {
 					value:   cell.Value(),
 				}
 			}
+		}
+	}
+
+	// Detect files with uncached formula values (e.g. written by exceljs,
+	// xlsxwriter). If every formula cell has a zero/empty cached value and
+	// there are more than 2 such cells, the file was never calculated, so
+	// there is nothing meaningful to compare against.
+	if len(cached) > 2 {
+		allUncached := true
+		for _, entry := range cached {
+			v := entry.value
+			switch v.Type {
+			case werkbook.TypeEmpty:
+				// empty counts as uncached
+			case werkbook.TypeNumber:
+				if v.Number != 0 {
+					allUncached = false
+				}
+			case werkbook.TypeString:
+				if v.String != "" {
+					allUncached = false
+				}
+			default:
+				allUncached = false
+			}
+			if !allUncached {
+				break
+			}
+		}
+		if allUncached {
+			return checkData{File: filePath}, true, ""
 		}
 	}
 
@@ -165,7 +381,7 @@ func cmdCheck(args []string, globals globalFlags) int {
 
 				computed, _ := s.GetValue(ref)
 
-				if valuesEqual(entry.value, computed, toleranceFlag) {
+				if valuesEqual(entry.value, computed, cfg.Tolerance) {
 					matches++
 				} else {
 					diffs = append(diffs, checkDiff{
@@ -184,20 +400,48 @@ func cmdCheck(args []string, globals globalFlags) int {
 		diffs = []checkDiff{}
 	}
 
-	data := checkData{
+	return checkData{
 		File:       filePath,
 		Formulas:   len(cached),
 		Matches:    matches,
 		Mismatches: len(diffs),
 		Diffs:      diffs,
-	}
+	}, false, ""
+}
 
-	writeSuccess(cmd, data, globals)
-	return ExitSuccess
+// isVolatileFormula returns true if the formula's result is expected to change
+// on every recalculation (e.g. RAND, NOW, TODAY).
+func isVolatileFormula(formula string) bool {
+	upper := strings.ToUpper(formula)
+	for _, fn := range volatileFuncs {
+		if strings.Contains(upper, fn+"(") {
+			return true
+		}
+	}
+	return false
+}
+
+var volatileFuncs = []string{
+	"RAND",
+	"RANDARRAY",
+	"RANDBETWEEN",
+	"NOW",
+	"TODAY",
+	"OFFSET",
+	"INDIRECT",
 }
 
 func valuesEqual(a, b werkbook.Value, tolerance float64) bool {
+	// Handle cross-type error comparisons: some xlsx writers store error
+	// values (e.g. #N/A) as t="str" strings while the formula engine
+	// produces TypeError values. Treat them as equal when the strings match.
 	if a.Type != b.Type {
+		if a.Type == werkbook.TypeError && b.Type == werkbook.TypeString {
+			return a.String == b.String
+		}
+		if a.Type == werkbook.TypeString && b.Type == werkbook.TypeError {
+			return a.String == b.String
+		}
 		return false
 	}
 	switch a.Type {
@@ -223,6 +467,54 @@ func parseFloat(s string) (float64, error) {
 	var f float64
 	_, err := fmt.Sscanf(s, "%f", &f)
 	return f, err
+}
+
+func renderCheckMultiText(data checkMultiData) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Files: %d", data.Files))
+	if data.Skipped > 0 {
+		sb.WriteString(fmt.Sprintf("\nSkipped (uncached): %d", data.Skipped))
+	}
+	sb.WriteString(fmt.Sprintf("\nFormulas: %d", data.Formulas))
+	sb.WriteString(fmt.Sprintf("\nMatches: %d", data.Matches))
+	sb.WriteString(fmt.Sprintf("\nMismatches: %d", data.Mismatches))
+	if data.Errors > 0 {
+		sb.WriteString(fmt.Sprintf("\nFile errors: %d", data.Errors))
+	}
+
+	// Show files with mismatches.
+	for _, r := range data.Results {
+		if r.Mismatches == 0 {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("\n\n--- %s ---", r.File))
+		sb.WriteString(fmt.Sprintf("\nFormulas: %d  Matches: %d  Mismatches: %d", r.Formulas, r.Matches, r.Mismatches))
+		if len(r.Diffs) > 0 {
+			sb.WriteString("\n")
+			rows := make([][]string, 0, len(r.Diffs))
+			for _, d := range r.Diffs {
+				rows = append(rows, []string{
+					d.Sheet,
+					d.Cell,
+					d.Formula,
+					displayRaw(d.Cached),
+					displayRaw(d.Computed),
+				})
+			}
+			sb.WriteString(renderTabular(
+				[]string{"Sheet", "Cell", "Formula", "Cached", "Computed"},
+				rows,
+			))
+		}
+	}
+
+	// Show file errors.
+	for _, fe := range data.FileErrors {
+		sb.WriteString(fmt.Sprintf("\n\n--- %s ---", fe.File))
+		sb.WriteString(fmt.Sprintf("\nError: %s", fe.Error))
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 func renderCheckText(data checkData) string {

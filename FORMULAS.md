@@ -53,7 +53,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | CEILING | Rounds a number up to the nearest multiple of a significance. | Math & Trig | 51 |
 | CEILING.MATH | Rounds a number up using Excel's CEILING.MATH rules. | Math & Trig | 37 |
 | CEILING.PRECISE | Rounds a number up to the nearest significance, ignoring the sign of the significance. | Math & Trig | 37 |
-| CHAR | Returns the character for a numeric code. | Text | 41 |
+| CHAR | Returns the character for a numeric code. | Text | 56 |
 | CHISQ.DIST | Returns the chi-square distribution. | Statistical | 39 |
 | CHISQ.DIST.RT | Returns the right-tailed chi-square probability. | Statistical | 29 |
 | CHISQ.INV | Returns the inverse of the chi-square cumulative distribution. | Statistical | 36 |
@@ -79,8 +79,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | COSH | Returns the hyperbolic cosine of a number. | Math & Trig | 26 |
 | COT | Returns the cotangent of an angle. | Math & Trig | 26 |
 | COTH | Returns the hyperbolic cotangent of a number. | Math & Trig | 26 |
-| COUNT | Counts numeric values. | Statistical | 29 |
-| COUNTA | Counts non-empty values. | Statistical | 20 |
+| COUNT | Counts numeric values. | Statistical | 34 |
+| COUNTA | Counts non-empty values. | Statistical | 21 |
 | COUNTBLANK | Counts blank cells in a range. | Statistical | 40 |
 | COUNTIF | Counts values that match one condition. | Statistical | 75 |
 | COUNTIFS | Counts values that match all supplied conditions. | Statistical | 49 |
@@ -152,7 +152,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | FACT | Returns the factorial of a number. | Math & Trig | 28 |
 | FACTDOUBLE | Returns the double factorial of a number. | Math & Trig | 30 |
 | FALSE | Returns the logical value FALSE. | Logical | 11 |
-| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 67 |
+| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 77 |
 | FIND | Returns the position of one text value inside another, case-sensitive. | Text | 48 |
 | FISHER | Returns the Fisher transformation of a correlation coefficient. | Statistical | 15 |
 | FISHERINV | Returns the inverse Fisher transformation. | Statistical | 15 |
@@ -182,12 +182,12 @@ Werkbook supports **446** spreadsheet formula functions.
 | HEX2OCT | Converts a hexadecimal number to octal. | Engineering | 35 |
 | HLOOKUP | Looks up a value across the top row of a table and returns a value from a specified row. | Lookup & Reference | 102 |
 | HOUR | Returns the hour from a time or datetime value. | Date & Time | 16 |
-| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 19 |
+| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 20 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 46 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 64 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 36 |
-| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 76 |
-| IFNA | Returns a fallback value when a formula returns #N/A. | Information | 44 |
+| IFERROR | Returns a fallback value when a formula returns an error. | Logical | 77 |
+| IFNA | Returns a fallback value when a formula returns #N/A. | Information | 45 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
 | IMABS | Returns the absolute value of a complex number. | Engineering | 38 |
 | IMAGINARY | Returns the imaginary coefficient of a complex number. | Engineering | 38 |
@@ -254,8 +254,8 @@ Werkbook supports **446** spreadsheet formula functions.
 | LOWER | Converts text to lowercase. | Text | 48 |
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 32 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 26 |
-| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 75 |
-| MAX | Returns the largest numeric value. | Statistical | 38 |
+| MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 76 |
+| MAX | Returns the largest numeric value. | Statistical | 39 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
@@ -351,7 +351,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
 | SECOND | Returns the second from a time or datetime value. | Date & Time | 16 |
-| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 101 |
+| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 103 |
 | SERIESSUM | Returns the sum of a power series. | Math & Trig | 27 |
 | SHEET | Returns the sheet index of a reference. | Information | 14 |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information | 8 |
@@ -363,7 +363,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | SLN | Returns straight-line depreciation for one period. | Financial | 53 |
 | SLOPE | Returns the slope of a linear regression line. | Statistical | 39 |
 | SMALL | Returns the k-th smallest value in a data set. | Statistical | 29 |
-| SORT | Sorts an array by row or column order. | Logical | 50 |
+| SORT | Sorts an array by row or column order. | Logical | 51 |
 | SORTBY | Sorts an array by one or more companion arrays. | Logical | 4 |
 | SQRT | Returns the square root of a number. | Math & Trig | 29 |
 | SQRTPI | Returns the square root of a number multiplied by pi. | Math & Trig | 25 |
@@ -377,10 +377,10 @@ Werkbook supports **446** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 41 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 80 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 87 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 72 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
-| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 72 |
+| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 73 |
 | SUMSQ | Returns the sum of squares of the supplied values. | Statistical | 30 |
 | SUMX2MY2 | Returns the sum of the difference of squares of paired arrays. | Math & Trig | 55 |
 | SUMX2PY2 | Returns the sum of the sum of squares of paired arrays. | Math & Trig | 57 |
@@ -400,12 +400,12 @@ Werkbook supports **446** spreadsheet formula functions.
 | TBILLEQ | Returns the bond-equivalent yield for a Treasury bill. | Financial | 34 |
 | TBILLPRICE | Returns the price per 100 face value for a Treasury bill. | Financial | 36 |
 | TBILLYIELD | Returns the yield for a Treasury bill. | Financial | 35 |
-| TEXT | Formats a value as text using a number format pattern. | Text | 127 |
+| TEXT | Formats a value as text using a number format pattern. | Text | 134 |
 | TEXTAFTER | Returns the text that appears after a delimiter. | Text | 34 |
 | TEXTBEFORE | Returns the text that appears before a delimiter. | Text | 34 |
 | TEXTJOIN | Joins text values with a delimiter. | Text | 66 |
 | TEXTSPLIT | Splits text into rows or columns around delimiters. | Text | 88 |
-| TIME | Builds a time value from hour, minute, and second numbers. | Date & Time | 42 |
+| TIME | Builds a time value from hour, minute, and second numbers. | Date & Time | 47 |
 | TIMEVALUE | Converts time text to a serial time value. | Date & Time | 48 |
 | TOCOL | Flattens an array into a single column. | Lookup & Reference | 22 |
 | TODAY | Returns the current date. | Date & Time | 2 |

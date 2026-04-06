@@ -441,7 +441,10 @@ func days360Calc(sy, sm, sd, ey, em, ed int, european bool) float64 {
 	} else {
 		// US (NASD) method — order of checks matters:
 		// 1. If both dates are last day of February, set D2 to 30.
-		if isLastDayOfFeb(sy, sm, sd) && isLastDayOfFeb(ey, em, ed) {
+		//    Only adjust D2 when its actual day is not greater than D1's day,
+		//    so that a non-leap Feb 28 start to a leap Feb 29 end preserves
+		//    the extra day (matching Excel's behavior).
+		if isLastDayOfFeb(sy, sm, sd) && isLastDayOfFeb(ey, em, ed) && ed <= sd {
 			ed = 30
 		}
 		// 2. If start date is last day of February, set D1 to 30.
@@ -560,21 +563,23 @@ func fnTIME(args []Value) (Value, error) {
 	minute = math.Trunc(minute)
 	second = math.Trunc(second)
 
-	// Returns #NUM! if any argument exceeds 32767.
-	if hour > 32767 || minute > 32767 || second > 32767 {
+	// Excel returns #NUM! when any individual argument's absolute value
+	// exceeds 32767.
+	if math.Abs(hour) > 32767 || math.Abs(minute) > 32767 || math.Abs(second) > 32767 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
 	totalSeconds := hour*3600 + minute*60 + second
-	// Returns #NUM! if the total time is negative.
+
+	// Excel returns #NUM! when the resulting total is negative.
 	if totalSeconds < 0 {
 		return ErrorVal(ErrValNUM), nil
 	}
 
+	// Wrap large values modulo 86400 (Excel wraps around the day).
+	totalSeconds = math.Mod(totalSeconds, 86400)
+
 	result := totalSeconds / 86400
-	// TIME returns only the fractional part (time of day).
-	// Values >= 1.0 wrap; e.g. TIME(25,0,0) = 0.04167 (just the 1-hour fraction).
-	result = result - math.Floor(result)
 	return NumberVal(result), nil
 }
 

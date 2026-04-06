@@ -80,6 +80,9 @@ func renderTextSuccess(command string, data any) string {
 			return renderCreateText(d)
 		}
 	case "check":
+		if d, ok := data.(checkMultiData); ok {
+			return renderCheckMultiText(d)
+		}
 		if d, ok := data.(checkData); ok {
 			return renderCheckText(d)
 		}
