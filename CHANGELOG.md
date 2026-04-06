@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.9.0
+
+### Features
+
+- **Shared formula support**: Added shared formula parsing and external reference filtering in OOXML import
+- **Dynamic array spill conflict detection**: Detect and handle spill conflicts for dynamic array formulas, matching Excel behavior
+- **Spill control for imported formulas**: Dynamic array spill behavior is now preserved through import
+- **Check command**: New `wb check` command for validating engine parity against Excel
+- **Check config**: Configurable check runs with formula alignment improvements
+- **Exported column conversion functions**: `ColumnToIndex` and `IndexToColumn` are now public API
+
+### Bug fixes
+
+- **Formula formatting and math alignment**: Aligned number formatting and math operations with Excel behavior
+- **Inherited array context in error wrappers**: Fixed array context propagation through error-handling formula wrappers
+- **IF in inherited array context**: IF function now correctly participates in inherited array context
+
 ## v0.8.1
 
 - Added MIT license
