@@ -654,6 +654,75 @@ func TestSpillBlockedByOccupiedCellWithoutRecalculate(t *testing.T) {
 	}
 }
 
+func TestSpillBlockedByFormulaCell(t *testing.T) {
+	const (
+		dataSheet  = "Data"
+		spillSheet = "Spill"
+	)
+
+	f := werkbook.New(werkbook.FirstSheet(dataSheet))
+	ds := f.Sheet(dataSheet)
+	for _, c := range []struct {
+		cell string
+		val  any
+	}{
+		{"A2", true}, {"B2", 10.0},
+		{"A3", false}, {"B3", 20.0},
+		{"A4", true}, {"B4", 30.0},
+		{"A5", false}, {"B5", 40.0},
+		{"A6", true}, {"B6", 50.0},
+	} {
+		if err := ds.SetValue(c.cell, c.val); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ss, err := f.NewSheet(spillSheet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ss.SetFormula("B2", "FILTER(Data!B2:B6,Data!A2:A6)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ss.SetFormula("B4", "12345"); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := ss.GetValue("B2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != werkbook.TypeError || v.String != "#SPILL!" {
+		t.Fatalf("B2 = %#v, want #SPILL!", v)
+	}
+	v2, err := ss.GetValue("B3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v2.Type != werkbook.TypeEmpty {
+		t.Fatalf("B3 = %#v, want empty while spill blocked", v2)
+	}
+	v3, err := ss.GetValue("B4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v3.Type != werkbook.TypeNumber || v3.Number != 12345 {
+		t.Fatalf("B4 = %#v, want 12345 formula blocker", v3)
+	}
+
+	if err := ss.SetValue("B4", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	v4, err := ss.GetValue("B3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v4.Type != werkbook.TypeNumber || v4.Number != 30 {
+		t.Fatalf("B3 after clearing formula blocker = %#v, want 30", v4)
+	}
+}
+
 // TestSpillConflict2DInteriorBlocker verifies #SPILL! when a cell in the
 // interior of a 2D spill rectangle (SEQUENCE(3,3)) is occupied.
 func TestSpillConflict2DInteriorBlocker(t *testing.T) {
@@ -921,6 +990,62 @@ func TestSetValueOnSpillAnchorClearsSpill(t *testing.T) {
 	v3, _ := ss.GetValue("B3")
 	if v3.Type != werkbook.TypeEmpty {
 		t.Fatalf("B3 = %#v, want empty after anchor overwritten", v3)
+	}
+}
+
+func TestSetFormulaOnSpillAnchorClearsSpillWithoutRecalculate(t *testing.T) {
+	const (
+		dataSheet  = "Data"
+		spillSheet = "Spill"
+	)
+
+	f := werkbook.New(werkbook.FirstSheet(dataSheet))
+	ds := f.Sheet(dataSheet)
+	for _, c := range []struct {
+		cell string
+		val  any
+	}{
+		{"A2", true}, {"B2", 10.0},
+		{"A3", true}, {"B3", 20.0},
+	} {
+		if err := ds.SetValue(c.cell, c.val); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ss, err := f.NewSheet(spillSheet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ss.SetFormula("B2", "FILTER(Data!B2:B3,Data!A2:A3)"); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := ss.GetValue("B3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Type != werkbook.TypeNumber || v.Number != 20 {
+		t.Fatalf("B3 = %#v, want 20 before anchor replacement", v)
+	}
+
+	if err := ss.SetFormula("B2", "42"); err != nil {
+		t.Fatal(err)
+	}
+
+	v2, err := ss.GetValue("B2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v2.Type != werkbook.TypeNumber || v2.Number != 42 {
+		t.Fatalf("B2 = %#v, want 42 after anchor replacement", v2)
+	}
+	v3, err := ss.GetValue("B3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v3.Type != werkbook.TypeEmpty {
+		t.Fatalf("B3 = %#v, want empty after replacing spill anchor with scalar formula", v3)
 	}
 }
 
