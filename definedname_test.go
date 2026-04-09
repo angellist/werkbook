@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jpoz/werkbook"
@@ -400,6 +401,67 @@ func TestResolveDefinedNameFullColumnSpill(t *testing.T) {
 				t.Fatalf("[%d][%d] = %#v, want %#v", r, c, vals[r][c], want[r][c])
 			}
 		}
+	}
+}
+
+func TestResolveDefinedNameFullRowSpill(t *testing.T) {
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+	if err := s.SetValue("A2", "Totals"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetFormula("B2", `HSTACK(10,20,30)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, dn := range []werkbook.DefinedName{
+		{Name: "RowTwoRange", Value: "Sheet1!$2:$2", LocalSheetID: -1},
+		{Name: "RowTwoCoord", Value: "Sheet1!2", LocalSheetID: -1},
+	} {
+		if err := f.SetDefinedName(dn); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	f.Recalculate()
+
+	for _, name := range []string{"RowTwoRange", "RowTwoCoord"} {
+		vals, err := f.ResolveDefinedName(name, -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(vals) != 1 || len(vals[0]) != 4 {
+			t.Fatalf("%s: expected 1x4 grid, got %dx%d", name, len(vals), len(vals[0]))
+		}
+		want := []werkbook.Value{
+			{Type: werkbook.TypeString, String: "Totals"},
+			{Type: werkbook.TypeNumber, Number: 10},
+			{Type: werkbook.TypeNumber, Number: 20},
+			{Type: werkbook.TypeNumber, Number: 30},
+		}
+		for c := range want {
+			if vals[0][c] != want[c] {
+				t.Fatalf("%s[0][%d] = %#v, want %#v", name, c, vals[0][c], want[c])
+			}
+		}
+	}
+}
+
+func TestResolveDefinedNameBoundedRangeRejectsOversizedMaterialization(t *testing.T) {
+	f := werkbook.New()
+	if err := f.SetDefinedName(werkbook.DefinedName{
+		Name:         "HugeRange",
+		Value:        "Sheet1!$A$1:$B$524289",
+		LocalSheetID: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := f.ResolveDefinedName("HugeRange", -1)
+	if err == nil {
+		t.Fatal("expected oversized range error")
+	}
+	if !strings.Contains(err.Error(), "exceeds materialized range limit") {
+		t.Fatalf("error = %q, want materialized range limit", err)
 	}
 }
 

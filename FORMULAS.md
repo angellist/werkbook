@@ -182,7 +182,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | HEX2OCT | Converts a hexadecimal number to octal. | Engineering | 35 |
 | HLOOKUP | Looks up a value across the top row of a table and returns a value from a specified row. | Lookup & Reference | 102 |
 | HOUR | Returns the hour from a time or datetime value. | Date & Time | 16 |
-| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 20 |
+| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 21 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 46 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 64 |
 | IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 36 |

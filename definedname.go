@@ -115,7 +115,11 @@ func (f *File) ResolveDefinedName(name string, sheetIndex int) ([][]Value, error
 		return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
 	}
 	if area.isRange {
-		return f.resolveDefinedNameRange(area.rangeAddr), nil
+		rows, err := f.resolveDefinedNameRange(area.rangeAddr)
+		if err != nil {
+			return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
+		}
+		return rows, nil
 	}
 
 	// Single cell.
@@ -269,12 +273,24 @@ func formatDefinedNameCoord(col, row int) string {
 	return ""
 }
 
-func (f *File) resolveDefinedNameRange(addr formula.RangeAddr) [][]Value {
+func (f *File) resolveDefinedNameRange(addr formula.RangeAddr) ([][]Value, error) {
+	bounded := !isDefinedNameOpenEndedRange(addr)
+	expectedRows := 0
+	expectedCols := 0
+	if bounded {
+		expectedRows = addr.ToRow - addr.FromRow + 1
+		expectedCols = addr.ToCol - addr.FromCol + 1
+		if formula.RangeCellCountExceedsLimit(expectedRows, expectedCols) {
+			return nil, fmt.Errorf("defined name range %dx%d exceeds materialized range limit", expectedRows, expectedCols)
+		}
+	}
+
 	resolver := &fileResolver{file: f, currentSheet: addr.Sheet}
 	rawRows := resolver.GetRangeValues(addr)
-	if !isDefinedNameOpenEndedRange(addr) {
-		expectedRows := addr.ToRow - addr.FromRow + 1
-		expectedCols := addr.ToCol - addr.FromCol + 1
+	if isDefinedNameRangeOverflow(rawRows) {
+		return nil, fmt.Errorf("defined name range exceeds materialized range limit")
+	}
+	if bounded {
 		for len(rawRows) < expectedRows {
 			blankRow := make([]formula.Value, expectedCols)
 			for i := range blankRow {
@@ -290,12 +306,20 @@ func (f *File) resolveDefinedNameRange(addr formula.RangeAddr) [][]Value {
 			out[i][j] = formulaGridValueToCellValue(raw)
 		}
 	}
-	return out
+	return out, nil
 }
 
 func isDefinedNameOpenEndedRange(addr formula.RangeAddr) bool {
 	return (addr.FromRow == 1 && addr.ToRow >= MaxRows) ||
 		(addr.FromCol == 1 && addr.ToCol >= MaxColumns)
+}
+
+func isDefinedNameRangeOverflow(rows [][]formula.Value) bool {
+	return len(rows) == 1 &&
+		len(rows[0]) == 1 &&
+		rows[0][0].Type == formula.ValueError &&
+		rows[0][0].Err == formula.ErrValREF &&
+		rows[0][0].RangeOverflow
 }
 
 func formulaGridValueToCellValue(v formula.Value) Value {

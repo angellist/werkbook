@@ -75,7 +75,6 @@ func BenchmarkRecalculateFullColumnFilterSiblings(b *testing.B) {
 					b.Fatalf("ResolveDefinedName rows = %d, want %d", len(vals), expectedRows+1)
 				}
 				fullColumnFilterSiblingBenchmarkSink = expectedRows + cols + len(vals)
-				b.StartTimer()
 			}
 		})
 	}
