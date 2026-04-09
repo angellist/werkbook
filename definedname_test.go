@@ -1,6 +1,7 @@
 package werkbook_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -271,6 +272,132 @@ func TestResolveDefinedNameRange(t *testing.T) {
 		for c, v := range row {
 			if v.Type != werkbook.TypeNumber || v.Number != want[r][c] {
 				t.Errorf("[%d][%d] = %v, want %v", r, c, v, want[r][c])
+			}
+		}
+	}
+}
+
+func TestResolveDefinedNameRangePreservesBlankCells(t *testing.T) {
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+	if err := s.SetValue("A1", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetDefinedName(werkbook.DefinedName{
+		Name:         "Sparse",
+		Value:        "Sheet1!$A$1:$B$2",
+		LocalSheetID: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	vals, err := f.ResolveDefinedName("Sparse", -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vals) != 2 || len(vals[0]) != 2 {
+		t.Fatalf("expected 2x2 grid, got %dx%d", len(vals), len(vals[0]))
+	}
+	if vals[0][0].Type != werkbook.TypeNumber || vals[0][0].Number != 1 {
+		t.Fatalf("[0][0] = %#v, want 1", vals[0][0])
+	}
+	if vals[0][1].Type != werkbook.TypeEmpty {
+		t.Fatalf("[0][1] = %#v, want empty", vals[0][1])
+	}
+	if vals[1][0].Type != werkbook.TypeEmpty {
+		t.Fatalf("[1][0] = %#v, want empty", vals[1][0])
+	}
+	if vals[1][1].Type != werkbook.TypeEmpty {
+		t.Fatalf("[1][1] = %#v, want empty", vals[1][1])
+	}
+}
+
+func TestResolveDefinedNameFullColumnSpill(t *testing.T) {
+	f := werkbook.New(werkbook.FirstSheet("Source"))
+	source := f.Sheet("Source")
+	if err := source.SetValue("A1", "Name"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.SetValue("B1", "Amount"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.SetValue("C1", "Include"); err != nil {
+		t.Fatal(err)
+	}
+	rows := []struct {
+		name    string
+		amount  float64
+		include bool
+	}{
+		{name: "Alpha", amount: 10, include: true},
+		{name: "Beta", amount: 20, include: false},
+		{name: "Gamma", amount: 30, include: true},
+	}
+	for i, row := range rows {
+		refRow := i + 2
+		if err := source.SetValue(fmt.Sprintf("A%d", refRow), row.name); err != nil {
+			t.Fatal(err)
+		}
+		if err := source.SetValue(fmt.Sprintf("B%d", refRow), row.amount); err != nil {
+			t.Fatal(err)
+		}
+		if err := source.SetValue(fmt.Sprintf("C%d", refRow), row.include); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	out, err := f.NewSheet("Out Data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := out.SetValue("A1", "Name"); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.SetValue("B1", "Amount"); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.SetFormula("A2", `FILTER(Source!A2:A4,Source!C2:C4,"No rows")`); err != nil {
+		t.Fatal(err)
+	}
+	if err := out.SetFormula("B2", `FILTER(Source!B2:B4,Source!C2:C4,"No rows")`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.SetDefinedName(werkbook.DefinedName{
+		Name:         "OutTable",
+		Value:        `'Out Data'!$A:$B`,
+		LocalSheetID: -1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	f.Recalculate()
+
+	vals, err := f.ResolveDefinedName("OutTable", -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vals) != 3 || len(vals[0]) != 2 {
+		t.Fatalf("expected 3x2 grid, got %dx%d", len(vals), len(vals[0]))
+	}
+
+	want := [][]werkbook.Value{
+		{
+			{Type: werkbook.TypeString, String: "Name"},
+			{Type: werkbook.TypeString, String: "Amount"},
+		},
+		{
+			{Type: werkbook.TypeString, String: "Alpha"},
+			{Type: werkbook.TypeNumber, Number: 10},
+		},
+		{
+			{Type: werkbook.TypeString, String: "Gamma"},
+			{Type: werkbook.TypeNumber, Number: 30},
+		},
+	}
+	for r := range want {
+		for c := range want[r] {
+			if vals[r][c] != want[r][c] {
+				t.Fatalf("[%d][%d] = %#v, want %#v", r, c, vals[r][c], want[r][c])
 			}
 		}
 	}

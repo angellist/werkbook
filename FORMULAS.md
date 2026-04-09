@@ -79,7 +79,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | COSH | Returns the hyperbolic cosine of a number. | Math & Trig | 26 |
 | COT | Returns the cotangent of an angle. | Math & Trig | 26 |
 | COTH | Returns the hyperbolic cotangent of a number. | Math & Trig | 26 |
-| COUNT | Counts numeric values. | Statistical | 34 |
+| COUNT | Counts numeric values. | Statistical | 36 |
 | COUNTA | Counts non-empty values. | Statistical | 21 |
 | COUNTBLANK | Counts blank cells in a range. | Statistical | 40 |
 | COUNTIF | Counts values that match one condition. | Statistical | 75 |
@@ -152,7 +152,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | FACT | Returns the factorial of a number. | Math & Trig | 28 |
 | FACTDOUBLE | Returns the double factorial of a number. | Math & Trig | 30 |
 | FALSE | Returns the logical value FALSE. | Logical | 11 |
-| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 77 |
+| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 87 |
 | FIND | Returns the position of one text value inside another, case-sensitive. | Text | 48 |
 | FISHER | Returns the Fisher transformation of a correlation coefficient. | Statistical | 15 |
 | FISHERINV | Returns the inverse Fisher transformation. | Statistical | 15 |
@@ -351,7 +351,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
 | SECOND | Returns the second from a time or datetime value. | Date & Time | 16 |
-| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 103 |
+| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 104 |
 | SERIESSUM | Returns the sum of a power series. | Math & Trig | 27 |
 | SHEET | Returns the sheet index of a reference. | Information | 14 |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information | 8 |
@@ -377,7 +377,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 41 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 87 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 90 |
 | SUMIF | Returns the sum of values that match one condition. | Statistical | 72 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
 | SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 73 |
