@@ -110,31 +110,231 @@ func (f *File) ResolveDefinedName(name string, sheetIndex int) ([][]Value, error
 		return nil, fmt.Errorf("cannot resolve defined name %q: sheet %q not found", name, sheetName)
 	}
 
-	// Determine if this is a range (contains ":") or a single cell.
-	if strings.Contains(cellRef, ":") {
-		col1, row1, col2, row2, err := RangeToCoordinates(cellRef)
+	area, err := parseDefinedNameArea(sheetName, cellRef)
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
+	}
+	if area.isRange {
+		rows, err := f.resolveDefinedNameRange(area.rangeAddr)
 		if err != nil {
 			return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
-		}
-		rows := make([][]Value, row2-row1+1)
-		for r := row1; r <= row2; r++ {
-			cols := make([]Value, col2-col1+1)
-			for c := col1; c <= col2; c++ {
-				ref, _ := CoordinatesToCellName(c, r)
-				v, _ := s.GetValue(ref)
-				cols[c-col1] = v
-			}
-			rows[r-row1] = cols
 		}
 		return rows, nil
 	}
 
 	// Single cell.
-	v, err := s.GetValue(cellRef)
+	singleRef, err := CoordinatesToCellName(area.cellCol, area.cellRow)
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
+	}
+	v, err := s.GetValue(singleRef)
 	if err != nil {
 		return nil, fmt.Errorf("cannot resolve defined name %q: %w", name, err)
 	}
 	return [][]Value{{v}}, nil
+}
+
+type definedNameArea struct {
+	rangeAddr formula.RangeAddr
+	cellCol   int
+	cellRow   int
+	isRange   bool
+}
+
+func parseDefinedNameArea(sheetName, cellRef string) (definedNameArea, error) {
+	parts := strings.SplitN(strings.TrimSpace(cellRef), ":", 2)
+	if len(parts) == 2 {
+		fromCol, fromRow, err := parseDefinedNameCoord(parts[0])
+		if err != nil {
+			return definedNameArea{}, err
+		}
+		toCol, toRow, err := parseDefinedNameCoord(parts[1])
+		if err != nil {
+			return definedNameArea{}, err
+		}
+		addr, err := buildDefinedNameRangeAddr(sheetName, fromCol, fromRow, toCol, toRow)
+		if err != nil {
+			return definedNameArea{}, err
+		}
+		return definedNameArea{rangeAddr: addr, isRange: true}, nil
+	}
+
+	col, row, err := parseDefinedNameCoord(parts[0])
+	if err != nil {
+		return definedNameArea{}, err
+	}
+	switch {
+	case col > 0 && row > 0:
+		return definedNameArea{cellCol: col, cellRow: row}, nil
+	case col > 0:
+		return definedNameArea{
+			rangeAddr: formula.RangeAddr{
+				Sheet:   sheetName,
+				FromCol: col,
+				FromRow: 1,
+				ToCol:   col,
+				ToRow:   MaxRows,
+			},
+			isRange: true,
+		}, nil
+	case row > 0:
+		return definedNameArea{
+			rangeAddr: formula.RangeAddr{
+				Sheet:   sheetName,
+				FromCol: 1,
+				FromRow: row,
+				ToCol:   MaxColumns,
+				ToRow:   row,
+			},
+			isRange: true,
+		}, nil
+	default:
+		return definedNameArea{}, fmt.Errorf("invalid reference %q", cellRef)
+	}
+}
+
+func buildDefinedNameRangeAddr(sheetName string, fromCol, fromRow, toCol, toRow int) (formula.RangeAddr, error) {
+	switch {
+	case fromCol > 0 && fromRow > 0 && toCol > 0 && toRow > 0:
+		if fromCol > toCol {
+			fromCol, toCol = toCol, fromCol
+		}
+		if fromRow > toRow {
+			fromRow, toRow = toRow, fromRow
+		}
+	case fromCol > 0 && fromRow == 0 && toCol > 0 && toRow == 0:
+		if fromCol > toCol {
+			fromCol, toCol = toCol, fromCol
+		}
+		fromRow = 1
+		toRow = MaxRows
+	case fromCol == 0 && fromRow > 0 && toCol == 0 && toRow > 0:
+		if fromRow > toRow {
+			fromRow, toRow = toRow, fromRow
+		}
+		fromCol = 1
+		toCol = MaxColumns
+	default:
+		return formula.RangeAddr{}, fmt.Errorf("mixed reference types in %q", fmt.Sprintf("%s:%s", formatDefinedNameCoord(fromCol, fromRow), formatDefinedNameCoord(toCol, toRow)))
+	}
+	return formula.RangeAddr{
+		Sheet:   sheetName,
+		FromCol: fromCol,
+		FromRow: fromRow,
+		ToCol:   toCol,
+		ToRow:   toRow,
+	}, nil
+}
+
+func parseDefinedNameCoord(ref string) (col, row int, err error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return 0, 0, fmt.Errorf("empty reference")
+	}
+
+	i := 0
+	for i < len(ref) && isAlpha(ref[i]) {
+		i++
+	}
+	if i == 0 {
+		row, err = parseRow(ref)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid reference %q: %w", ref, err)
+		}
+		return 0, row, nil
+	}
+
+	col, err = ColumnNameToNumber(ref[:i])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid reference %q: %w", ref, err)
+	}
+	if i == len(ref) {
+		return col, 0, nil
+	}
+	row, err = parseRow(ref[i:])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid reference %q: %w", ref, err)
+	}
+	return col, row, nil
+}
+
+func formatDefinedNameCoord(col, row int) string {
+	switch {
+	case col > 0 && row > 0:
+		ref, err := CoordinatesToCellName(col, row)
+		if err == nil {
+			return ref
+		}
+	case col > 0:
+		return ColumnNumberToName(col)
+	case row > 0:
+		return fmt.Sprintf("%d", row)
+	}
+	return ""
+}
+
+func (f *File) resolveDefinedNameRange(addr formula.RangeAddr) ([][]Value, error) {
+	bounded := !isDefinedNameOpenEndedRange(addr)
+	expectedRows := 0
+	expectedCols := 0
+	if bounded {
+		expectedRows = addr.ToRow - addr.FromRow + 1
+		expectedCols = addr.ToCol - addr.FromCol + 1
+		if formula.RangeCellCountExceedsLimit(expectedRows, expectedCols) {
+			return nil, fmt.Errorf("defined name range %dx%d exceeds materialized range limit", expectedRows, expectedCols)
+		}
+	}
+
+	resolver := &fileResolver{file: f, currentSheet: addr.Sheet}
+	rawRows := resolver.GetRangeValues(addr)
+	if isDefinedNameRangeOverflow(rawRows) {
+		return nil, fmt.Errorf("defined name range exceeds materialized range limit")
+	}
+	if bounded {
+		for len(rawRows) < expectedRows {
+			blankRow := make([]formula.Value, expectedCols)
+			for i := range blankRow {
+				blankRow[i] = formula.EmptyVal()
+			}
+			rawRows = append(rawRows, blankRow)
+		}
+	}
+	out := make([][]Value, len(rawRows))
+	for i, rawRow := range rawRows {
+		out[i] = make([]Value, len(rawRow))
+		for j, raw := range rawRow {
+			out[i][j] = formulaGridValueToCellValue(raw)
+		}
+	}
+	return out, nil
+}
+
+func isDefinedNameOpenEndedRange(addr formula.RangeAddr) bool {
+	return (addr.FromRow == 1 && addr.ToRow >= MaxRows) ||
+		(addr.FromCol == 1 && addr.ToCol >= MaxColumns)
+}
+
+func isDefinedNameRangeOverflow(rows [][]formula.Value) bool {
+	return len(rows) == 1 &&
+		len(rows[0]) == 1 &&
+		rows[0][0].Type == formula.ValueError &&
+		rows[0][0].Err == formula.ErrValREF &&
+		rows[0][0].RangeOverflow
+}
+
+func formulaGridValueToCellValue(v formula.Value) Value {
+	switch v.Type {
+	case formula.ValueNumber:
+		return Value{Type: TypeNumber, Number: v.Num}
+	case formula.ValueString:
+		return Value{Type: TypeString, String: v.Str}
+	case formula.ValueBool:
+		return Value{Type: TypeBool, Bool: v.Bool}
+	case formula.ValueError:
+		return Value{Type: TypeError, String: v.Err.String()}
+	default:
+		return Value{Type: TypeEmpty}
+	}
 }
 
 // lookupDefinedName finds the best-matching defined name, preferring a
