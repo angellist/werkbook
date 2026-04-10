@@ -80,14 +80,15 @@ type checkData struct {
 }
 
 type checkMultiData struct {
-	Files      int         `json:"files"`
-	Skipped    int         `json:"skipped"`
-	Formulas   int         `json:"formulas"`
-	Matches    int         `json:"matches"`
-	Mismatches int         `json:"mismatches"`
-	Errors     int         `json:"errors"`
-	Results    []checkData `json:"results"`
-	FileErrors []fileError `json:"file_errors,omitempty"`
+	Files        int         `json:"files"`
+	Skipped      int         `json:"skipped"`
+	Formulas     int         `json:"formulas"`
+	Matches      int         `json:"matches"`
+	Mismatches   int         `json:"mismatches"`
+	Errors       int         `json:"errors"`
+	Results      []checkData `json:"results"`
+	SkippedFiles []string    `json:"skipped_files,omitempty"`
+	FileErrors   []fileError `json:"file_errors,omitempty"`
 }
 
 type fileError struct {
@@ -203,6 +204,7 @@ func cmdCheck(args []string, globals globalFlags) int {
 		}
 		if skipped {
 			multi.Skipped++
+			multi.SkippedFiles = append(multi.SkippedFiles, fp)
 			continue
 		}
 		multi.Files++
@@ -477,6 +479,9 @@ func renderCheckMultiText(data checkMultiData) string {
 	sb.WriteString(fmt.Sprintf("Files: %d", data.Files))
 	if data.Skipped > 0 {
 		sb.WriteString(fmt.Sprintf("\nSkipped (uncached): %d", data.Skipped))
+		for _, fp := range data.SkippedFiles {
+			sb.WriteString(fmt.Sprintf("\n  - %s", fp))
+		}
 	}
 	sb.WriteString(fmt.Sprintf("\nFormulas: %d", data.Formulas))
 	sb.WriteString(fmt.Sprintf("\nMatches: %d", data.Matches))

@@ -15,7 +15,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | AGGREGATE | Applies an aggregate calculation with options to ignore selected values. | Statistical | 98 |
 | AMORDEGRC | Returns depreciation for each accounting period using a French declining balance method. | Financial | 12 |
 | AMORLINC | Returns depreciation for each accounting period using a linear method. | Financial | 14 |
-| ANCHORARRAY | Returns the full spilled array produced by a dynamic array formula. | Lookup & Reference | 6 |
+| ANCHORARRAY | Returns the full spilled array produced by a dynamic array formula. | Lookup & Reference | 9 |
 | AND | Returns TRUE when every supplied condition is TRUE. | Logical | 31 |
 | ARABIC | Converts Roman numeral text to an Arabic number. | Math & Trig | 38 |
 | AREAS | Counts the number of areas in a reference. | Information | 23 |
@@ -26,7 +26,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | ATAN2 | Returns the arctangent from x and y coordinates. | Math & Trig | 30 |
 | ATANH | Returns the inverse hyperbolic tangent of a number. | Math & Trig | 31 |
 | AVEDEV | Returns the average absolute deviation from the mean. | Statistical | 22 |
-| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 43 |
+| AVERAGE | Returns the arithmetic mean of the supplied values. | Statistical | 44 |
 | AVERAGEA | Returns the average of supplied values, including logical values and text coercions. | Statistical | 24 |
 | AVERAGEIF | Returns the average of values that match one condition. | Statistical | 42 |
 | AVERAGEIFS | Returns the average of values that match all supplied conditions. | Statistical | 48 |
@@ -79,11 +79,11 @@ Werkbook supports **446** spreadsheet formula functions.
 | COSH | Returns the hyperbolic cosine of a number. | Math & Trig | 26 |
 | COT | Returns the cotangent of an angle. | Math & Trig | 26 |
 | COTH | Returns the hyperbolic cotangent of a number. | Math & Trig | 26 |
-| COUNT | Counts numeric values. | Statistical | 36 |
-| COUNTA | Counts non-empty values. | Statistical | 21 |
+| COUNT | Counts numeric values. | Statistical | 42 |
+| COUNTA | Counts non-empty values. | Statistical | 22 |
 | COUNTBLANK | Counts blank cells in a range. | Statistical | 40 |
-| COUNTIF | Counts values that match one condition. | Statistical | 75 |
-| COUNTIFS | Counts values that match all supplied conditions. | Statistical | 49 |
+| COUNTIF | Counts values that match one condition. | Statistical | 78 |
+| COUNTIFS | Counts values that match all supplied conditions. | Statistical | 51 |
 | COUPDAYBS | Returns the number of days from the coupon period start to settlement. | Financial | 17 |
 | COUPDAYS | Returns the number of days in the coupon period containing settlement. | Financial | 17 |
 | COUPDAYSNC | Returns the number of days from settlement to the next coupon date. | Financial | 17 |
@@ -123,7 +123,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | DOLLARDE | Converts a fractional dollar price to a decimal price. | Financial | 18 |
 | DOLLARFR | Converts a decimal dollar price to a fractional price. | Financial | 17 |
 | DPRODUCT | Returns the product of matching records in a database range. | Db | 67 |
-| DROP | Drops rows or columns from the start or end of an array. | Lookup & Reference | 26 |
+| DROP | Drops rows or columns from the start or end of an array. | Lookup & Reference | 27 |
 | DSTDEV | Returns the sample standard deviation of matching database records. | Db | 3 |
 | DSTDEVP | Returns the population standard deviation of matching database records. | Db | 2 |
 | DSUM | Returns the sum of matching records in a database range. | Db | 8 |
@@ -152,7 +152,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | FACT | Returns the factorial of a number. | Math & Trig | 28 |
 | FACTDOUBLE | Returns the double factorial of a number. | Math & Trig | 30 |
 | FALSE | Returns the logical value FALSE. | Logical | 11 |
-| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 87 |
+| FILTER | Filters an array to rows or columns that meet a Boolean include mask. | Lookup & Reference | 104 |
 | FIND | Returns the position of one text value inside another, case-sensitive. | Text | 48 |
 | FISHER | Returns the Fisher transformation of a correlation coefficient. | Statistical | 15 |
 | FISHERINV | Returns the inverse Fisher transformation. | Statistical | 15 |
@@ -182,10 +182,10 @@ Werkbook supports **446** spreadsheet formula functions.
 | HEX2OCT | Converts a hexadecimal number to octal. | Engineering | 35 |
 | HLOOKUP | Looks up a value across the top row of a table and returns a value from a specified row. | Lookup & Reference | 102 |
 | HOUR | Returns the hour from a time or datetime value. | Date & Time | 16 |
-| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 21 |
+| HSTACK | Stacks arrays horizontally. | Lookup & Reference | 22 |
 | HYPERLINK | Creates a clickable hyperlink. | Lookup & Reference | 46 |
 | HYPGEOM.DIST | Returns the hypergeometric distribution. | Statistical | 64 |
-| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 36 |
+| IF | Returns one value when a condition is TRUE and another when it is FALSE. | Logical | 37 |
 | IFERROR | Returns a fallback value when a formula returns an error. | Logical | 77 |
 | IFNA | Returns a fallback value when a formula returns #N/A. | Information | 45 |
 | IFS | Evaluates conditions in order and returns the value for the first TRUE condition. | Logical | 32 |
@@ -242,7 +242,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | LCM | Returns the least common multiple. | Math & Trig | 39 |
 | LEFT | Returns characters from the left side of a text value. | Text | 42 |
 | LEN | Returns the number of characters in text. | Text | 37 |
-| LET | Assigns names to intermediate values within a formula. | Logical | 35 |
+| LET | Assigns names to intermediate values within a formula. | Logical | 36 |
 | LINEST | Returns linear regression statistics. | Statistical | 3 |
 | LN | Returns the natural logarithm of a number. | Math & Trig | 32 |
 | LOG | Returns the logarithm of a number in a chosen base. | Math & Trig | 35 |
@@ -255,14 +255,14 @@ Werkbook supports **446** spreadsheet formula functions.
 | MAKEARRAY | Builds an array by applying a lambda to row and column indexes. | Logical | 32 |
 | MAP | Applies a lambda element-by-element across one or more arrays. | Logical | 26 |
 | MATCH | Returns the relative position of a lookup value in a range or array. | Lookup & Reference | 76 |
-| MAX | Returns the largest numeric value. | Statistical | 39 |
+| MAX | Returns the largest numeric value. | Statistical | 41 |
 | MAXA | Returns the largest value, counting logical values and text coercions. | Statistical | 16 |
 | MAXIFS | Returns the maximum value that matches all supplied conditions. | Statistical | 45 |
 | MDETERM | Returns the determinant of a matrix. | Math & Trig | 31 |
 | MDURATION | Returns the modified duration of a security. | Financial | 22 |
 | MEDIAN | Returns the median of a data set. | Statistical | 27 |
 | MID | Returns characters from the middle of a text value. | Text | 50 |
-| MIN | Returns the smallest numeric value. | Statistical | 36 |
+| MIN | Returns the smallest numeric value. | Statistical | 37 |
 | MINA | Returns the smallest value, counting logical values and text coercions. | Statistical | 16 |
 | MINIFS | Returns the minimum value that matches all supplied conditions. | Statistical | 49 |
 | MINUTE | Returns the minute from a time or datetime value. | Date & Time | 16 |
@@ -278,7 +278,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | MULTINOMIAL | Returns the multinomial of a set of numbers. | Math & Trig | 36 |
 | MUNIT | Returns a unit matrix of a requested size. | Math & Trig | 38 |
 | N | Converts a value to a number using spreadsheet coercion rules. | Information | 19 |
-| NA | Returns the #N/A error value. | Information | 15 |
+| NA | Returns the #N/A error value. | Information | 17 |
 | NEGBINOM.DIST | Returns the negative binomial distribution. | Statistical | 62 |
 | NETWORKDAYS | Counts working days between two dates. | Date & Time | 53 |
 | NETWORKDAYS.INTL | Counts working days between two dates using a custom weekend pattern. | Date & Time | 44 |
@@ -351,7 +351,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | SEC | Returns the secant of an angle. | Math & Trig | 26 |
 | SECH | Returns the hyperbolic secant of a number. | Math & Trig | 28 |
 | SECOND | Returns the second from a time or datetime value. | Date & Time | 16 |
-| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 104 |
+| SEQUENCE | Returns a sequence of numbers as an array. | Math & Trig | 107 |
 | SERIESSUM | Returns the sum of a power series. | Math & Trig | 27 |
 | SHEET | Returns the sheet index of a reference. | Information | 14 |
 | SHEETS | Returns the number of sheets in a reference or workbook scope. | Information | 8 |
@@ -363,7 +363,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | SLN | Returns straight-line depreciation for one period. | Financial | 53 |
 | SLOPE | Returns the slope of a linear regression line. | Statistical | 39 |
 | SMALL | Returns the k-th smallest value in a data set. | Statistical | 29 |
-| SORT | Sorts an array by row or column order. | Logical | 51 |
+| SORT | Sorts an array by row or column order. | Logical | 52 |
 | SORTBY | Sorts an array by one or more companion arrays. | Logical | 4 |
 | SQRT | Returns the square root of a number. | Math & Trig | 29 |
 | SQRTPI | Returns the square root of a number multiplied by pi. | Math & Trig | 25 |
@@ -377,10 +377,10 @@ Werkbook supports **446** spreadsheet formula functions.
 | STEYX | Returns the standard error of predicted y values in regression. | Statistical | 41 |
 | SUBSTITUTE | Replaces matching text within a string. | Text | 69 |
 | SUBTOTAL | Returns a subtotal using a selected aggregate function. | Math & Trig | 75 |
-| SUM | Returns the sum of supplied numbers. | Statistical | 90 |
-| SUMIF | Returns the sum of values that match one condition. | Statistical | 72 |
+| SUM | Returns the sum of supplied numbers. | Statistical | 104 |
+| SUMIF | Returns the sum of values that match one condition. | Statistical | 74 |
 | SUMIFS | Returns the sum of values that match all supplied conditions. | Statistical | 65 |
-| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 73 |
+| SUMPRODUCT | Returns the sum of pairwise products across arrays. | Statistical | 82 |
 | SUMSQ | Returns the sum of squares of the supplied values. | Statistical | 30 |
 | SUMX2MY2 | Returns the sum of the difference of squares of paired arrays. | Math & Trig | 55 |
 | SUMX2PY2 | Returns the sum of the sum of squares of paired arrays. | Math & Trig | 57 |
@@ -394,7 +394,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | T.INV | Returns the inverse of the Student's t cumulative distribution. | Statistical | 33 |
 | T.INV.2T | Returns the inverse of the two-tailed Student's t-distribution. | Statistical | 37 |
 | T.TEST | Returns the probability associated with a Student's t-test. | Statistical | 56 |
-| TAKE | Returns a requested number of rows or columns from an array. | Lookup & Reference | 30 |
+| TAKE | Returns a requested number of rows or columns from an array. | Lookup & Reference | 31 |
 | TAN | Returns the tangent of an angle. | Math & Trig | 23 |
 | TANH | Returns the hyperbolic tangent of a number. | Math & Trig | 27 |
 | TBILLEQ | Returns the bond-equivalent yield for a Treasury bill. | Financial | 34 |
@@ -403,13 +403,13 @@ Werkbook supports **446** spreadsheet formula functions.
 | TEXT | Formats a value as text using a number format pattern. | Text | 134 |
 | TEXTAFTER | Returns the text that appears after a delimiter. | Text | 34 |
 | TEXTBEFORE | Returns the text that appears before a delimiter. | Text | 34 |
-| TEXTJOIN | Joins text values with a delimiter. | Text | 66 |
+| TEXTJOIN | Joins text values with a delimiter. | Text | 67 |
 | TEXTSPLIT | Splits text into rows or columns around delimiters. | Text | 88 |
 | TIME | Builds a time value from hour, minute, and second numbers. | Date & Time | 47 |
 | TIMEVALUE | Converts time text to a serial time value. | Date & Time | 48 |
-| TOCOL | Flattens an array into a single column. | Lookup & Reference | 22 |
+| TOCOL | Flattens an array into a single column. | Lookup & Reference | 23 |
 | TODAY | Returns the current date. | Date & Time | 2 |
-| TOROW | Flattens an array into a single row. | Lookup & Reference | 46 |
+| TOROW | Flattens an array into a single row. | Lookup & Reference | 47 |
 | TRANSPOSE | Swaps the rows and columns of an array. | Lookup & Reference | 58 |
 | TREND | Returns values along a linear trend. | Statistical | 10 |
 | TRIM | Removes extra spaces from text. | Text | 44 |
@@ -431,7 +431,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | VARPA | Returns the population variance including logical values and text coercions. | Statistical | 22 |
 | VDB | Returns depreciation using the variable declining balance method. | Financial | 33 |
 | VLOOKUP | Looks up a value in the first column of a table and returns a value from another column. | Lookup & Reference | 87 |
-| VSTACK | Stacks arrays vertically. | Lookup & Reference | 18 |
+| VSTACK | Stacks arrays vertically. | Lookup & Reference | 19 |
 | WEEKDAY | Returns the day of the week for a date. | Date & Time | 59 |
 | WEEKNUM | Returns the week number of a date. | Date & Time | 39 |
 | WEIBULL.DIST | Returns the Weibull distribution. | Statistical | 33 |
@@ -440,7 +440,7 @@ Werkbook supports **446** spreadsheet formula functions.
 | WRAPCOLS | Wraps a vector into a two-dimensional array by columns. | Lookup & Reference | 20 |
 | WRAPROWS | Wraps a vector into a two-dimensional array by rows. | Lookup & Reference | 19 |
 | XIRR | Returns the internal rate of return for cash flows on irregular dates. | Financial | 38 |
-| XLOOKUP | Looks up a value in one array and returns the matching value from another array. | Lookup & Reference | 112 |
+| XLOOKUP | Looks up a value in one array and returns the matching value from another array. | Lookup & Reference | 113 |
 | XMATCH | Returns the position of a lookup value with exact, wildcard, or binary search modes. | Lookup & Reference | 81 |
 | XNPV | Returns the net present value of cash flows on irregular dates. | Financial | 42 |
 | XOR | Returns TRUE when an odd number of supplied conditions are TRUE. | Logical | 34 |

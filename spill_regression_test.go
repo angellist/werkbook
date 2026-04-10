@@ -553,3 +553,634 @@ func TestDynamicArrayRepresentativeRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// TestSpillRangeAggregation locks down that aggregator functions see spilled
+// values when reading bounded, full-column, full-row, cross-sheet, and
+// defined-name references that cover a dynamic-array spill.
+//
+// Why this matrix exists: range aggregation over spill ranges has broken
+// multiple times (PRs #39, #40, #50). Each combination below is a seam
+// that any future refactor to range materialization could silently regress.
+//
+// Shapes under test:
+//   - vertical:    FILTER(Data!B2:B6, Data!A2:A6)     spills B2:B4 on Spill
+//   - horizontal:  HSTACK(10, 20, 30)                 spills B2:D2 on Spill
+//   - rectangular: SEQUENCE(2, 2, 10, 5)              spills B2:C3 on Spill
+func TestSpillRangeAggregation(t *testing.T) {
+	type harness struct {
+		name    string
+		build   func(*testing.T) (*werkbook.File, *werkbook.Sheet, *werkbook.Sheet)
+		shape   string // "vertical" | "horizontal" | "rectangular"
+		spillTL string // top-left of spilled range, e.g. "B2"
+	}
+
+	harnesses := []harness{
+		{
+			name: "vertical_filter",
+			build: func(t *testing.T) (*werkbook.File, *werkbook.Sheet, *werkbook.Sheet) {
+				f, _, spill, calc := buildVerticalFilterHarness(t)
+				return f, spill, calc
+			},
+			shape:   "vertical",
+			spillTL: "B2",
+		},
+		{
+			name: "horizontal_hstack",
+			build: func(t *testing.T) (*werkbook.File, *werkbook.Sheet, *werkbook.Sheet) {
+				f, _, spill, calc := buildHorizontalHStackHarness(t)
+				return f, spill, calc
+			},
+			shape:   "horizontal",
+			spillTL: "B2",
+		},
+		{
+			name: "rectangular_sequence",
+			build: func(t *testing.T) (*werkbook.File, *werkbook.Sheet, *werkbook.Sheet) {
+				f, _, spill, calc := buildRectangularSequenceHarness(t)
+				return f, spill, calc
+			},
+			shape:   "rectangular",
+			spillTL: "B2",
+		},
+	}
+
+	// Expected totals over each shape's full spill.
+	//   vertical:    [10, 30, 50]                sum=90  count=3  min=10 max=50
+	//   horizontal:  [10, 20, 30]                sum=60  count=3  min=10 max=30
+	//   rectangular: [[10,15],[20,25]]           sum=70  count=4  min=10 max=25
+	type expect struct {
+		sum, count, min, max float64
+	}
+	wants := map[string]expect{
+		"vertical":    {sum: 90, count: 3, min: 10, max: 50},
+		"horizontal":  {sum: 60, count: 3, min: 10, max: 30},
+		"rectangular": {sum: 70, count: 4, min: 10, max: 25},
+	}
+
+	// rangeFor returns reference strings for different range styles over the
+	// spill on sheet "Spill". "bounded" is a generous fixed rectangle that
+	// fully covers the spill; "fullcol" uses Spill!B:D which covers every
+	// shape's columns.
+	//
+	// Note: full-row references (Spill!2:3) are intentionally excluded; see
+	// TestSpillFullRowRangeReference for that gap.
+	rangeFor := func(style, shape string) string {
+		switch style {
+		case "bounded":
+			switch shape {
+			case "vertical":
+				return "Spill!B2:B10"
+			case "horizontal":
+				return "Spill!B2:Z2"
+			case "rectangular":
+				return "Spill!B2:D10"
+			}
+		case "fullcol":
+			return "Spill!B:D"
+		case "crosssheet_bounded":
+			// same as bounded but emphasizes the cross-sheet path
+			switch shape {
+			case "vertical":
+				return "Spill!B2:B20"
+			case "horizontal":
+				return "Spill!B2:H2"
+			case "rectangular":
+				return "Spill!B2:E10"
+			}
+		}
+		t.Fatalf("unknown style/shape combo: %s/%s", style, shape)
+		return ""
+	}
+
+	styles := []string{"bounded", "fullcol", "crosssheet_bounded"}
+
+	for _, h := range harnesses {
+		for _, style := range styles {
+			t.Run(h.name+"/"+style, func(t *testing.T) {
+				f, _, calc := h.build(t)
+
+				ref := rangeFor(style, h.shape)
+				mustSetFormula(t, calc, "A1", "SUM("+ref+")")
+				mustSetFormula(t, calc, "A2", "COUNT("+ref+")")
+				mustSetFormula(t, calc, "A3", "COUNTA("+ref+")")
+				mustSetFormula(t, calc, "A4", "MIN("+ref+")")
+				mustSetFormula(t, calc, "A5", "MAX("+ref+")")
+				mustSetFormula(t, calc, "A6", "AVERAGE("+ref+")")
+				mustSetFormula(t, calc, "A7", `COUNTIF(`+ref+`,">0")`)
+				mustSetFormula(t, calc, "A8", `SUMIF(`+ref+`,">0")`)
+
+				f.Recalculate()
+
+				w := wants[h.shape]
+				assertSheetWants(t, calc,
+					numWant("A1", w.sum),
+					numWant("A2", w.count),
+					numWant("A3", w.count),
+					numWant("A4", w.min),
+					numWant("A5", w.max),
+					numWant("A6", w.sum/w.count),
+					numWant("A7", w.count),
+					numWant("A8", w.sum),
+				)
+			})
+		}
+	}
+}
+
+// TestSpillRangeAggregationWithDefinedName locks down that aggregator
+// functions see spilled values through a workbook-scoped defined name.
+// This is the exact path that regressed in PR #50 (jpoz/fix-spill-reads),
+// where full-column references inside defined names did not expand to
+// include published spill bounds.
+func TestSpillRangeAggregationWithDefinedName(t *testing.T) {
+	f, _, _, calc := buildVerticalFilterHarness(t)
+
+	f.AddDefinedName(werkbook.DefinedName{
+		Name:         "SpillCol",
+		Value:        "Spill!$B:$B",
+		LocalSheetID: -1,
+	})
+	f.AddDefinedName(werkbook.DefinedName{
+		Name:         "SpillBounded",
+		Value:        "Spill!$B$2:$B$20",
+		LocalSheetID: -1,
+	})
+
+	mustSetFormula(t, calc, "A1", `SUM(SpillCol)`)
+	mustSetFormula(t, calc, "A2", `COUNT(SpillCol)`)
+	mustSetFormula(t, calc, "A3", `SUM(SpillBounded)`)
+	mustSetFormula(t, calc, "A4", `COUNTIF(SpillBounded,">20")`)
+
+	f.Recalculate()
+
+	assertSheetWants(t, calc,
+		numWant("A1", 90),
+		numWant("A2", 3),
+		numWant("A3", 90),
+		numWant("A4", 2),
+	)
+}
+
+// TestSpillArrayContextInheritance locks down that scalar functions
+// registered in formula.inheritedArrayArgFuncs actually lift to array
+// context when called inside an array-forcing outer (FILTER, SUMPRODUCT,
+// HSTACK, etc.). Bugs in this registry are the single most common spill
+// failure mode:
+//
+//   - PR #43: IFERROR/IFNA didn't inherit when wrapping errors inside SUMPRODUCT
+//   - PR #44: IF was missing from the list; SUMPRODUCT(mask*IF(...)) broke
+//   - PR #46: DATEVALUE was missing; FILTER on DATEVALUE(text_col) broke
+//
+// Each subtest below covers one function from inheritedArrayArgFuncs. Add a
+// row here every time a new function is added to that registry.
+func TestSpillArrayContextInheritance(t *testing.T) {
+	type rowData struct {
+		label  string
+		amount float64
+		date   string // YYYY-MM-DD text
+	}
+	// Helper: build a fresh workbook seeded with the same small dataset on
+	// sheet Data. B = amount, C = date-text, A = include flag.
+	build := func(t *testing.T) (*werkbook.File, *werkbook.Sheet, *werkbook.Sheet) {
+		t.Helper()
+		rows := []rowData{
+			{"alpha", 10, "2026-01-01"},
+			{"beta", -20, "2026-02-01"},
+			{"gamma", 30, "2026-03-01"},
+			{"delta", -40, "2026-04-01"},
+		}
+		f, data, spill, calc := newSpillHarness(t)
+		for i, r := range rows {
+			n := i + 2
+			mustSetValue(t, data, "A"+strconv.Itoa(n), r.label)
+			mustSetValue(t, data, "B"+strconv.Itoa(n), r.amount)
+			mustSetValue(t, data, "C"+strconv.Itoa(n), r.date)
+		}
+		_ = spill
+		return f, data, calc
+	}
+
+	t.Run("IF_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// Count positive amounts: legacy IF must evaluate element-wise inside
+		// the outer SUMPRODUCT array context (PR #44).
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(IF(Data!B2:B5>0,1,0))`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 2)) // alpha + gamma
+	})
+
+	t.Run("IFERROR_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// IFERROR inside SUMPRODUCT: wrap a potentially-erroring division
+		// and sum the safe results. (PR #43)
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(IFERROR(1/Data!B2:B5,0))`)
+		f.Recalculate()
+		val, err := calc.GetValue("A1")
+		if err != nil {
+			t.Fatalf("GetValue: %v", err)
+		}
+		// 1/10 + 1/-20 + 1/30 + 1/-40 = 0.1 - 0.05 + 0.0333... - 0.025 = 0.058333...
+		want := 1.0/10 + 1.0/-20 + 1.0/30 + 1.0/-40
+		if val.Type != werkbook.TypeNumber || absDiff(val.Number, want) > 1e-9 {
+			t.Fatalf("IFERROR inside SUMPRODUCT = %#v, want %g", val, want)
+		}
+	})
+
+	t.Run("IFNA_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// Seed a column with mixed #N/A and numeric values, then ensure
+		// IFNA lifts to array context and substitutes 0 for the errors.
+		// Confirms PR #43: IFNA respects inherited array context.
+		mustSetValue(t, calc, "D2", 10.0)
+		mustSetFormula(t, calc, "D3", `NA()`)
+		mustSetValue(t, calc, "D4", 20.0)
+		mustSetFormula(t, calc, "D5", `NA()`)
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(IFNA(D2:D5,0))`)
+		// Control: sanity check that the raw sum DOES propagate #N/A.
+		mustSetFormula(t, calc, "A2", `SUMPRODUCT(D2:D5)`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 30))
+		ctrl, _ := calc.GetValue("A2")
+		if ctrl.Type != werkbook.TypeError || ctrl.String != "#N/A" {
+			t.Fatalf("control A2 should be #N/A error, got %#v", ctrl)
+		}
+	})
+
+	t.Run("ABS_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// Without array inheritance, ABS would implicit-intersect to a
+		// single scalar and SUMPRODUCT would see |B2|.
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(ABS(Data!B2:B5))`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 100)) // 10+20+30+40
+	})
+
+	t.Run("ISNUMBER_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// Mix of numbers and labels: count numeric entries across A:C cols.
+		// Uses array context so ISNUMBER sees the whole range.
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(--ISNUMBER(Data!B2:B5))`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 4))
+	})
+
+	t.Run("NOT_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		// Count non-negative values with NOT.
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(--NOT(Data!B2:B5<0))`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 2))
+	})
+
+	t.Run("N_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		mustSetFormula(t, calc, "A1", `SUMPRODUCT(N(Data!B2:B5>0))`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", 2))
+	})
+
+	t.Run("DATEVALUE_inside_FILTER", func(t *testing.T) {
+		f, _, calc := build(t)
+		// PR #46: FILTER with DATEVALUE converting a text-date column must
+		// lift DATEVALUE to array context so the predicate sees a range.
+		// Keep only rows whose date is after 2026-02-15.
+		mustSetFormula(t, calc, "A1",
+			`FILTER(Data!B2:B5, DATEVALUE(Data!C2:C5)>DATEVALUE("2026-02-15"))`)
+		f.Recalculate()
+		// Matches rows with date 2026-03-01 and 2026-04-01 → [30, -40]
+		assertSheetWants(t, calc,
+			numWant("A1", 30),
+			numWant("A2", -40),
+		)
+	})
+
+	t.Run("DATEVALUE_inside_SUMPRODUCT", func(t *testing.T) {
+		f, _, calc := build(t)
+		mustSetFormula(t, calc, "A1",
+			`SUMPRODUCT((DATEVALUE(Data!C2:C5)>DATEVALUE("2026-02-15"))*Data!B2:B5)`)
+		f.Recalculate()
+		assertSheetWants(t, calc, numWant("A1", -10)) // 30 + -40
+	})
+}
+
+func absDiff(a, b float64) float64 {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}
+
+// TestSpillFullColumnSiblingFilters locks down the exact shape that
+// regressed in PR #50 (jpoz/fix-spill-reads): a defined name that points
+// at a full-column block (Out!$A:$H) where each column is a sibling
+// FILTER anchor. The defined-name resolver must honor every sibling's
+// published spill bounds when materializing the rectangular block.
+//
+// A full-size version lives in full_column_filter_bench_test.go as a
+// benchmark; this is the small-scale correctness test.
+func TestSpillFullColumnSiblingFilters(t *testing.T) {
+	f := werkbook.New(werkbook.FirstSheet("Source"))
+	source := f.Sheet("Source")
+
+	headers := []string{"Account", "Borrower", "City", "State", "Balance", "DaysLate", "Bucket", "Delinquent"}
+	for i, h := range headers {
+		ref, _ := werkbook.CoordinatesToCellName(i+1, 1)
+		mustSetValue(t, source, ref, h)
+	}
+
+	// 6 rows, 3 delinquent (rows 2, 4, 6 → delinquent=1).
+	type record struct {
+		id         int
+		borrower   string
+		city       string
+		state      string
+		balance    float64
+		daysLate   float64
+		bucket     string
+		delinquent float64
+	}
+	rows := []record{
+		{1, "Alice", "NY", "NY", 100, 5, "B1", 0},
+		{2, "Bob", "LA", "CA", 200, 15, "B2", 1},
+		{3, "Carol", "SF", "CA", 300, 0, "B0", 0},
+		{4, "Dan", "DC", "DC", 400, 35, "B3", 1},
+		{5, "Eve", "SEA", "WA", 500, 3, "B1", 0},
+		{6, "Frank", "BOS", "MA", 600, 90, "B3", 1},
+	}
+	for i, r := range rows {
+		rowN := i + 2
+		refA, _ := werkbook.CoordinatesToCellName(1, rowN)
+		mustSetValue(t, source, refA, float64(r.id))
+		refB, _ := werkbook.CoordinatesToCellName(2, rowN)
+		mustSetValue(t, source, refB, r.borrower)
+		refC, _ := werkbook.CoordinatesToCellName(3, rowN)
+		mustSetValue(t, source, refC, r.city)
+		refD, _ := werkbook.CoordinatesToCellName(4, rowN)
+		mustSetValue(t, source, refD, r.state)
+		refE, _ := werkbook.CoordinatesToCellName(5, rowN)
+		mustSetValue(t, source, refE, r.balance)
+		refF, _ := werkbook.CoordinatesToCellName(6, rowN)
+		mustSetValue(t, source, refF, r.daysLate)
+		refG, _ := werkbook.CoordinatesToCellName(7, rowN)
+		mustSetValue(t, source, refG, r.bucket)
+		refH, _ := werkbook.CoordinatesToCellName(8, rowN)
+		mustSetValue(t, source, refH, r.delinquent)
+	}
+
+	out := mustNewSheet(t, f, "Out")
+	for i, h := range headers {
+		ref, _ := werkbook.CoordinatesToCellName(i+1, 1)
+		mustSetValue(t, out, ref, h)
+	}
+	// 8 sibling FILTER anchors, all consuming the same Delinquent criteria.
+	for col := 1; col <= 8; col++ {
+		colName := werkbook.ColumnNumberToName(col)
+		formula := `FILTER(Source!` + colName + `2:` + colName + `7,Source!H2:H7<>0,"No rows")`
+		anchor, _ := werkbook.CoordinatesToCellName(col, 2)
+		mustSetFormula(t, out, anchor, formula)
+	}
+
+	// Workbook-scoped defined name over the full column block.
+	if err := f.SetDefinedName(werkbook.DefinedName{
+		Name:         "Delinquents",
+		Value:        `Out!$A:$H`,
+		LocalSheetID: -1,
+	}); err != nil {
+		t.Fatalf("SetDefinedName: %v", err)
+	}
+
+	f.Recalculate()
+
+	vals, err := f.ResolveDefinedName("Delinquents", -1)
+	if err != nil {
+		t.Fatalf("ResolveDefinedName: %v", err)
+	}
+	// Expected rows: 1 header + 3 delinquent rows = 4 rows
+	if got := len(vals); got != 4 {
+		t.Fatalf("rows = %d, want 4 (header + 3 spilled)", got)
+	}
+	if got := len(vals[0]); got != 8 {
+		t.Fatalf("cols = %d, want 8", got)
+	}
+
+	// Spot-check a few cells. Header row:
+	if vals[0][1].String != "Borrower" {
+		t.Fatalf("header[1] = %q, want Borrower", vals[0][1].String)
+	}
+	// First data row is id=2 (Bob).
+	if vals[1][0].Type != werkbook.TypeNumber || vals[1][0].Number != 2 {
+		t.Fatalf("row1 col0 = %#v, want 2", vals[1][0])
+	}
+	if vals[1][1].String != "Bob" {
+		t.Fatalf("row1 col1 = %q, want Bob", vals[1][1].String)
+	}
+	// Third data row is id=6 (Frank, balance 600).
+	if vals[3][0].Type != werkbook.TypeNumber || vals[3][0].Number != 6 {
+		t.Fatalf("row3 col0 = %#v, want 6", vals[3][0])
+	}
+	if vals[3][4].Type != werkbook.TypeNumber || vals[3][4].Number != 600 {
+		t.Fatalf("row3 col4 = %#v, want 600", vals[3][4])
+	}
+}
+
+// TestSpillCascade locks down cascading dynamic-array dependencies:
+// anchor A feeds anchor B which feeds anchor C. When A's upstream data
+// changes, every downstream anchor must recompute with fresh bounds.
+// This exercises the dependency graph + spill overlay rebuild path.
+func TestSpillCascade(t *testing.T) {
+	f := werkbook.New()
+	mustSetSheetName(t, f, "Sheet1", "Data")
+	data := f.Sheet("Data")
+	mid := mustNewSheet(t, f, "Mid")
+	out := mustNewSheet(t, f, "Out")
+
+	// Seed data with 5 rows, flag column A and amount column B.
+	seeds := []struct {
+		keep bool
+		amt  float64
+	}{
+		{true, 10},
+		{false, 20},
+		{true, 30},
+		{true, 40},
+		{false, 50},
+	}
+	for i, s := range seeds {
+		n := i + 2
+		mustSetValue(t, data, "A"+strconv.Itoa(n), s.keep)
+		mustSetValue(t, data, "B"+strconv.Itoa(n), s.amt)
+	}
+
+	// Anchor A: FILTER returns kept amounts → [10, 30, 40]
+	mustSetFormula(t, mid, "B2", `FILTER(Data!B2:B6,Data!A2:A6)`)
+	// Anchor B: ANCHORARRAY is the programmatic form of Excel's spill
+	// reference operator (Mid!B2#). It reads anchor A's dynamic bounds,
+	// making the downstream anchor re-evaluate whenever A's shape changes.
+	// Double every element.
+	mustSetFormula(t, out, "B2", `ANCHORARRAY(Mid!B2)*2`)
+	// Scalar consumer of the final cascade. Uses a generous bounded range
+	// so the consumer picks up whatever shape B2 spills to.
+	mustSetFormula(t, out, "A1", `SUM(B2:B20)`)
+
+	f.Recalculate()
+	// (10+30+40) * 2 = 160
+	assertSheetWants(t, out, numWant("A1", 160))
+
+	// Mutate upstream: flip row 3 to keep, row 5 to drop.
+	// A2=T(10), A3=T(20), A4=T(30), A5=F, A6=F → kept = [10,20,30]
+	mustSetValue(t, data, "A3", true)
+	mustSetValue(t, data, "A5", false)
+	f.Recalculate()
+	// (10+20+30) * 2 = 120
+	assertSheetWants(t, out, numWant("A1", 120))
+
+	// Shrink upstream: disable all rows → kept empty, cascade should
+	// produce an empty or zero sum and not leak stale data from prior state.
+	for _, r := range []string{"A2", "A3", "A4", "A5", "A6"} {
+		mustSetValue(t, data, r, false)
+	}
+	f.Recalculate()
+	val, err := out.GetValue("A1")
+	if err != nil {
+		t.Fatalf("GetValue A1: %v", err)
+	}
+	if val.Type == werkbook.TypeNumber && val.Number == 0 {
+		return // accepted: empty spill → zero sum
+	}
+	if val.Type == werkbook.TypeError {
+		// Excel can produce #CALC! when FILTER has no matches. That
+		// propagates through the cascade as an error, which is also fine.
+		return
+	}
+	t.Fatalf("after upstream drain, expected zero or error, got %#v", val)
+}
+
+// TestSpillBlockedTransitions locks down that #SPILL! state clears when
+// the blocker is removed and re-appears when re-introduced, with the
+// overlay generation tracking correctly across transitions.
+func TestSpillBlockedTransitions(t *testing.T) {
+	f := werkbook.New()
+	mustSetSheetName(t, f, "Sheet1", "Data")
+	data := f.Sheet("Data")
+	spill := mustNewSheet(t, f, "Spill")
+
+	// Seed source data: [10, 30, 50] (3 rows kept)
+	mustSetValue(t, data, "A2", true)
+	mustSetValue(t, data, "B2", 10.0)
+	mustSetValue(t, data, "A3", true)
+	mustSetValue(t, data, "B3", 30.0)
+	mustSetValue(t, data, "A4", true)
+	mustSetValue(t, data, "B4", 50.0)
+
+	mustSetFormula(t, spill, "B2", `FILTER(Data!B2:B4,Data!A2:A4)`)
+
+	// Phase 1: unobstructed. B2:B4 should hold the filtered values.
+	f.Recalculate()
+	assertSheetWants(t, spill,
+		numWant("B2", 10),
+		numWant("B3", 30),
+		numWant("B4", 50),
+	)
+
+	// Phase 2: place a blocker inside the spill range. Anchor B2 must
+	// become #SPILL!, and downstream cells should clear.
+	mustSetValue(t, spill, "B3", "blocker")
+	f.Recalculate()
+	anchor, err := spill.GetValue("B2")
+	if err != nil {
+		t.Fatalf("GetValue B2: %v", err)
+	}
+	if anchor.Type != werkbook.TypeError || anchor.String != "#SPILL!" {
+		t.Fatalf("expected #SPILL! at B2 after blocker, got %#v", anchor)
+	}
+
+	// Phase 3: remove the blocker. The anchor must reset to spilled state
+	// and the downstream cells must be repopulated.
+	mustSetValue(t, spill, "B3", nil)
+	f.Recalculate()
+	assertSheetWants(t, spill,
+		numWant("B2", 10),
+		numWant("B3", 30),
+		numWant("B4", 50),
+	)
+
+	// Phase 4: reintroduce the blocker elsewhere in the range. Confirms
+	// that overlay invalidation works on the second blocking transition.
+	mustSetValue(t, spill, "B4", "other blocker")
+	f.Recalculate()
+	anchor, _ = spill.GetValue("B2")
+	if anchor.Type != werkbook.TypeError || anchor.String != "#SPILL!" {
+		t.Fatalf("expected #SPILL! at B2 after second blocker, got %#v", anchor)
+	}
+}
+
+// TestSpillFullRowRangeReference is a live tripwire for a known gap:
+// full-row range references like Spill!2:3 currently return #NAME? because
+// the range parser does not accept row-only syntax on sheet-qualified refs.
+// When the gap is fixed, the test will flip from skip to assert and will
+// lock down that full-row refs correctly pick up published spill bounds.
+func TestSpillFullRowRangeReference(t *testing.T) {
+	f, _, _, calc := buildHorizontalHStackHarness(t)
+	mustSetFormula(t, calc, "A1", `SUM(Spill!2:3)`)
+	f.Recalculate()
+
+	val, err := calc.GetValue("A1")
+	if err != nil {
+		t.Fatalf("GetValue: %v", err)
+	}
+	if val.Type == werkbook.TypeError && val.String == "#NAME?" {
+		t.Skip("full-row range references (Spill!2:3) not yet supported; " +
+			"remove this skip once the parser accepts row-only syntax")
+	}
+	if val.Type != werkbook.TypeNumber || val.Number != 60 {
+		t.Fatalf("SUM(Spill!2:3) = %#v, want number 60", val)
+	}
+}
+
+// TestSpillRangeAggregationAfterGrowth locks down that aggregators re-read
+// a spill after the underlying data grows/shrinks. This is a generalization
+// of TestSpillRecalculationTracksGrowthAndShrink that adds SUMIF/COUNTIF/MAX
+// into the consumer set, since those take separate range-materialization
+// paths than plain SUM.
+func TestSpillRangeAggregationAfterGrowth(t *testing.T) {
+	f, data, _, calc := buildResizableFilterHarness(t)
+
+	mustSetFormula(t, calc, "A1", `SUM(Spill!B2:B20)`)
+	mustSetFormula(t, calc, "A2", `COUNT(Spill!B2:B20)`)
+	mustSetFormula(t, calc, "A3", `MAX(Spill!B2:B20)`)
+	mustSetFormula(t, calc, "A4", `COUNTIF(Spill!B2:B20,">25")`)
+	mustSetFormula(t, calc, "A5", `SUMIF(Spill!B2:B20,">25")`)
+
+	f.Recalculate()
+	// Initial: FILTER result = [10, 30]
+	assertSheetWants(t, calc,
+		numWant("A1", 40),
+		numWant("A2", 2),
+		numWant("A3", 30),
+		numWant("A4", 1),
+		numWant("A5", 30),
+	)
+
+	// Grow to [10, 30, 40]
+	mustSetValue(t, data, "A5", true)
+	f.Recalculate()
+	assertSheetWants(t, calc,
+		numWant("A1", 80),
+		numWant("A2", 3),
+		numWant("A3", 40),
+		numWant("A4", 2),
+		numWant("A5", 70),
+	)
+
+	// Shrink to [10]
+	mustSetValue(t, data, "A4", false)
+	mustSetValue(t, data, "A5", false)
+	f.Recalculate()
+	assertSheetWants(t, calc,
+		numWant("A1", 10),
+		numWant("A2", 1),
+		numWant("A3", 10),
+		numWant("A4", 0),
+		numWant("A5", 0),
+	)
+}

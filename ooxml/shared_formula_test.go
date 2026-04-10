@@ -194,6 +194,77 @@ func TestExpandSharedFormulasOrphanChild(t *testing.T) {
 	}
 }
 
+func TestShiftFormulaRefsFullRowRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		formula  string
+		dCol     int
+		dRow     int
+		expected string
+	}{
+		{"full-row shift down by 1", "SUM(5:6)", 0, 1, "SUM(6:7)"},
+		{"full-row shift down by 2", "SUM(5:6)", 0, 2, "SUM(7:8)"},
+		{"full-row shift up", "SUM(10:11)", 0, -3, "SUM(7:8)"},
+		{"full-row col delta ignored", "SUM(5:6)", 4, 1, "SUM(6:7)"},
+		{"full-row no shift", "SUM(5:6)", 0, 0, "SUM(5:6)"},
+		{"full-row single row", "SUM(5:5)", 0, 2, "SUM(7:7)"},
+		{"mixed cell-to-row", "SUM(A1:5)", 0, 1, "SUM(A2:6)"},
+		{"mixed row-to-cell", "SUM(5:A10)", 0, 1, "SUM(6:A11)"},
+		{"full-row plus literal", "SUM(5:6)*2", 0, 1, "SUM(6:7)*2"},
+		{"full-row next to cell ref", "SUM(5:6)+A1", 0, 1, "SUM(6:7)+A2"},
+		{"two full-row ranges", "SUM(5:6)+SUM(10:11)", 0, 1, "SUM(6:7)+SUM(11:12)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shiftFormulaRefs(tt.formula, tt.dCol, tt.dRow)
+			if got != tt.expected {
+				t.Errorf("shiftFormulaRefs(%q, %d, %d) = %q, want %q",
+					tt.formula, tt.dCol, tt.dRow, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExpandSharedFormulasFullRowRange(t *testing.T) {
+	// Shared formula over two rows referencing full rows, like the
+	// calamine column_row_ranges.xlsx fixture. A1 master = SUM(5:6); row 2
+	// should become SUM(6:7) via the row offset.
+	sd := SheetData{
+		Rows: []RowData{
+			{Num: 1, Cells: []CellData{
+				{Ref: "A1", Formula: "SUM(5:6)", FormulaType: "shared", FormulaRef: "A1:E2", SharedIndex: 0},
+				{Ref: "B1", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "C1", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "D1", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "E1", Formula: "", FormulaType: "shared", SharedIndex: 0},
+			}},
+			{Num: 2, Cells: []CellData{
+				{Ref: "A2", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "B2", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "C2", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "D2", Formula: "", FormulaType: "shared", SharedIndex: 0},
+				{Ref: "E2", Formula: "", FormulaType: "shared", SharedIndex: 0},
+			}},
+		},
+	}
+
+	expandSharedFormulas(&sd)
+
+	// Row 1: all cells keep SUM(5:6) (no row offset, full row ignores col offset).
+	for _, cell := range sd.Rows[0].Cells {
+		if cell.Formula != "SUM(5:6)" {
+			t.Errorf("row 1 cell %s formula = %q, want SUM(5:6)", cell.Ref, cell.Formula)
+		}
+	}
+	// Row 2: all cells should be shifted to SUM(6:7).
+	for _, cell := range sd.Rows[1].Cells {
+		if cell.Formula != "SUM(6:7)" {
+			t.Errorf("row 2 cell %s formula = %q, want SUM(6:7)", cell.Ref, cell.Formula)
+		}
+	}
+}
+
 func TestShiftFormulaRefsQuotedSheet(t *testing.T) {
 	tests := []struct {
 		name     string

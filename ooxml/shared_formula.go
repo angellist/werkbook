@@ -92,37 +92,73 @@ func shiftFormulaRefs(src string, dCol, dRow int) string {
 	var b strings.Builder
 	b.Grow(len(src) + 16)
 	lastPos := 0
+	wrote := false
 
-	for _, tok := range tokens {
-		if tok.Type != formula.TokCellRef {
+	for i, tok := range tokens {
+		var replacement string
+		var ok bool
+
+		switch tok.Type {
+		case formula.TokCellRef:
+			ref, err := parseCellRefForShift(tok.Value)
+			if err != nil {
+				continue
+			}
+			newCol := ref.col
+			newRow := ref.row
+			if !ref.absCol {
+				newCol += dCol
+			}
+			if !ref.absRow && ref.row > 0 {
+				newRow += dRow
+			}
+			if newCol < 1 || newRow < 0 {
+				continue // out of range, skip shifting
+			}
+			replacement = buildCellRefString(ref, newCol, newRow)
+			ok = true
+
+		case formula.TokNumber:
+			// A plain number token that sits directly next to a range colon
+			// is a row reference, part of a full-row range like SUM(5:6) or a
+			// mixed range like SUM(A1:5). The lexer emits these as TokNumber
+			// rather than TokCellRef, so we handle them here. Skip decimals
+			// and exponent forms, which cannot represent a row number.
+			if dRow == 0 {
+				continue
+			}
+			if strings.ContainsAny(tok.Value, ".eE") {
+				continue
+			}
+			adjColon := (i > 0 && tokens[i-1].Type == formula.TokColon) ||
+				(i+1 < len(tokens) && tokens[i+1].Type == formula.TokColon)
+			if !adjColon {
+				continue
+			}
+			row, err := strconv.Atoi(tok.Value)
+			if err != nil || row <= 0 {
+				continue
+			}
+			newRow := row + dRow
+			if newRow < 1 {
+				continue // out of range, skip shifting
+			}
+			replacement = strconv.Itoa(newRow)
+			ok = true
+		}
+
+		if !ok {
 			continue
 		}
-		ref, err := parseCellRefForShift(tok.Value)
-		if err != nil {
-			continue
-		}
-
-		newCol := ref.col
-		newRow := ref.row
-		if !ref.absCol {
-			newCol += dCol
-		}
-		if !ref.absRow && ref.row > 0 {
-			newRow += dRow
-		}
-		if newCol < 1 || newRow < 0 {
-			continue // out of range, skip shifting
-		}
-
-		shifted := buildCellRefString(ref, newCol, newRow)
 
 		// Replace the token in the source string.
 		b.WriteString(src[lastPos:tok.Pos])
-		b.WriteString(shifted)
+		b.WriteString(replacement)
 		lastPos = tok.Pos + len(tok.Value)
+		wrote = true
 	}
 
-	if lastPos == 0 {
+	if !wrote {
 		return src // nothing shifted
 	}
 	b.WriteString(src[lastPos:])
