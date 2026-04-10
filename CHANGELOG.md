@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.9.1
+
+### Features
+
+- **Full column/row ranges in defined names**: `ResolveDefinedName` now supports full column (`A:H`) and full row (`2:2`) references, routing through the internal range resolver so dynamic spills and sparse ranges are preserved
+- **`WithoutFormulas` open option**: New option on `Open` functions that skips dependency graph construction and formula evaluation for metadata-only reads, speeding up `wb info` and similar workflows
+- **Spill array performance**: Precomputed bounds cache replaces O(rows) scans in hot evaluation loops, plus a new spill overlay tracking system that manages array formula spill states without full sheet iteration
+
+### Bug fixes
+
+- **DATEVALUE in FILTER**: DATEVALUE now participates in inherited array context, fixing FILTER operations with full-column DATEVALUE expressions
+- **Uncached dynamic array spills**: Dynamic array formulas without cached spill ranges now evaluate on file load so dependent formulas see the spilled results
+- **SUMPRODUCT / IF array context**: IF no longer inherits array context from SUMPRODUCT, matching Excel behavior
+- **Oversized defined name ranges**: Bounded defined name ranges now reject materialization beyond the range cell count limit instead of risking OOM
+
 ## v0.9.0
 
 ### Features
