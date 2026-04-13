@@ -2019,6 +2019,12 @@ func TestEvalSUMPRODUCTDoesNotLeakArrayContextIntoNestedIFArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
+	// Without array context, IF falls back to implicit intersection (row 2:
+	// B2=5, C2=5, D1=1 → 5-5*1=0, not >0 → IF returns 0). This matches
+	// Excel's legacy behavior where IF does not inherit array context from
+	// SUMPRODUCT. Excel gives #VALUE! when the formula row is outside the
+	// range; here CurrentRow=2 is inside B1:B3 so implicit intersection
+	// succeeds and produces 0.
 	if got.Type != ValueNumber || got.Num != 0 {
 		t.Fatalf("nested IF SUMPRODUCT = %v (%g), want 0", got.Type, got.Num)
 	}

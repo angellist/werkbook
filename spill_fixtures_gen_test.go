@@ -142,6 +142,11 @@ var spillFixtureBuilders = []spillFixtureBuilder{
 		purpose:  "SUMPRODUCT reading a spill and multiplying by a criteria mask",
 		build:    buildFixture30,
 	},
+	{
+		filename: "31_sumproduct_nested_if_elementwise.xlsx",
+		purpose:  "SUMPRODUCT with nested IF evaluating element-wise (issue #51)",
+		build:    buildFixture31,
+	},
 }
 
 // TestGenerateSpillFixtures writes each entry in spillFixtureBuilders to
@@ -154,9 +159,9 @@ func TestGenerateSpillFixtures(t *testing.T) {
 	for _, fb := range spillFixtureBuilders {
 		t.Run(fb.filename, func(t *testing.T) {
 			f := fb.build(t)
-			// Force a full recalc so any stale spill state from the
-			// build order (e.g. a blocker added after the anchor) is
-			// resolved in the cached values written to disk.
+			// Tell Excel to recalculate all formulas on open so it
+			// caches its own computed values, not werkbook's.
+			f.SetCalcProperties(werkbook.CalcProperties{FullCalcOnLoad: true})
 			f.Recalculate()
 			path := filepath.Join(spillFixturesGenDir, fb.filename)
 			if err := f.SaveAs(path); err != nil {
@@ -456,5 +461,37 @@ func buildFixture30(t *testing.T) *werkbook.File {
 	// Spill the filtered values and their doubled form, then aggregate.
 	mustSetFormula(t, out, "A2", `FILTER(Data!A2:A7,Data!B2:B7=TRUE)`)
 	mustSetFormula(t, out, "C1", `SUMPRODUCT(ANCHORARRAY(A2)*2)`)
+	return f
+}
+
+// buildFixture31 reproduces the exact pattern from issue #51:
+// SUMPRODUCT((status="completed")*IF(amount-cost*rate>0, amount-cost*rate, 0))
+// Excel evaluates this element-wise: row1=5, row2=0, row3=10 → 15.
+func buildFixture31(t *testing.T) *werkbook.File {
+	f := werkbook.New(werkbook.FirstSheet("Data"))
+	data := f.Sheet("Data")
+	// A=status, B=amount, C=cost, D=rate
+	mustSetValue(t, data, "A1", "Status")
+	mustSetValue(t, data, "B1", "Amount")
+	mustSetValue(t, data, "C1", "Cost")
+	mustSetValue(t, data, "D1", "Rate")
+
+	mustSetValue(t, data, "A2", "completed")
+	mustSetValue(t, data, "B2", 5.0)
+	mustSetValue(t, data, "C2", 0.0)
+	mustSetValue(t, data, "D2", 1.0)
+
+	mustSetValue(t, data, "A3", "completed")
+	mustSetValue(t, data, "B3", 5.0)
+	mustSetValue(t, data, "C3", 5.0)
+
+	mustSetValue(t, data, "A4", "completed")
+	mustSetValue(t, data, "B4", 10.0)
+	mustSetValue(t, data, "C4", 0.0)
+
+	out, _ := f.NewSheet("Out")
+	// The issue #51 formula — expects 15.
+	mustSetFormula(t, out, "A1",
+		`SUMPRODUCT((Data!A2:A4="completed")*IF(Data!B2:B4-Data!C2:C4*Data!D2>0,Data!B2:B4-Data!C2:C4*Data!D2,0))`)
 	return f
 }
