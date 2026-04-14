@@ -141,8 +141,9 @@ func (c *compiler) compileNodeCtx(node Node, inArrayCtx bool) error {
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
-		if n.Col > maxCols {
-			// Column beyond XFD that wasn't consumed by LET/LAMBDA desugaring — invalid ref.
+		if n.Col < 1 || n.Col > maxCols {
+			// Column outside valid range [A, XFD] (includes overflow-wrapped values)
+			// that wasn't consumed by LET/LAMBDA desugaring — invalid ref.
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
@@ -167,8 +168,9 @@ func (c *compiler) compileNodeCtx(node Node, inArrayCtx bool) error {
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
-		if n.From.Col > maxCols || n.To.Col > maxCols {
-			// Column beyond XFD that wasn't consumed by LET/LAMBDA desugaring — invalid ref.
+		if n.From.Col < 1 || n.From.Col > maxCols || n.To.Col < 1 || n.To.Col > maxCols {
+			// Column outside valid range [A, XFD] (includes overflow-wrapped values)
+			// that wasn't consumed by LET/LAMBDA desugaring — invalid ref.
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
@@ -556,7 +558,7 @@ func (c *compiler) compileFuncCall(n *FuncCall, inArrayCtx bool) error {
 		}
 		// For ISREF, range references are also references.
 		if name == "ISREF" {
-			if rr, ok := n.Args[0].(*RangeRef); ok {
+			if rr, ok := n.Args[0].(*RangeRef); ok && rr.From.Col >= 1 && rr.From.Col <= maxCols && rr.To.Col >= 1 && rr.To.Col <= maxCols {
 				idx := c.addRef(CellAddr{Sheet: rr.From.Sheet, Col: rr.From.Col, Row: rr.From.Row})
 				c.emit(OpLoadCellRef, idx)
 				c.emit(OpCall, uint32(funcID)<<8|uint32(argc))

@@ -76,6 +76,9 @@ func parseCellRefToken(raw string) (*CellRef, error) {
 		return nil, fmt.Errorf("expected column letters in %q", raw)
 	}
 	ref.Col = ColLettersToNumber(s[colStart:i])
+	if ref.Col <= 0 {
+		return nil, fmt.Errorf("column out of range in %q", raw)
+	}
 
 	if i < len(s) && s[i] == '$' {
 		ref.AbsRow = true
