@@ -43,6 +43,7 @@ func Register(name string, fn Func) {
 		idToName = append(idToName, upper)
 		nameToID[upper] = id
 	}
+	delete(funcMetaByName, upper)
 	registry[upper] = fn
 }
 

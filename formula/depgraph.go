@@ -13,6 +13,12 @@ type rangeSub struct {
 	rng         RangeAddr // Sheet is always qualified
 }
 
+type dynamicRangeSub struct {
+	formulaCell QualifiedCell
+	kind        DynamicRangeKind
+	rng         RangeAddr // Sheet is always qualified
+}
+
 // DynamicRangeKind distinguishes dynamic dependency edge families.
 type DynamicRangeKind uint8
 
@@ -35,14 +41,18 @@ type DepGraph struct {
 	rangeSubs []rangeSub
 	// dynamic range subscriptions grouped by formula cell and kind.
 	dynamicRanges map[QualifiedCell]map[DynamicRangeKind][]RangeAddr
+	// dynamic range subscriptions indexed by the range's sheet for faster
+	// point invalidation lookups.
+	dynamicRangeSubsBySheet map[string][]dynamicRangeSub
 }
 
 // NewDepGraph creates an empty dependency graph.
 func NewDepGraph() *DepGraph {
 	return &DepGraph{
-		dependsOn:     make(map[QualifiedCell]map[QualifiedCell]bool),
-		dependents:    make(map[QualifiedCell]map[QualifiedCell]bool),
-		dynamicRanges: make(map[QualifiedCell]map[DynamicRangeKind][]RangeAddr),
+		dependsOn:               make(map[QualifiedCell]map[QualifiedCell]bool),
+		dependents:              make(map[QualifiedCell]map[QualifiedCell]bool),
+		dynamicRanges:           make(map[QualifiedCell]map[DynamicRangeKind][]RangeAddr),
+		dynamicRangeSubsBySheet: make(map[string][]dynamicRangeSub),
 	}
 }
 
@@ -97,9 +107,16 @@ func (g *DepGraph) SetDynamicRanges(formulaCell QualifiedCell, kind DynamicRange
 	if g.dynamicRanges == nil {
 		g.dynamicRanges = make(map[QualifiedCell]map[DynamicRangeKind][]RangeAddr)
 	}
+	if g.dynamicRangeSubsBySheet == nil {
+		g.dynamicRangeSubsBySheet = make(map[string][]dynamicRangeSub)
+	}
 
 	byKind := g.dynamicRanges[formulaCell]
+	existing := byKind[kind]
 	if len(ranges) == 0 {
+		if len(existing) != 0 {
+			g.removeDynamicRangeSubs(formulaCell, kind, existing)
+		}
 		if byKind != nil {
 			delete(byKind, kind)
 			if len(byKind) == 0 {
@@ -108,8 +125,11 @@ func (g *DepGraph) SetDynamicRanges(formulaCell QualifiedCell, kind DynamicRange
 		}
 		return
 	}
-	if byKind != nil && rangeAddrsEqual(byKind[kind], ranges) {
+	if byKind != nil && rangeAddrsEqual(existing, ranges) {
 		return
+	}
+	if len(existing) != 0 {
+		g.removeDynamicRangeSubs(formulaCell, kind, existing)
 	}
 
 	if byKind == nil {
@@ -119,6 +139,7 @@ func (g *DepGraph) SetDynamicRanges(formulaCell QualifiedCell, kind DynamicRange
 	copied := make([]RangeAddr, len(ranges))
 	copy(copied, ranges)
 	byKind[kind] = copied
+	g.addDynamicRangeSubs(formulaCell, kind, copied)
 }
 
 func rangeAddrsEqual(a, b []RangeAddr) bool {
@@ -131,6 +152,55 @@ func rangeAddrsEqual(a, b []RangeAddr) bool {
 		}
 	}
 	return true
+}
+
+func (g *DepGraph) addDynamicRangeSubs(formulaCell QualifiedCell, kind DynamicRangeKind, ranges []RangeAddr) {
+	if g.dynamicRangeSubsBySheet == nil {
+		g.dynamicRangeSubsBySheet = make(map[string][]dynamicRangeSub)
+	}
+	for _, rng := range ranges {
+		g.dynamicRangeSubsBySheet[rng.Sheet] = append(g.dynamicRangeSubsBySheet[rng.Sheet], dynamicRangeSub{
+			formulaCell: formulaCell,
+			kind:        kind,
+			rng:         rng,
+		})
+	}
+}
+
+func (g *DepGraph) removeDynamicRangeSubs(formulaCell QualifiedCell, kind DynamicRangeKind, ranges []RangeAddr) {
+	if g.dynamicRangeSubsBySheet == nil || len(ranges) == 0 {
+		return
+	}
+
+	removeBySheet := make(map[string]map[RangeAddr]bool)
+	for _, rng := range ranges {
+		set := removeBySheet[rng.Sheet]
+		if set == nil {
+			set = make(map[RangeAddr]bool)
+			removeBySheet[rng.Sheet] = set
+		}
+		set[rng] = true
+	}
+
+	for sheet, removeSet := range removeBySheet {
+		subs := g.dynamicRangeSubsBySheet[sheet]
+		if len(subs) == 0 {
+			continue
+		}
+		n := 0
+		for _, sub := range subs {
+			if sub.formulaCell == formulaCell && sub.kind == kind && removeSet[sub.rng] {
+				continue
+			}
+			subs[n] = sub
+			n++
+		}
+		if n == 0 {
+			delete(g.dynamicRangeSubsBySheet, sheet)
+			continue
+		}
+		g.dynamicRangeSubsBySheet[sheet] = subs[:n]
+	}
 }
 
 // Unregister removes all edges from formulaCell.
@@ -158,6 +228,11 @@ func (g *DepGraph) Unregister(formulaCell QualifiedCell) {
 	}
 	g.rangeSubs = g.rangeSubs[:n]
 
+	if byKind := g.dynamicRanges[formulaCell]; byKind != nil {
+		for kind, ranges := range byKind {
+			g.removeDynamicRangeSubs(formulaCell, kind, ranges)
+		}
+	}
 	delete(g.dynamicRanges, formulaCell)
 }
 
@@ -186,23 +261,15 @@ func (g *DepGraph) DirectDependents(cell QualifiedCell) []QualifiedCell {
 		}
 	}
 
-	for formulaCell, byKind := range g.dynamicRanges {
-		if seen[formulaCell] {
+	for _, rs := range g.dynamicRangeSubsBySheet[cell.Sheet] {
+		if seen[rs.formulaCell] {
 			continue
 		}
-		for _, ranges := range byKind {
-			for _, rng := range ranges {
-				if !rangeContainsCell(rng, cell) {
-					continue
-				}
-				seen[formulaCell] = true
-				result = append(result, formulaCell)
-				break
-			}
-			if seen[formulaCell] {
-				break
-			}
+		if !rangeContainsCell(rs.rng, cell) {
+			continue
 		}
+		seen[rs.formulaCell] = true
+		result = append(result, rs.formulaCell)
 	}
 
 	return result

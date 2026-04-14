@@ -183,6 +183,33 @@ func TestSetDynamicRangesReplacesOnlyOneKind(t *testing.T) {
 	}
 }
 
+func TestDynamicRangesTrackTheRangeSheet(t *testing.T) {
+	g := NewDepGraph()
+
+	b1 := QualifiedCell{Sheet: "Sheet1", Col: 2, Row: 1}
+	g.SetDynamicRanges(b1, DynamicRangeKindMaterialized, []RangeAddr{
+		{Sheet: "Sheet2", FromCol: 3, FromRow: 4, ToCol: 3, ToRow: 5},
+	})
+
+	if deps := g.DirectDependents(QualifiedCell{Sheet: "Sheet1", Col: 3, Row: 4}); len(deps) != 0 {
+		t.Fatalf("expected no dependent on the formula sheet when the dynamic range is on another sheet, got %v", deps)
+	}
+	if deps := g.DirectDependents(QualifiedCell{Sheet: "Sheet2", Col: 3, Row: 4}); !qcEqual(deps, []QualifiedCell{b1}) {
+		t.Fatalf("expected dynamic dependent on Sheet2, got %v", deps)
+	}
+
+	g.SetDynamicRanges(b1, DynamicRangeKindMaterialized, []RangeAddr{
+		{Sheet: "Sheet3", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 2},
+	})
+
+	if deps := g.DirectDependents(QualifiedCell{Sheet: "Sheet2", Col: 3, Row: 4}); len(deps) != 0 {
+		t.Fatalf("expected old Sheet2 dynamic range to be removed, got %v", deps)
+	}
+	if deps := g.DirectDependents(QualifiedCell{Sheet: "Sheet3", Col: 1, Row: 2}); !qcEqual(deps, []QualifiedCell{b1}) {
+		t.Fatalf("expected replacement dynamic range on Sheet3, got %v", deps)
+	}
+}
+
 func TestUnregisterClearsPointRangeAndDynamicEdges(t *testing.T) {
 	g := NewDepGraph()
 

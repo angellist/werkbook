@@ -144,7 +144,7 @@ var spillFixtureBuilders = []spillFixtureBuilder{
 	},
 	{
 		filename: "31_sumproduct_nested_if_elementwise.xlsx",
-		purpose:  "SUMPRODUCT with nested IF evaluating element-wise (issue #51)",
+		purpose:  "SUMPRODUCT nested IF with the formula row outside the referenced rows (#VALUE! via implicit intersection)",
 		build:    buildFixture31,
 	},
 }
@@ -464,9 +464,10 @@ func buildFixture30(t *testing.T) *werkbook.File {
 	return f
 }
 
-// buildFixture31 reproduces the exact pattern from issue #51:
-// SUMPRODUCT((status="completed")*IF(amount-cost*rate>0, amount-cost*rate, 0))
-// Excel evaluates this element-wise: row1=5, row2=0, row3=10 → 15.
+// buildFixture31 locks down the workbook-layout case where SUMPRODUCT's nested
+// IF is evaluated from row 1 while the referenced rows start at row 2. Excel
+// applies implicit intersection instead of element-wise IF evaluation, so the
+// formula yields #VALUE!.
 func buildFixture31(t *testing.T) *werkbook.File {
 	f := werkbook.New(werkbook.FirstSheet("Data"))
 	data := f.Sheet("Data")
@@ -490,7 +491,8 @@ func buildFixture31(t *testing.T) *werkbook.File {
 	mustSetValue(t, data, "C4", 0.0)
 
 	out, _ := f.NewSheet("Out")
-	// The issue #51 formula — expects 15.
+	// The formula is intentionally placed on row 1 while its array inputs begin
+	// on row 2 so cached-value parity exercises the #VALUE! case.
 	mustSetFormula(t, out, "A1",
 		`SUMPRODUCT((Data!A2:A4="completed")*IF(Data!B2:B4-Data!C2:C4*Data!D2>0,Data!B2:B4-Data!C2:C4*Data!D2,0))`)
 	return f

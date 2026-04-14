@@ -86,3 +86,29 @@ func TestInheritedArrayMetadataDoesNotExpand(t *testing.T) {
 		})
 	}
 }
+
+func TestRegisterClearsStaleMetadataOnOverride(t *testing.T) {
+	const name = "TEST.REGISTER.CLEAR"
+
+	RegisterWithMeta(name, NoCtx(func(args []Value) (Value, error) {
+		return NumberVal(1), nil
+	}), FuncMeta{
+		Kind:               FnKindScalarLifted,
+		InheritedArrayArgs: map[int]bool{0: true},
+	})
+
+	if got := inheritedArrayEvalForFuncArg(name, 0); !got {
+		t.Fatalf("expected inherited array metadata for %s before override", name)
+	}
+
+	Register(name, NoCtx(func(args []Value) (Value, error) {
+		return NumberVal(2), nil
+	}))
+
+	if _, ok := funcMetaForName(name); ok {
+		t.Fatalf("expected metadata for %s to be cleared after plain Register override", name)
+	}
+	if got := inheritedArrayEvalForFuncArg(name, 0); got {
+		t.Fatalf("inheritedArrayEvalForFuncArg(%q, 0) = true, want false after override", name)
+	}
+}
