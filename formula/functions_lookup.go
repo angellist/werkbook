@@ -521,7 +521,15 @@ func fnINDEX(args []Value) (Value, error) {
 	if colNum < 0 || colNum >= cols {
 		return ErrorVal(ErrValREF), nil
 	}
-	return indexArrayValue(arr, ri, colNum), nil
+	v := indexArrayValue(arr, ri, colNum)
+	if arr.RangeOrigin != nil {
+		v.CellOrigin = &CellAddr{
+			Sheet: arr.RangeOrigin.Sheet,
+			Col:   arr.RangeOrigin.FromCol + colNum,
+			Row:   arr.RangeOrigin.FromRow + ri,
+		}
+	}
+	return v, nil
 }
 
 func indexArrayValue(arr Value, rowIdx, colIdx int) Value {
@@ -537,6 +545,9 @@ func fnMATCH(args []Value) (Value, error) {
 	}
 	lookup := args[0]
 	arr := args[1]
+	if lookup.Type == ValueError {
+		return lookup, nil
+	}
 	matchType := 1
 	if len(args) == 3 {
 		mt, e := CoerceNum(args[2])

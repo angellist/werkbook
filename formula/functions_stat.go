@@ -915,7 +915,11 @@ func fnSUMIFS(args []Value) (Value, error) {
 				}
 			}
 			if allMatch {
-				if n, e := CoerceNum(sumRange.Array[r][c]); e == nil {
+				sv := sumRange.Array[r][c]
+				if sv.Type == ValueError {
+					return sv, nil
+				}
+				if n, e := CoerceNum(sv); e == nil {
 					sum += n
 				}
 			}
@@ -1080,6 +1084,11 @@ func fnAVERAGEIF(args []Value) (Value, error) {
 					var sv Value
 					if avgRange.Type == ValueArray && i < len(avgRange.Array) && j < len(avgRange.Array[i]) {
 						sv = avgRange.Array[i][j]
+					} else if avgRange.Type != ValueArray {
+						sv = avgRange
+					}
+					if sv.Type == ValueError {
+						return sv, nil
 					}
 					if n, e := CoerceNum(sv); e == nil {
 						sum += n
@@ -1099,9 +1108,21 @@ func fnSUMPRODUCT(args []Value) (Value, error) {
 	if len(args) == 0 {
 		return ErrorVal(ErrValVALUE), nil
 	}
-	if args[0].Type != ValueArray {
-		return ErrorVal(ErrValVALUE), nil
+	// Propagate any error argument; promote scalar numeric/bool/string args to
+	// 1x1 arrays so SUMPRODUCT(scalar) matches Excel (e.g. SUMPRODUCT(5)=5,
+	// SUMPRODUCT(#N/A)=#N/A).
+	promoted := make([]Value, len(args))
+	for i, arg := range args {
+		if arg.Type == ValueError {
+			return arg, nil
+		}
+		if arg.Type == ValueArray {
+			promoted[i] = arg
+			continue
+		}
+		promoted[i] = Value{Type: ValueArray, Array: [][]Value{{arg}}}
 	}
+	args = promoted
 	firstArr := args[0].Array
 	rows := len(firstArr)
 	cols := 0
@@ -1110,9 +1131,6 @@ func fnSUMPRODUCT(args []Value) (Value, error) {
 	}
 
 	for _, arg := range args[1:] {
-		if arg.Type != ValueArray {
-			return ErrorVal(ErrValVALUE), nil
-		}
 		if len(arg.Array) != rows {
 			return ErrorVal(ErrValVALUE), nil
 		}
@@ -1286,7 +1304,11 @@ func fnAVERAGEIFS(args []Value) (Value, error) {
 				}
 			}
 			if allMatch {
-				if n, e := CoerceNum(avgRange.Array[r][c]); e == nil {
+				sv := avgRange.Array[r][c]
+				if sv.Type == ValueError {
+					return sv, nil
+				}
+				if n, e := CoerceNum(sv); e == nil {
 					sum += n
 					count++
 				}
@@ -1326,7 +1348,11 @@ func fnMAXIFS(args []Value) (Value, error) {
 				}
 			}
 			if allMatch {
-				if n, e := CoerceNum(maxRange.Array[r][c]); e == nil {
+				sv := maxRange.Array[r][c]
+				if sv.Type == ValueError {
+					return sv, nil
+				}
+				if n, e := CoerceNum(sv); e == nil {
 					if !found || n > maxVal {
 						maxVal = n
 						found = true
@@ -1368,7 +1394,11 @@ func fnMINIFS(args []Value) (Value, error) {
 				}
 			}
 			if allMatch {
-				if n, e := CoerceNum(minRange.Array[r][c]); e == nil {
+				sv := minRange.Array[r][c]
+				if sv.Type == ValueError {
+					return sv, nil
+				}
+				if n, e := CoerceNum(sv); e == nil {
 					if !found || n < minVal {
 						minVal = n
 						found = true

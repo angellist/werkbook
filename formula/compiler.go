@@ -61,6 +61,13 @@ type compiler struct {
 	strIdx map[string]uint32
 	refIdx map[CellAddr]uint32
 	rngIdx map[RangeAddr]uint32
+
+	// dynamicArrayDepth tracks nesting inside dynamic-array-native functions
+	// (FILTER, SORT, UNIQUE, HSTACK, MAP, etc.). Inside those, IFERROR/IFNA
+	// lift over arrays like any element-wise function. Outside (top level or
+	// under legacy array-forcing like SUMPRODUCT), IFERROR/IFNA follow Excel's
+	// scalar implicit-intersection semantics.
+	dynamicArrayDepth int
 }
 
 func (c *compiler) emit(op OpCode, operand uint32) {
@@ -141,6 +148,12 @@ func (c *compiler) compileNodeCtx(node Node, inArrayCtx bool) error {
 			c.emit(OpPushError, uint32(ErrValNAME))
 			return nil
 		}
+		if n.Name != "" {
+			// Bare identifier that was not resolved as a defined name nor
+			// consumed by LET/LAMBDA desugaring.
+			c.emit(OpPushError, uint32(ErrValNAME))
+			return nil
+		}
 		if n.Col < 1 || n.Col > maxCols {
 			// Column outside valid range [A, XFD] (includes overflow-wrapped values)
 			// that wasn't consumed by LET/LAMBDA desugaring — invalid ref.
@@ -189,8 +202,47 @@ func (c *compiler) compileNodeCtx(node Node, inArrayCtx bool) error {
 			c.emit(OpLoadRange, idx)
 		}
 
+	case *IntersectRef:
+		if !isReferenceNode(n.Left) || !isReferenceNode(n.Right) {
+			c.emit(OpPushError, uint32(ErrValVALUE))
+			return nil
+		}
+		if err := c.compileIntersectOperand(n.Left, inArrayCtx); err != nil {
+			return err
+		}
+		if err := c.compileIntersectOperand(n.Right, inArrayCtx); err != nil {
+			return err
+		}
+		c.emit(OpIntersect, 0)
+
+	case *DynamicRangeRef:
+		// Both endpoints must yield single-cell references at runtime.
+		// CellRef operands compile to OpLoadCellRef so their address is
+		// available without resolving the cell value; other ref-returning
+		// expressions are compiled in array context so full-column/row
+		// args (e.g. A:A inside INDEX(A:A,n)) don't implicit-intersect
+		// before the function can use them as references.
+		c.emit(OpEnterArrayCtx, 0)
+		if err := c.compileIntersectOperand(n.From, true); err != nil {
+			return err
+		}
+		if err := c.compileIntersectOperand(n.To, true); err != nil {
+			return err
+		}
+		c.emit(OpLeaveArrayCtx, 0)
+		c.emit(OpBuildRange, 0)
+
 	case *UnionRef:
-		return fmt.Errorf("union references are only supported inside AREAS")
+		if len(n.Areas) == 0 {
+			c.emit(OpPushError, uint32(ErrValVALUE))
+			return nil
+		}
+		for _, area := range n.Areas {
+			if err := c.compileNodeCtx(area, inArrayCtx); err != nil {
+				return err
+			}
+		}
+		c.emit(OpUnion, uint32(len(n.Areas)))
 
 	case *UnaryExpr:
 		if err := c.compileNodeCtx(n.Operand, inArrayCtx); err != nil {
@@ -514,13 +566,66 @@ func (c *compiler) compileFuncCall(n *FuncCall, inArrayCtx bool) error {
 	// removed earlier.
 	name = strings.TrimPrefix(name, "_XLFN._XLWS.")
 	name = strings.TrimPrefix(name, "_XLFN.")
+	// ISOMITTED checks whether its argument was an omitted LAMBDA parameter.
+	// Because LAMBDA invocation substitutes the raw AST node (including
+	// *EmptyArg for empty argument slots), this is a purely syntactic check
+	// at compile time.
+	if name == "ISOMITTED" {
+		if len(n.Args) != 1 {
+			c.emit(OpPushError, uint32(ErrValVALUE))
+			return nil
+		}
+		if _, isEmpty := n.Args[0].(*EmptyArg); isEmpty {
+			c.emit(OpPushBool, 1)
+			return nil
+		}
+		c.emit(OpPushBool, 0)
+		return nil
+	}
 	funcID := LookupFunc(name)
 	if funcID < 0 {
-		return fmt.Errorf("unknown function %q", n.Name)
+		// Unknown function names produce #NAME? at runtime in Excel so that
+		// wrappers like IFERROR/ISERROR/ERROR.TYPE can catch the error.
+		c.emit(OpPushError, uint32(ErrValNAME))
+		return nil
 	}
 	argc := len(n.Args)
 	if argc > 255 {
 		return fmt.Errorf("function %q has %d arguments (max 255)", n.Name, argc)
+	}
+
+	// IFERROR and IFNA evaluate their arguments in Excel's legacy scalar
+	// context when called inside a legacy array-forcing function (SUMPRODUCT,
+	// SUMIF, MATCH, …): range references implicit-intersect at the formula
+	// cell's row/column before the function runs. Evidence:
+	// testdata/error_propagation/{06,11,12}_* all resolve SUMPRODUCT(IFERROR(
+	// range, …), …) to #VALUE! because the implicit-intersected IFERROR
+	// returns a scalar that SUMPRODUCT can't line up against the sibling
+	// range. Dynamic-array-native wrappers (FILTER, SORT, UNIQUE, …) keep
+	// array semantics — verified against Excel in spill fixture
+	// 33_iferror_datevalue_full_column.xlsx. CSE array formulas opt out via
+	// the opcode's ctx.IsArrayFormula guard.
+	if name == "IFERROR" || name == "IFNA" {
+		if c.dynamicArrayDepth == 0 {
+			wasArrayCtx := inArrayCtx
+			if wasArrayCtx {
+				c.emit(OpLeaveArrayCtx, 0)
+			}
+			for _, arg := range n.Args {
+				if err := c.compileNodeCtx(arg, false); err != nil {
+					return err
+				}
+				c.emit(OpImplicitIntersect, 0)
+			}
+			if wasArrayCtx {
+				c.emit(OpEnterArrayCtx, 0)
+			}
+			operand := uint32(funcID)<<8 | uint32(argc)
+			c.emit(OpCall, operand)
+			return nil
+		}
+		// Fall through to the element-wise lifting path for dynamic-array
+		// contexts.
 	}
 
 	inheritedArrayCtx := inArrayCtx
@@ -622,6 +727,10 @@ func (c *compiler) compileFuncCall(n *FuncCall, inArrayCtx bool) error {
 	if arrayCtx {
 		c.emit(OpEnterArrayCtx, 0)
 	}
+	if IsDynamicArrayFunc(name) {
+		c.dynamicArrayDepth++
+		defer func() { c.dynamicArrayDepth-- }()
+	}
 	for i, arg := range n.Args {
 		forceInheritedArrayArg := suspendInheritedArrayCtx && inheritedArrayCtx && inheritedArrayEvalForFuncArg(name, i)
 		if !arrayCtx {
@@ -696,6 +805,40 @@ func binaryOpCode(op string) (OpCode, error) {
 }
 
 func isDirectRangeRefNode(node Node) bool {
-	_, ok := node.(*RangeRef)
-	return ok
+	switch node.(type) {
+	case *RangeRef, *IntersectRef, *UnionRef:
+		return true
+	}
+	return false
+}
+
+// compileIntersectOperand compiles an operand of the intersection operator.
+// CellRef operands are loaded as ValueRef so rangeIntersect can recover their
+// address; otherwise OpLoadCell would push a value with no origin and the
+// intersection of two single-cell refs would fall through to #VALUE! instead
+// of computing the rectangle (and #NULL! when they don't overlap).
+func (c *compiler) compileIntersectOperand(n Node, inArrayCtx bool) error {
+	if cr, ok := n.(*CellRef); ok && !cr.DotNotation && cr.Name == "" && cr.SheetEnd == "" && cr.Col >= 1 && cr.Col <= maxCols {
+		idx := c.addRef(CellAddr{Sheet: cr.Sheet, Col: cr.Col, Row: cr.Row})
+		c.emit(OpLoadCellRef, idx)
+		return nil
+	}
+	return c.compileNodeCtx(n, inArrayCtx)
+}
+
+// isReferenceNode reports whether a node can legitimately appear as an
+// operand of the intersection operator. This mirrors Excel's rule: only
+// reference-producing expressions (cells, ranges, nested intersections, and
+// certain reference-returning function calls) are permitted.
+func isReferenceNode(n Node) bool {
+	switch v := n.(type) {
+	case *CellRef, *RangeRef, *IntersectRef, *UnionRef:
+		return true
+	case *FuncCall:
+		switch strings.ToUpper(v.Name) {
+		case "OFFSET", "INDIRECT", "INDEX", "CHOOSE", "IF", "IFS", "SWITCH", "ANCHORARRAY":
+			return true
+		}
+	}
+	return false
 }

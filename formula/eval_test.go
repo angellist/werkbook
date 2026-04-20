@@ -2203,10 +2203,16 @@ func TestEvalElementWiseLiftedScalarFunctions(t *testing.T) {
 			want:    NumberVal(-299),
 		},
 		{
+			// IFERROR evaluates its first arg in scalar context even when
+			// nested in SUMPRODUCT: at CurrentRow=1 the I1:I3/J1:J3
+			// expression implicit-intersects to I1/J1 = 10/2 = 5, so
+			// IFERROR(5,0)=5 and SUMPRODUCT(5, K1:K3) can't line up the
+			// scalar against the 3-cell K1:K3 — #VALUE!. Verified against
+			// Excel in testdata/error_propagation/12_sumproduct_iferror_div.xlsx.
 			name:    "sumproduct_iferror",
 			formula: "SUMPRODUCT(IFERROR(I1:I3/J1:J3,0),K1:K3)",
 			ctx:     scalarCtx,
-			want:    NumberVal(605),
+			want:    ErrorVal(ErrValVALUE),
 		},
 	}
 
@@ -2247,5 +2253,152 @@ func TestEvalImplicitIntersectionRowVector(t *testing.T) {
 	}
 	if got.Type != ValueNumber || got.Num != 21 {
 		t.Errorf("1+A5:C5 (non-array, col 2) = %v (%g), want 21", got.Type, got.Num)
+	}
+}
+
+// TestEvalIFERRORImplicitIntersection verifies that IFERROR's raw range-ref
+// arguments undergo legacy implicit intersection in a non-array formula
+// context, matching Excel's cached results.
+func TestEvalIFERRORImplicitIntersection(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 2}: ErrorVal(ErrValNA),
+			{Col: 1, Row: 3}: NumberVal(30),
+			{Col: 1, Row: 4}: ErrorVal(ErrValDIV0),
+			{Col: 1, Row: 5}: NumberVal(50),
+		},
+	}
+
+	// At row 1 the implicit intersection of A1:A5 picks A1 = 10.
+	ctxRow1 := &EvalContext{CurrentCol: 5, CurrentRow: 1, CurrentSheet: "Sheet1"}
+	cf := evalCompile(t, `SUM(IFERROR(A1:A5, 0))`)
+	got, err := Eval(cf, resolver, ctxRow1)
+	if err != nil {
+		t.Fatalf("Eval row 1: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Errorf("SUM(IFERROR(A1:A5, 0)) at row 1 = %v (%g), want 10", got.Type, got.Num)
+	}
+
+	// At row 2 the intersection picks A2 = #N/A, IFERROR substitutes 0, SUM = 0.
+	ctxRow2 := &EvalContext{CurrentCol: 5, CurrentRow: 2, CurrentSheet: "Sheet1"}
+	got, err = Eval(cf, resolver, ctxRow2)
+	if err != nil {
+		t.Fatalf("Eval row 2: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Errorf("SUM(IFERROR(A1:A5, 0)) at row 2 = %v (%g), want 0", got.Type, got.Num)
+	}
+
+	// With an alternative replacement the same pattern resolves to -1.
+	ctxRow2b := &EvalContext{CurrentCol: 5, CurrentRow: 2, CurrentSheet: "Sheet1"}
+	cf2 := evalCompile(t, `SUM(IFERROR(A1:A5, -1))`)
+	got2, err := Eval(cf2, resolver, ctxRow2b)
+	if err != nil {
+		t.Fatalf("Eval row 2 alt: %v", err)
+	}
+	if got2.Type != ValueNumber || got2.Num != -1 {
+		t.Errorf("SUM(IFERROR(A1:A5, -1)) at row 2 = %v (%g), want -1", got2.Type, got2.Num)
+	}
+}
+
+// TestEvalRangeIntersectOperator exercises the space-intersection operator:
+// a space between two references returns the rectangular overlap.
+func TestEvalRangeIntersectOperator(t *testing.T) {
+	cells := map[CellAddr]Value{}
+	// Populate A1:D4 with row*10+col so overlap values are easy to verify.
+	for r := 1; r <= 4; r++ {
+		for c := 1; c <= 4; c++ {
+			cells[CellAddr{Col: c, Row: r}] = NumberVal(float64(r*10 + c))
+		}
+	}
+	resolver := &mockResolver{cells: cells}
+
+	// SUM(A1:C3 B2:D4): overlap is B2:C3 = 22, 23, 32, 33 → 110.
+	ctx := &EvalContext{CurrentCol: 7, CurrentRow: 2, CurrentSheet: "Sheet1"}
+	cf := evalCompile(t, `SUM(A1:C3 B2:D4)`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval SUM: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 110 {
+		t.Errorf("SUM(A1:C3 B2:D4) = %v (%g), want 110", got.Type, got.Num)
+	}
+
+	// Scalar context at row 1: B2:C3 has no row-1 row → implicit intersection fails → #VALUE!.
+	ctxRow1 := &EvalContext{CurrentCol: 7, CurrentRow: 1, CurrentSheet: "Sheet1"}
+	cfPlain := evalCompile(t, `A1:C3 B2:D4`)
+	got, err = Eval(cfPlain, resolver, ctxRow1)
+	if err != nil {
+		t.Fatalf("Eval plain at row 1: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("A1:C3 B2:D4 at row 1 = %v (%v), want #VALUE!", got.Type, got.Err)
+	}
+
+	// Empty intersection: A1:B2 and D4:E5 don't overlap → #NULL!.
+	cfNull := evalCompile(t, `A1:B2 D4:E5`)
+	got, err = Eval(cfNull, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval empty isect: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNULL {
+		t.Errorf("A1:B2 D4:E5 = %v (%v), want #NULL!", got.Type, got.Err)
+	}
+
+	// SUM of empty intersection propagates #NULL!.
+	cfSumNull := evalCompile(t, `SUM(A1:B2 D4:E5)`)
+	got, err = Eval(cfSumNull, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval SUM of empty isect: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValNULL {
+		t.Errorf("SUM(A1:B2 D4:E5) = %v (%v), want #NULL!", got.Type, got.Err)
+	}
+
+	// IFERROR wrapping an empty intersection substitutes the fallback.
+	cfIferr := evalCompile(t, `IFERROR(A1:B2 D4:E5, -99)`)
+	got, err = Eval(cfIferr, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval IFERROR of empty isect: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != -99 {
+		t.Errorf("IFERROR(A1:B2 D4:E5, -99) = %v (%g), want -99", got.Type, got.Num)
+	}
+}
+
+// TestEvalUnionReferenceInFunctions verifies that a parenthesized union
+// reference list passed to generic functions flattens into a single array
+// input (matches Excel behaviour for SUM and COUNT).
+func TestEvalUnionReferenceInFunctions(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(11),
+			{Col: 1, Row: 2}: NumberVal(21),
+			{Col: 3, Row: 1}: NumberVal(13),
+			{Col: 3, Row: 2}: NumberVal(23),
+			{Col: 5, Row: 5}: NumberVal(99),
+		},
+	}
+
+	ctx := &EvalContext{CurrentCol: 7, CurrentRow: 3, CurrentSheet: "Sheet1"}
+
+	cfSum := evalCompile(t, `SUM((A1:A2, C1:C2))`)
+	got, err := Eval(cfSum, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval SUM union: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 68 {
+		t.Errorf("SUM((A1:A2, C1:C2)) = %v (%g), want 68", got.Type, got.Num)
+	}
+
+	cfCount := evalCompile(t, `COUNT((A1:A2, C1:C2, E5))`)
+	got, err = Eval(cfCount, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval COUNT union: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 5 {
+		t.Errorf("COUNT((A1:A2, C1:C2, E5)) = %v (%g), want 5", got.Type, got.Num)
 	}
 }
