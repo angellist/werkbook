@@ -18,12 +18,19 @@ type CellResolver interface {
 	GetRangeValues(addr RangeAddr) [][]Value
 }
 
+// DefinedNameResolver is an optional CellResolver extension used by
+// ref-producing functions like INDIRECT to resolve runtime named ranges.
+type DefinedNameResolver interface {
+	ResolveDefinedNameValue(name, scopeSheet string) (Value, bool)
+}
+
 // EvalContext provides context about the current evaluation environment.
 type EvalContext struct {
 	CurrentCol     int
 	CurrentRow     int
 	CurrentSheet   string
 	IsArrayFormula bool         // true for CSE (Ctrl+Shift+Enter) array formulas
+	InheritedArray bool         // internal: true while a call executes inside inherited array context
 	Date1904       bool         // true if the workbook uses the 1904 date system
 	Resolver       CellResolver // the active resolver; used by SUBTOTAL to inspect cells
 	Tracer         EvalTracer   // optional; nil means no tracing
@@ -155,24 +162,7 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 				push(ErrorVal(ErrValREF))
 				continue
 			}
-			// Pad trailing blank rows for bounded ranges. GetRangeValues
-			// clamps toRow to MaxRow to avoid huge allocations for
-			// full-column refs, but bounded ranges like A1:A5 need all
-			// requested rows so functions like COUNTBLANK see every blank.
-			// Skip padding for ranges that reach the sheet boundary
-			// (like A2:A1048576) — they behave like full-column refs.
-			reachesMaxAxis := addr.ToRow >= maxRows || addr.ToCol >= maxCols
-			if !isFullCol && !isFullRow && !reachesMaxAxis {
-				expectedRows := addr.ToRow - addr.FromRow + 1
-				cols := addr.ToCol - addr.FromCol + 1
-				for len(rows) < expectedRows {
-					emptyRow := make([]Value, cols)
-					for j := range emptyRow {
-						emptyRow[j] = EmptyVal()
-					}
-					rows = append(rows, emptyRow)
-				}
-			}
+			rows = normalizeResolverRangeRows(addr, rows)
 			origin := addr // capture for the Value
 			push(Value{Type: ValueArray, Array: rows, RangeOrigin: &origin})
 
@@ -228,8 +218,8 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 				return Value{}, err
 			}
 			if ctx != nil && !ctx.IsArrayFormula && arrayCtxDepth == 0 {
-				aWasRange := a.Type == ValueArray && a.RangeOrigin != nil
-				bWasRange := b.Type == ValueArray && b.RangeOrigin != nil
+				_, aWasRange := legacyArrayRef(a)
+				_, bWasRange := legacyArrayRef(b)
 				a = implicitIntersect(a, ctx)
 				b = implicitIntersect(b, ctx)
 				// If one side was a range and got intersected to a scalar but
@@ -237,14 +227,14 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 				// SCAN/SEQUENCE result), Excel intersects it to its top-left
 				// element so both operands match. Leaving it as an array
 				// would cause lop-sided broadcasts like A1:A8 - {rm}.
-				if aWasRange && a.Type != ValueArray && b.Type == ValueArray && b.RangeOrigin == nil {
-					if len(b.Array) > 0 && len(b.Array[0]) > 0 {
-						b = b.Array[0][0]
+				if aWasRange && a.Type != ValueArray && b.Type == ValueArray {
+					if _, ok := legacyArrayRef(b); !ok {
+						b = arrayTopLeft(b)
 					}
 				}
-				if bWasRange && b.Type != ValueArray && a.Type == ValueArray && a.RangeOrigin == nil {
-					if len(a.Array) > 0 && len(a.Array[0]) > 0 {
-						a = a.Array[0][0]
+				if bWasRange && b.Type != ValueArray && a.Type == ValueArray {
+					if _, ok := legacyArrayRef(a); !ok {
+						a = arrayTopLeft(a)
 					}
 				}
 			}
@@ -443,7 +433,8 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			}
 
 		case OpCall:
-			funcID := int(inst.Operand >> 8)
+			funcID := int((inst.Operand >> 8) & funcIDMask)
+			inheritedArrayCtx := inst.Operand&callFlagInheritedArrayCtx != 0
 			argc := int(inst.Operand & 0xFF)
 			if argc > len(stack) {
 				return Value{}, fmt.Errorf("stack underflow in function call")
@@ -452,7 +443,41 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			copy(args, stack[len(stack)-argc:])
 			stack = stack[:len(stack)-argc]
 
+			// Legacy implicit intersection for scalar-lifted functions.
+			// When a function in elementWiseCallFuncs is invoked in true
+			// scalar context — not CSE, not inside any array-forcing caller
+			// (even a suspended one like IF inside SUMPRODUCT) — Excel
+			// applies implicit intersection to each range argument instead
+			// of broadcasting. Example: TEXTJOIN(",", FALSE,
+			// SUBSTITUTE(A1:A4, …)) collapses SUBSTITUTE to the row-aligned
+			// cell rather than lifting over the whole range.
+			//
+			// The inheritedArrayCtx flag (set at compile time when the call
+			// site was inside an array-forcing function) suppresses this
+			// gate so broadcast behaviour still applies inside IF arms
+			// inside SUMPRODUCT, etc.
+			if ctx != nil && !ctx.IsArrayFormula && arrayCtxDepth == 0 &&
+				!inheritedArrayCtx &&
+				funcID >= 0 && funcID < len(idToName) &&
+				functionNeedsLegacyElementwisePreIntersect(idToName[funcID]) {
+				for i := range args {
+					if _, ok := legacyArrayRef(args[i]); ok {
+						args[i] = implicitIntersect(args[i], ctx)
+					}
+				}
+			}
+
+			restoreInheritedArray := false
+			prevInheritedArray := false
+			if ctx != nil {
+				restoreInheritedArray = true
+				prevInheritedArray = ctx.InheritedArray
+				ctx.InheritedArray = inheritedArrayCtx
+			}
 			result, err := CallFunc(funcID, args, ctx)
+			if restoreInheritedArray {
+				ctx.InheritedArray = prevInheritedArray
+			}
 			if err != nil {
 				return Value{}, err
 			}
@@ -506,13 +531,28 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			if err != nil {
 				return Value{}, err
 			}
-			// Collapse worksheet-range arrays (those with a RangeOrigin) to
-			// a single cell at the formula's row/column. The compiler only
-			// emits this opcode for IFERROR/IFNA arguments, which Excel
-			// evaluates in scalar context even when nested in an
-			// array-forcing function. CSE array formulas opt out.
-			if ctx != nil && !ctx.IsArrayFormula && v.Type == ValueArray && v.RangeOrigin != nil {
-				v = implicitIntersect(v, ctx)
+			// Scalarize arrays for explicit @/SINGLE and the legacy IFERROR/
+			// IFNA compatibility path. CSE array formulas opt out.
+			if ctx != nil && !ctx.IsArrayFormula && v.Type == ValueArray {
+				v = explicitIntersect(v, ctx)
+			}
+			push(v)
+
+		case OpImplicitIntersectRefOnly:
+			v, err := pop()
+			if err != nil {
+				return Value{}, err
+			}
+			// Legacy IFERROR/IFNA compatibility: intersect range-backed
+			// arrays so SUMPRODUCT(IFERROR(range, …), …) still collapses
+			// IFERROR to the row-aligned cell, but leave anonymous arrays
+			// (SEQUENCE/FILTER/MAP output used as an IFERROR fallback)
+			// alone so their dynamic-array shape reaches the wrapping
+			// function unchanged.
+			if ctx != nil && !ctx.IsArrayFormula {
+				if _, ok := legacyArrayRef(v); ok {
+					v = implicitIntersect(v, ctx)
+				}
 			}
 			push(v)
 
@@ -528,8 +568,10 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			result := rangeIntersect(a, b, resolver, ctx, arrayCtxDepth > 0)
 			// In non-array contexts a multi-cell intersection is subject to
 			// implicit intersection based on the formula position.
-			if arrayCtxDepth == 0 && result.Type == ValueArray && result.RangeOrigin != nil {
-				result = implicitIntersect(result, ctx)
+			if arrayCtxDepth == 0 {
+				if _, ok := legacyArrayRef(result); ok {
+					result = implicitIntersect(result, ctx)
+				}
 			}
 			push(result)
 
@@ -577,15 +619,9 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 				return Value{}, err
 			}
 
-			// Flatten array to a 1D list (row by row, left to right)
-			var elements []Value
-			if arr.Type == ValueArray {
-				for _, row := range arr.Array {
-					elements = append(elements, row...)
-				}
-			} else {
-				elements = []Value{arr}
-			}
+			// Flatten row-major using shared array-grid semantics so
+			// ref-derived arrays keep their logical shape.
+			elements := valueFlattenRowMajor(arr)
 
 			// Determine starting accumulator
 			acc := initialVal
@@ -643,10 +679,7 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			// Get array dimensions for output shape
 			var scanRows, scanCols int
 			if arr.Type == ValueArray {
-				scanRows = len(arr.Array)
-				if scanRows > 0 {
-					scanCols = len(arr.Array[0])
-				}
+				scanRows, scanCols = arrayOpBounds(arr)
 			} else {
 				scanRows, scanCols = 1, 1
 			}
@@ -669,12 +702,7 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 
 			for i := 0; i < scanRows; i++ {
 				for j := 0; j < scanCols; j++ {
-					var elem Value
-					if arr.Type == ValueArray {
-						elem = arr.Array[i][j]
-					} else {
-						elem = arr
-					}
+					elem := ArrayElement(arr, i, j)
 
 					if acc.Type == ValueEmpty && first {
 						// No initial value: first element becomes accumulator
@@ -775,46 +803,31 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			}
 
 			// Determine dimensions
-			var byrowRows, byrowCols int
+			var byrowRows int
 			if arr.Type == ValueArray {
-				byrowRows = len(arr.Array)
-				if byrowRows > 0 {
-					byrowCols = len(arr.Array[0])
-				}
+				byrowRows, _ = arrayOpBounds(arr)
 			} else {
-				// Scalar treated as 1x1
-				byrowRows, byrowCols = 1, 1
-				arr = Value{Type: ValueArray, Array: [][]Value{{arr}}}
+				byrowRows = 1
 			}
-			_ = byrowCols // cols used only to construct row arrays
 
 			// For each row, create a 1-row array and call lambda
 			byrowResult := make([][]Value, byrowRows)
 			byrowParamVals := make([]Value, 1)
 			for i := 0; i < byrowRows; i++ {
-				// Create a 1-row array from this row
-				var rowValues []Value
-				if i < len(arr.Array) {
-					rowValues = make([]Value, len(arr.Array[i]))
-					copy(rowValues, arr.Array[i])
-				} else {
-					rowValues = make([]Value, byrowCols)
-					for j := range rowValues {
-						rowValues[j] = EmptyVal()
-					}
-				}
-				rowArray := Value{Type: ValueArray, Array: [][]Value{rowValues}}
-
-				byrowParamVals[0] = rowArray
+				byrowParamVals[0] = valueProjectRowArray(arr, i)
 				res, err := evalWithParams(subFormula, resolver, ctx, byrowParamVals)
 				if err != nil {
 					return Value{}, err
 				}
 
 				// Per Excel: BYROW returns #VALUE! if the lambda produces
-				// anything but a single value.
+				// anything but a single value. A 1x1 array is still scalar.
 				if res.Type == ValueArray {
-					res = ErrorVal(ErrValVALUE)
+					if r, c := effectiveArrayBounds(res); r == 1 && c == 1 {
+						res = ArrayElement(res, 0, 0)
+					} else {
+						res = ErrorVal(ErrValVALUE)
+					}
 				}
 
 				byrowResult[i] = []Value{res}
@@ -890,16 +903,11 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			}
 
 			// Determine dimensions
-			var bycolRows, bycolCols int
+			var bycolCols int
 			if arr.Type == ValueArray {
-				bycolRows = len(arr.Array)
-				if bycolRows > 0 {
-					bycolCols = len(arr.Array[0])
-				}
+				_, bycolCols = arrayOpBounds(arr)
 			} else {
-				// Scalar treated as 1x1
-				bycolRows, bycolCols = 1, 1
-				arr = Value{Type: ValueArray, Array: [][]Value{{arr}}}
+				bycolCols = 1
 			}
 
 			// For each column, create a column vector (rows x 1) and call lambda
@@ -908,23 +916,20 @@ func evalWithParams(cf *CompiledFormula, resolver CellResolver, ctx *EvalContext
 			bycolParamVals := make([]Value, 1)
 
 			for j := 0; j < bycolCols; j++ {
-				// Build column vector (rows x 1)
-				colValues := make([][]Value, bycolRows)
-				for i := 0; i < bycolRows; i++ {
-					colValues[i] = []Value{ArrayElement(arr, i, j)}
-				}
-				colArray := Value{Type: ValueArray, Array: colValues}
-
-				bycolParamVals[0] = colArray
+				bycolParamVals[0] = valueProjectColArray(arr, j)
 				res, err := evalWithParams(subFormula, resolver, ctx, bycolParamVals)
 				if err != nil {
 					return Value{}, err
 				}
 
 				// Per Excel: BYCOL returns #VALUE! if the lambda produces
-				// anything but a single value.
+				// anything but a single value. A 1x1 array is still scalar.
 				if res.Type == ValueArray {
-					res = ErrorVal(ErrValVALUE)
+					if r, c := effectiveArrayBounds(res); r == 1 && c == 1 {
+						res = ArrayElement(res, 0, 0)
+					} else {
+						res = ErrorVal(ErrValVALUE)
+					}
 				}
 
 				bycolResult[0][j] = res
@@ -962,12 +967,17 @@ func CoerceNum(v Value) (float64, *Value) {
 			e := ErrorVal(ErrValVALUE)
 			return 0, &e
 		}
-		n, err := strconv.ParseFloat(trimmed, 64)
-		if err != nil {
-			e := ErrorVal(ErrValVALUE)
-			return 0, &e
+		if n, ok := excelParseNumber(trimmed); ok {
+			return n, nil
 		}
-		return n, nil
+		// Excel coerces text dates (and datetimes) to their serial value
+		// during arithmetic, so anything parseDateTimeString accepts
+		// behaves like a number here.
+		if serial, _, ok := parseDateTimeString(trimmed); ok {
+			return serial, nil
+		}
+		e := ErrorVal(ErrValVALUE)
+		return 0, &e
 	case ValueError:
 		return 0, &v
 	default:
@@ -977,10 +987,10 @@ func CoerceNum(v Value) (float64, *Value) {
 }
 
 // numberToString formats a number for concatenation using Excel's rules:
-// - At most 15 significant digits (via Go's 'G' format with precision 15)
-// - Prefer plain decimal notation; only use scientific notation for
-//   extremely large numbers (exponent > 20) or extremely small numbers
-//   (more than 9 leading zeros after the decimal point, i.e. exponent < -9).
+//   - At most 15 significant digits (via Go's 'G' format with precision 15)
+//   - Prefer plain decimal notation; only use scientific notation for
+//     extremely large numbers (exponent > 20) or extremely small numbers
+//     (more than 9 leading zeros after the decimal point, i.e. exponent < -9).
 func numberToString(f float64) string {
 	if f == 0 {
 		return "0"
@@ -1140,7 +1150,9 @@ func CompareValues(a, b Value) int {
 		case ValueNumber:
 			return cmpFloat(a.Num, b.Num)
 		case ValueString:
-			return strings.Compare(strings.ToLower(a.Str), strings.ToLower(b.Str))
+			sa := stripDefaultIgnorable(a.Str)
+			sb := stripDefaultIgnorable(b.Str)
+			return strings.Compare(strings.ToLower(sa), strings.ToLower(sb))
 		case ValueBool:
 			if a.Bool == b.Bool {
 				return 0
@@ -1153,6 +1165,50 @@ func CompareValues(a, b Value) int {
 	}
 
 	return typeRank(a.Type) - typeRank(b.Type)
+}
+
+// stripDefaultIgnorable removes Unicode default-ignorable code points. Excel's
+// `=`, `<`, `>` operators normalise characters like ZWSP (U+200B) and BOM
+// (U+FEFF) out before comparing text, even though LEN/FIND/SUBSTITUTE still
+// see them. Lookup functions use CompareValuesExact, which deliberately does
+// NOT call this — VLOOKUP stays strict.
+func stripDefaultIgnorable(s string) string {
+	needs := false
+	for _, r := range s {
+		if isDefaultIgnorable(r) {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if !isDefaultIgnorable(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isDefaultIgnorable(r rune) bool {
+	switch {
+	case r == 0x00AD: // SOFT HYPHEN
+		return true
+	case r >= 0x200B && r <= 0x200F: // ZWSP, ZWNJ, ZWJ, LRM, RLM
+		return true
+	case r >= 0x202A && r <= 0x202E: // bidi embedding/override markers
+		return true
+	case r >= 0x2060 && r <= 0x2064: // WJ and invisible math operators
+		return true
+	case r >= 0xFE00 && r <= 0xFE0F: // variation selectors 1–16
+		return true
+	case r == 0xFEFF: // BOM / ZWNBSP
+		return true
+	}
+	return false
 }
 
 // CompareValuesExact is like CompareValues but uses bit-exact float
@@ -1205,14 +1261,15 @@ func CompareValuesExact(a, b Value) int {
 }
 
 func typeRank(t ValueType) int {
+	// Excel sort order: numbers first, then text, then booleans, then errors.
 	switch t {
-	case ValueError:
-		return 0
 	case ValueNumber, ValueEmpty:
-		return 1
+		return 0
 	case ValueString:
-		return 2
+		return 1
 	case ValueBool:
+		return 2
+	case ValueError:
 		return 3
 	default:
 		return 4
@@ -1286,48 +1343,55 @@ func IsTruthy(v Value) bool {
 	}
 }
 
-// implicitIntersect reduces a ValueArray loaded from a worksheet range to a
-// scalar value using implicit intersection rules (legacy non-array
-// formula behaviour).  For a single-column range the value at the formula's
-// row is returned; for a single-row range the value at the formula's column
-// is returned.  If the range is multi-row and multi-column, or the formula
-// position falls outside the range, #VALUE! is returned.  Values that are
-// not range-origin arrays are returned unchanged.
+// implicitIntersect scalarizes an array for legacy implicit intersection and
+// explicit @/SINGLE semantics. Anonymous arrays are left unchanged; explicit
+// @/SINGLE scalarization uses explicitIntersect instead.
 func implicitIntersect(v Value, ctx *EvalContext) Value {
-	if v.Type != ValueArray || ctx == nil || v.RangeOrigin == nil {
+	if v.Type != ValueArray || ctx == nil {
 		return v
 	}
-	ro := v.RangeOrigin
+	ref, ok := legacyArrayRef(v)
+	if !ok {
+		return v
+	}
+	ro := ref.Bounds()
 	isSingleCol := ro.FromCol == ro.ToCol
 	isSingleRow := ro.FromRow == ro.ToRow
 	if isSingleCol {
 		r := ctx.CurrentRow
-		if r >= ro.FromRow && r <= ro.ToRow && len(v.Array) > 0 {
+		if r >= ro.FromRow && r <= ro.ToRow {
 			idx := r - ro.FromRow
-			if idx < len(v.Array) {
-				return v.Array[idx][0]
-			}
+			return legacyRefCellValue(ref, idx, 0)
 		}
 		return ErrorVal(ErrValVALUE)
 	}
 	if isSingleRow {
 		c := ctx.CurrentCol
-		if c >= ro.FromCol && c <= ro.ToCol && len(v.Array) > 0 {
+		if c >= ro.FromCol && c <= ro.ToCol {
 			idx := c - ro.FromCol
-			if idx < len(v.Array[0]) {
-				return v.Array[0][idx]
-			}
+			return legacyRefCellValue(ref, 0, idx)
 		}
 		return ErrorVal(ErrValVALUE)
 	}
 	return ErrorVal(ErrValVALUE)
 }
 
-// rangeIntersect computes the rectangular intersection of two range-origin
-// values for Excel's intersection operator (space between references).
-// Returns #VALUE! if either operand is not a proper range reference (must
-// have RangeOrigin) or the sheets differ, and #NULL! if the rectangles
-// don't overlap.
+func explicitIntersect(v Value, ctx *EvalContext) Value {
+	if v.Type != ValueArray {
+		return v
+	}
+	if _, ok := legacyArrayRef(v); !ok {
+		return arrayTopLeft(v)
+	}
+	return implicitIntersect(v, ctx)
+}
+
+// rangeIntersect computes the rectangular intersection of two ref-like values
+// for Excel's intersection operator (space between references). The operands
+// may arrive as raw refs, range-backed arrays, or evalRef-backed legacy
+// values. Returns #VALUE! if either operand does not still resolve to live
+// range bounds or the sheets differ, and #NULL! if the rectangles don't
+// overlap.
 func rangeIntersect(a, b Value, resolver CellResolver, ctx *EvalContext, inArrayCtx bool) Value {
 	// Propagate existing errors.
 	if a.Type == ValueError {
@@ -1336,11 +1400,13 @@ func rangeIntersect(a, b Value, resolver CellResolver, ctx *EvalContext, inArray
 	if b.Type == ValueError {
 		return b
 	}
-	aRo := extractRangeOrigin(a)
-	bRo := extractRangeOrigin(b)
-	if aRo == nil || bRo == nil {
+	aRef, aOk := legacyValueRef(a)
+	bRef, bOk := legacyValueRef(b)
+	if !aOk || !bOk {
 		return ErrorVal(ErrValVALUE)
 	}
+	aRo := aRef.Bounds()
+	bRo := bRef.Bounds()
 	if aRo.Sheet != bRo.Sheet || aRo.SheetEnd != "" || bRo.SheetEnd != "" {
 		return ErrorVal(ErrValVALUE)
 	}
@@ -1381,9 +1447,10 @@ func rangeIntersect(a, b Value, resolver CellResolver, ctx *EvalContext, inArray
 
 // buildRangeFromRefs constructs the rectangular range spanning two single-cell
 // references for the dynamic range operator (e.g. A1:INDEX(A:A,n)). Each
-// operand must resolve to a single cell — either a ValueRef, a value carrying
-// a CellOrigin, or a single-cell array carrying a RangeOrigin. Mismatched
-// sheets or unresolvable operands yield #REF!.
+// operand must still resolve to live single-cell bounds after crossing the
+// legacy Value boundary, whether it arrived as a raw ref, a cell-origin
+// scalar, a single-cell range, or an evalRef-backed value. Mismatched sheets
+// or unresolvable operands yield #REF!.
 func buildRangeFromRefs(a, b Value, resolver CellResolver, ctx *EvalContext) Value {
 	if a.Type == ValueError {
 		return a
@@ -1391,11 +1458,13 @@ func buildRangeFromRefs(a, b Value, resolver CellResolver, ctx *EvalContext) Val
 	if b.Type == ValueError {
 		return b
 	}
-	aRo := extractRangeOrigin(a)
-	bRo := extractRangeOrigin(b)
-	if aRo == nil || bRo == nil {
+	aRef, aOk := legacyValueRef(a)
+	bRef, bOk := legacyValueRef(b)
+	if !aOk || !bOk {
 		return ErrorVal(ErrValREF)
 	}
+	aRo := aRef.Bounds()
+	bRo := bRef.Bounds()
 	if aRo.SheetEnd != "" || bRo.SheetEnd != "" {
 		return ErrorVal(ErrValREF)
 	}
@@ -1451,33 +1520,6 @@ func buildRangeFromRefs(a, b Value, resolver CellResolver, ctx *EvalContext) Val
 	return Value{Type: ValueArray, Array: rows, RangeOrigin: &origin}
 }
 
-func extractRangeOrigin(v Value) *RangeAddr {
-	if v.Type == ValueArray && v.RangeOrigin != nil {
-		return v.RangeOrigin
-	}
-	if v.CellOrigin != nil {
-		// Single-cell ref carried a CellOrigin (including empty-cell results
-		// from INDEX/OFFSET that still represent a worksheet address).
-		c := v.CellOrigin
-		return &RangeAddr{
-			Sheet: c.Sheet, SheetEnd: c.SheetEnd,
-			FromCol: c.Col, FromRow: c.Row,
-			ToCol: c.Col, ToRow: c.Row,
-		}
-	}
-	if v.Type == ValueRef {
-		encoded := int(v.Num)
-		col := encoded % 100_000
-		row := encoded / 100_000
-		return &RangeAddr{
-			Sheet:   v.Str,
-			FromCol: col, FromRow: row,
-			ToCol: col, ToRow: row,
-		}
-	}
-	return nil
-}
-
 // unionAreas flattens a sequence of area Values into a single ValueArray by
 // concatenating rows row-by-row. Scalars become 1x1 elements. The result has
 // no RangeOrigin because it no longer represents a single rectangle.
@@ -1490,7 +1532,14 @@ func unionAreas(areas []Value) Value {
 			return v
 		}
 		if v.Type == ValueArray {
-			out = append(out, v.Array...)
+			rows, cols := arrayOpBounds(v)
+			for r := 0; r < rows; r++ {
+				row := make([]Value, cols)
+				for c := 0; c < cols; c++ {
+					row[c] = arrayElementDirect(v, rows, cols, r, c)
+				}
+				out = append(out, row)
+			}
 			continue
 		}
 		out = append(out, []Value{v})
@@ -1622,16 +1671,7 @@ func ArrayElement(v Value, i, j int) Value {
 		return v
 	}
 	rows, cols := effectiveArrayBounds(v)
-	if i < 0 || j < 0 || i >= rows || j >= cols {
-		return ErrorVal(ErrValNA)
-	}
-	if i < len(v.Array) && j < len(v.Array[i]) {
-		return v.Array[i][j]
-	}
-	if v.RangeOrigin != nil {
-		return EmptyVal()
-	}
-	return ErrorVal(ErrValNA)
+	return arrayElementDirect(v, rows, cols, i, j)
 }
 
 // resolveSheetRange returns the slice of sheet names from startSheet to endSheet
@@ -1664,18 +1704,7 @@ func resolveSheetRange(allSheets []string, startSheet, endSheet string) []string
 // Non-numeric values in ranges are skipped; non-numeric scalar args cause #VALUE!.
 func IterateNumeric(args []Value, fn func(float64)) *Value {
 	for _, arg := range args {
-		if arg.Type == ValueArray {
-			for _, row := range arg.Array {
-				for _, cell := range row {
-					if cell.Type == ValueError {
-						return &cell
-					}
-					if cell.Type == ValueNumber {
-						fn(cell.Num)
-					}
-				}
-			}
-		} else {
+		if arg.Type != ValueArray {
 			if arg.Type == ValueError {
 				return &arg
 			}
@@ -1684,6 +1713,22 @@ func IterateNumeric(args []Value, fn func(float64)) *Value {
 				return e
 			}
 			fn(n)
+			continue
+		}
+		var err *Value
+		iterateValueElements(arg, func(cell Value) bool {
+			if cell.Type == ValueError {
+				cellErr := cell
+				err = &cellErr
+				return false
+			}
+			if cell.Type == ValueNumber {
+				fn(cell.Num)
+			}
+			return true
+		})
+		if err != nil {
+			return err
 		}
 	}
 	return nil

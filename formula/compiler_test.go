@@ -150,7 +150,7 @@ func TestCompileRangeRef(t *testing.T) {
 	}
 }
 
-func TestCompileNeedsSpillProbe(t *testing.T) {
+func TestCompileTopLevelArrayCompanion(t *testing.T) {
 	tests := []struct {
 		input string
 		want  bool
@@ -165,6 +165,7 @@ func TestCompileNeedsSpillProbe(t *testing.T) {
 		{"SUM(A:A)", false},
 		{"COUNT(A:A)", false},
 		{"SUMIF(A:A,\">0\")", false},
+		{"SUMIF(A:A,UNIQUE(B1:B3))", true},
 		{"MATCH(1,A:A,0)", false},
 		{"SUMPRODUCT(A1:A3*B1:B3)", false},
 	}
@@ -172,8 +173,8 @@ func TestCompileNeedsSpillProbe(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			cf := compileFormula(t, tt.input)
-			if cf.NeedsSpillProbe != tt.want {
-				t.Fatalf("NeedsSpillProbe = %v, want %v", cf.NeedsSpillProbe, tt.want)
+			if got := cf.TopLevelArray != nil; got != tt.want {
+				t.Fatalf("TopLevelArray != nil = %v, want %v", got, tt.want)
 			}
 		})
 	}

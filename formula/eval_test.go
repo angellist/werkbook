@@ -2,12 +2,14 @@ package formula
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
 // mockResolver implements CellResolver for testing.
 type mockResolver struct {
-	cells map[CellAddr]Value
+	cells        map[CellAddr]Value
+	definedNames map[string]Value
 }
 
 // sparseResolver mimics the workbook resolver's behavior for full-row and
@@ -40,6 +42,17 @@ func (m *mockResolver) GetRangeValues(addr RangeAddr) [][]Value {
 		rows[r-addr.FromRow] = row
 	}
 	return rows
+}
+
+func (m *mockResolver) ResolveDefinedNameValue(name, scopeSheet string) (Value, bool) {
+	if m.definedNames == nil {
+		return Value{}, false
+	}
+	if v, ok := m.definedNames[strings.ToLower(scopeSheet)+"\x00"+strings.ToLower(name)]; ok {
+		return v, true
+	}
+	v, ok := m.definedNames["\x00"+strings.ToLower(name)]
+	return v, ok
 }
 
 func (m *sparseResolver) GetCellValue(addr CellAddr) Value {
@@ -557,6 +570,59 @@ func TestEvalSUMPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
 	}
 }
 
+func TestEvalAVERAGEPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 5}: NumberVal(30),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     3,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "AVERAGE(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Errorf("AVERAGE(A:A) = %v (%g), want 20", got.Type, got.Num)
+	}
+}
+
+func TestEvalCOUNTPreservesDirectFullRowArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 5}: NumberVal(10),
+			{Col: 3, Row: 5}: BoolVal(true),
+			{Col: 4, Row: 5}: StringVal("9"),
+			{Col: 5, Row: 5}: NumberVal(7),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     1,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "COUNT(5:5)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("COUNT(5:5) = %v (%g), want 2", got.Type, got.Num)
+	}
+}
+
 func TestEvalCOUNTAPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
 	resolver := &mockResolver{
 		cells: map[CellAddr]Value{
@@ -581,6 +647,208 @@ func TestEvalCOUNTAPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
 	}
 	if got.Type != ValueNumber || got.Num != 3 {
 		t.Errorf("MAX(COUNTA(A:A)-1,0) = %v (%g), want 3", got.Type, got.Num)
+	}
+}
+
+func TestEvalMAXPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(10),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 5}: NumberVal(30),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     4,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "MAX(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 30 {
+		t.Errorf("MAX(A:A) = %v (%g), want 30", got.Type, got.Num)
+	}
+}
+
+func TestEvalDEVSQPreservesDirectFullRowArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 5}: NumberVal(1),
+			{Col: 3, Row: 5}: BoolVal(true),
+			{Col: 4, Row: 5}: NumberVal(3),
+			{Col: 6, Row: 5}: NumberVal(5),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     1,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "DEVSQ(5:5)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 8 {
+		t.Errorf("DEVSQ(5:5) = %v (%g), want 8", got.Type, got.Num)
+	}
+}
+
+func TestEvalAVEDEVPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 5}: NumberVal(4),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     2,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "AVEDEV(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("AVEDEV(A:A) = %v (%g), want 1", got.Type, got.Num)
+	}
+}
+
+func TestEvalSTDEVPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 5}: NumberVal(4),
+			{Col: 1, Row: 7}: NumberVal(6),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     3,
+		CurrentRow:     4,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "STDEV(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 2 {
+		t.Errorf("STDEV(A:A) = %v (%g), want 2", got.Type, got.Num)
+	}
+}
+
+func TestEvalVARPPreservesDirectFullRowArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 5}: NumberVal(2),
+			{Col: 3, Row: 5}: BoolVal(true),
+			{Col: 4, Row: 5}: NumberVal(4),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     1,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "VAR.P(5:5)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("VAR.P(5:5) = %v (%g), want 1", got.Type, got.Num)
+	}
+}
+
+func TestEvalVARAPreservesDirectFullColumnArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(2),
+			{Col: 1, Row: 3}: BoolVal(true),
+			{Col: 1, Row: 5}: StringVal("x"),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     2,
+		CurrentRow:     2,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "VARA(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 1 {
+		t.Errorf("VARA(A:A) = %v (%g), want 1", got.Type, got.Num)
+	}
+}
+
+func TestEvalSTDEVPAPreservesDirectFullRowArgInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 2, Row: 5}: NumberVal(2),
+			{Col: 4, Row: 5}: BoolVal(true),
+			{Col: 6, Row: 5}: StringVal("x"),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     1,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "STDEVPA(5:5)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	want := math.Sqrt(2.0 / 3.0)
+	if got.Type != ValueNumber || got.Num != want {
+		t.Errorf("STDEVPA(5:5) = %v (%g), want %g", got.Type, got.Num, want)
+	}
+}
+
+func TestEvalVARADirectCellTextStillErrors(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("x"),
+		},
+	}
+
+	cf := evalCompile(t, "VARA(A1,2)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Errorf("VARA(A1,2) = %v, want #VALUE!", got)
 	}
 }
 
@@ -677,6 +945,64 @@ func TestEvalFILTERPreservesFullColumnArgsInScalarFormula(t *testing.T) {
 	if got.Array[1][0].Type != ValueNumber || got.Array[1][0].Num != 300 {
 		t.Fatalf("FILTER second row = %#v, want 300", got.Array[1][0])
 	}
+}
+
+func TestEvalSORTBYPreservesFullColumnArgsInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(300),
+			{Col: 2, Row: 1}: NumberVal(3),
+			{Col: 1, Row: 2}: NumberVal(100),
+			{Col: 2, Row: 2}: NumberVal(1),
+			{Col: 1, Row: 3}: NumberVal(200),
+			{Col: 2, Row: 3}: NumberVal(2),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     3,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "SORTBY(A:A,B:B)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	assertLookupValueEqual(t, got, Value{Type: ValueArray, Array: [][]Value{
+		{NumberVal(100)},
+		{NumberVal(200)},
+		{NumberVal(300)},
+	}})
+}
+
+func TestEvalUNIQUEPreservesFullColumnArgsInScalarFormula(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: StringVal("alpha"),
+			{Col: 1, Row: 2}: StringVal("beta"),
+			{Col: 1, Row: 3}: StringVal("alpha"),
+		},
+	}
+
+	ctx := &EvalContext{
+		CurrentCol:     2,
+		CurrentRow:     1,
+		CurrentSheet:   "Sheet1",
+		IsArrayFormula: false,
+	}
+
+	cf := evalCompile(t, "UNIQUE(A:A)")
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	assertLookupValueEqual(t, got, Value{Type: ValueArray, Array: [][]Value{
+		{StringVal("alpha")},
+		{StringVal("beta")},
+	}})
 }
 
 func TestEvalPERCENTRANKPreservesFullColumnArgInScalarFormula(t *testing.T) {
@@ -941,6 +1267,127 @@ func TestLiftUnaryTrimmedRangeOriginUsesLogicalBounds(t *testing.T) {
 	}})
 	if got.RangeOrigin == nil || got.RangeOrigin.FromRow != 1 || got.RangeOrigin.ToRow != 3 {
 		t.Fatalf("LiftUnary RangeOrigin = %+v, want rows 1:3", got.RangeOrigin)
+	}
+}
+
+func TestEvalRefBoundarySingleCellRoundTripsThroughLegacyValue(t *testing.T) {
+	addr := CellAddr{Sheet: "Sheet1", Col: 2, Row: 7}
+	got := EvalValueToValue(newEvalSingleCellRef(addr, StringVal("hello")))
+
+	if got.Type != ValueString || got.Str != "hello" {
+		t.Fatalf("EvalValueToValue(single ref) = %#v, want string hello", got)
+	}
+	if got.CellOrigin == nil || *got.CellOrigin != addr {
+		t.Fatalf("CellOrigin = %+v, want %+v", got.CellOrigin, addr)
+	}
+	if got.evalRef == nil {
+		t.Fatal("expected legacy boundary value to retain evalRef")
+	}
+
+	roundTrip := ValueToEvalValue(got)
+	if roundTrip.Kind != EvalRef || roundTrip.Ref == nil {
+		t.Fatalf("ValueToEvalValue(roundTrip) = %#v, want EvalRef", roundTrip)
+	}
+	if bounds := roundTrip.Ref.Bounds(); bounds != (RangeAddr{Sheet: "Sheet1", FromCol: 2, FromRow: 7, ToCol: 2, ToRow: 7}) {
+		t.Fatalf("Bounds = %+v, want Sheet1!B7", bounds)
+	}
+	cell := EvalValueToValue(roundTrip.Ref.Materialized.Cell(0, 0))
+	if cell.Type != ValueString || cell.Str != "hello" {
+		t.Fatalf("Materialized cell = %#v, want string hello", cell)
+	}
+}
+
+func TestEvalRefBoundaryPlaceholderKeepsInternalFullAxisRef(t *testing.T) {
+	addr := RangeAddr{Sheet: "Sheet1", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: maxRows}
+	got := EvalValueToValue(newEvalRangeRef(addr, [][]Value{
+		{NumberVal(10)},
+		{NumberVal(20)},
+	}, nil, &RefLegacyBoundary{
+		PlaceholderRows: 1,
+		PlaceholderCols: 1,
+		UseEmptyArray:   true,
+	}))
+
+	if got.Type != ValueArray {
+		t.Fatalf("EvalValueToValue(full-axis ref) type = %v, want ValueArray", got.Type)
+	}
+	if len(got.Array) != 1 || len(got.Array[0]) != 1 {
+		t.Fatalf("legacy placeholder dims = %dx%d, want 1x1", len(got.Array), len(got.Array[0]))
+	}
+	if got.Array[0][0].Type != ValueEmpty {
+		t.Fatalf("legacy placeholder cell = %#v, want empty", got.Array[0][0])
+	}
+	if got.evalRef == nil {
+		t.Fatal("expected legacy placeholder value to retain evalRef")
+	}
+
+	roundTrip := ValueToEvalValue(got)
+	if roundTrip.Kind != EvalRef || roundTrip.Ref == nil {
+		t.Fatalf("ValueToEvalValue(roundTrip) = %#v, want EvalRef", roundTrip)
+	}
+	if bounds := roundTrip.Ref.Bounds(); bounds != addr {
+		t.Fatalf("Bounds = %+v, want %+v", bounds, addr)
+	}
+	if rows := roundTrip.Ref.Materialized.Rows(); rows != 2 {
+		t.Fatalf("Materialized.Rows = %d, want 2", rows)
+	}
+	cell := EvalValueToValue(roundTrip.Ref.Materialized.Cell(1, 0))
+	if cell.Type != ValueNumber || cell.Num != 20 {
+		t.Fatalf("Materialized cell = %#v, want 20", cell)
+	}
+}
+
+func TestImplicitIntersectUsesEvalRefBackedRange(t *testing.T) {
+	addr := RangeAddr{Sheet: "Sheet1", FromCol: 1, FromRow: 2, ToCol: 1, ToRow: 4}
+	v := EvalValueToValue(newEvalRangeRef(addr, [][]Value{
+		{NumberVal(10)},
+		{NumberVal(20)},
+		{NumberVal(30)},
+	}, nil, nil))
+
+	got := implicitIntersect(v, &EvalContext{CurrentCol: 7, CurrentRow: 3})
+	if got.Type != ValueNumber || got.Num != 20 {
+		t.Fatalf("implicitIntersect(evalRef-backed A2:A4 at row 3) = %#v, want 20", got)
+	}
+}
+
+func TestRangeIntersectRejectsEvalRefBacked3DValue(t *testing.T) {
+	threeD := EvalValueToValue(newEvalRangeRef(
+		RangeAddr{Sheet: "Sheet1", SheetEnd: "Sheet3", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 1},
+		[][]Value{{NumberVal(10)}},
+		nil,
+		nil,
+	))
+	twoD := EvalValueToValue(newEvalRangeRef(
+		RangeAddr{Sheet: "Sheet1", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 1},
+		[][]Value{{NumberVal(10)}},
+		nil,
+		nil,
+	))
+
+	got := rangeIntersect(threeD, twoD, &mockResolver{}, &EvalContext{CurrentSheet: "Sheet1"}, false)
+	if got.Type != ValueError || got.Err != ErrValVALUE {
+		t.Fatalf("rangeIntersect(3D ref, 2D ref) = %#v, want #VALUE!", got)
+	}
+}
+
+func TestBuildRangeFromRefsRejectsEvalRefBacked3DValue(t *testing.T) {
+	threeD := EvalValueToValue(newEvalRangeRef(
+		RangeAddr{Sheet: "Sheet1", SheetEnd: "Sheet3", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 1},
+		[][]Value{{NumberVal(10)}},
+		nil,
+		nil,
+	))
+	twoD := EvalValueToValue(newEvalRangeRef(
+		RangeAddr{Sheet: "Sheet1", FromCol: 1, FromRow: 2, ToCol: 1, ToRow: 2},
+		[][]Value{{NumberVal(20)}},
+		nil,
+		nil,
+	))
+
+	got := buildRangeFromRefs(threeD, twoD, &mockResolver{}, &EvalContext{CurrentSheet: "Sheet1"})
+	if got.Type != ValueError || got.Err != ErrValREF {
+		t.Fatalf("buildRangeFromRefs(3D ref, 2D ref) = %#v, want #REF!", got)
 	}
 }
 
@@ -1797,6 +2244,45 @@ func TestEvalCOUNTBLANKPadding(t *testing.T) {
 	}
 }
 
+func TestEvalCOUNTBLANKFullColumnCountsLogicalBlanks(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 3}: NumberVal(2),
+		},
+	}
+
+	cf := evalCompile(t, "COUNTBLANK(A:A)")
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf("Eval(COUNTBLANK(A:A)): %v", err)
+	}
+	want := float64(maxRows - 2)
+	if got.Type != ValueNumber || got.Num != want {
+		t.Errorf("COUNTBLANK(A:A) = %v (%g), want %g", got.Type, got.Num, want)
+	}
+}
+
+func TestEvalCOUNTIFFullColumnCountsLogicalBlanksForNotEqualZero(t *testing.T) {
+	resolver := &sparseResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(0),
+			{Col: 1, Row: 3}: NumberVal(0),
+		},
+	}
+
+	cf := evalCompile(t, `COUNTIF(A:A,"<>0")`)
+	got, err := Eval(cf, resolver, nil)
+	if err != nil {
+		t.Fatalf(`Eval(COUNTIF(A:A,"<>0")): %v`, err)
+	}
+	want := float64(maxRows - 2)
+	if got.Type != ValueNumber || got.Num != want {
+		t.Errorf(`COUNTIF(A:A,"<>0") = %v (%g), want %g`, got.Type, got.Num, want)
+	}
+}
+
 func TestEvalOversizedBoundedRangeReturnsREF(t *testing.T) {
 	resolver := &panicRangeResolver{}
 
@@ -2303,6 +2789,137 @@ func TestEvalIFERRORImplicitIntersection(t *testing.T) {
 	}
 }
 
+func TestEvalIFERROROFFSETScalarizesAnonymousArrayOffsets(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Sheet: "data", Col: 1, Row: 2}: NumberVal(10),
+			{Sheet: "data", Col: 1, Row: 4}: NumberVal(30),
+			{Sheet: "data", Col: 1, Row: 6}: NumberVal(50),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver, CurrentSheet: "results", CurrentCol: 2, CurrentRow: 4}
+
+	got, err := Eval(evalCompile(t, `IFERROR(OFFSET(data!A2,{0;2;4},0),"err")`), resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 10 {
+		t.Fatalf("IFERROR(OFFSET(data!A2,{0;2;4},0),\"err\") = %#v, want 10", got)
+	}
+}
+
+func TestEvalSUMPRODUCTWholeColumnINDIRECTUsesLiveRefInComparison(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Sheet: "data", Col: 1, Row: 1}: NumberVal(1),
+			{Sheet: "data", Col: 1, Row: 2}: NumberVal(2),
+			{Sheet: "data", Col: 1, Row: 3}: NumberVal(3),
+			{Sheet: "data", Col: 1, Row: 4}: NumberVal(4),
+			{Sheet: "data", Col: 1, Row: 5}: NumberVal(5),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver, CurrentSheet: "results", CurrentCol: 2, CurrentRow: 6}
+
+	got, err := Eval(evalCompile(t, `SUMPRODUCT((INDIRECT("data!A:A")>2)*1)`), resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Fatalf(`SUMPRODUCT((INDIRECT("data!A:A")>2)*1) = %#v, want 3`, got)
+	}
+}
+
+func TestEvalCOUNTIndirectArrayArgIgnoresRefDerivedAnonymousArrayValues(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Sheet: "data", Col: 1, Row: 1}: NumberVal(10),
+			{Sheet: "data", Col: 1, Row: 3}: NumberVal(30),
+			{Sheet: "data", Col: 1, Row: 5}: NumberVal(50),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver, CurrentSheet: "results", CurrentCol: 2, CurrentRow: 5}
+
+	got, err := Eval(evalCompile(t, `COUNT(INDIRECT({"data!A1";"data!A3";"data!A5"}))`), resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Fatalf(`COUNT(INDIRECT({"data!A1";"data!A3";"data!A5"})) = %#v, want 0`, got)
+	}
+}
+
+func TestEvalSUMPRODUCTIndirectArrayArgIgnoresRefDerivedAnonymousArrayValues(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Sheet: "data", Col: 1, Row: 1}: NumberVal(10),
+			{Sheet: "data", Col: 1, Row: 3}: NumberVal(30),
+			{Sheet: "data", Col: 1, Row: 5}: NumberVal(50),
+		},
+	}
+	ctx := &EvalContext{Resolver: resolver, CurrentSheet: "results", CurrentCol: 2, CurrentRow: 4}
+
+	got, err := Eval(evalCompile(t, `SUMPRODUCT(INDIRECT({"data!A1";"data!A3";"data!A5"}))`), resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 0 {
+		t.Fatalf(`SUMPRODUCT(INDIRECT({"data!A1";"data!A3";"data!A5"})) = %#v, want 0`, got)
+	}
+}
+
+// TestEvalIFErrorAndIFNARetainAnonymousArrayFallbacks guards the
+// OpImplicitIntersectRefOnly path: in a normal scalar formula cell, IFERROR
+// / IFNA should still leave anonymous fallback arrays intact so wrappers like
+// ROWS/SUM see the full SEQUENCE(5), not just its top-left cell.
+func TestEvalIFErrorAndIFNARetainAnonymousArrayFallbacks(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(1),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(3),
+		},
+	}
+	ctx := &EvalContext{CurrentCol: 4, CurrentRow: 2, CurrentSheet: "Sheet1"}
+
+	tests := []struct {
+		name    string
+		formula string
+		want    Value
+	}{
+		{
+			name:    "rows_iferror_filter_empty_fallback_sequence",
+			formula: `ROWS(IFERROR(FILTER(A1:A3,A1:A3=0),SEQUENCE(5)))`,
+			want:    NumberVal(5),
+		},
+		{
+			name:    "sum_iferror_filter_empty_fallback_sequence",
+			formula: `SUM(IFERROR(FILTER(A1:A3,A1:A3=0),SEQUENCE(5)))`,
+			want:    NumberVal(15),
+		},
+		{
+			name:    "rows_ifna_fallback_sequence",
+			formula: `ROWS(IFNA(#N/A,SEQUENCE(5)))`,
+			want:    NumberVal(5),
+		},
+		{
+			name:    "sum_ifna_fallback_sequence",
+			formula: `SUM(IFNA(#N/A,SEQUENCE(5)))`,
+			want:    NumberVal(15),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, ctx)
+			if err != nil {
+				t.Fatalf("Eval(%s): %v", tt.formula, err)
+			}
+			assertLookupValueEqual(t, got, tt.want)
+		})
+	}
+}
+
 // TestEvalRangeIntersectOperator exercises the space-intersection operator:
 // a space between two references returns the rectangular overlap.
 func TestEvalRangeIntersectOperator(t *testing.T) {
@@ -2365,6 +2982,36 @@ func TestEvalRangeIntersectOperator(t *testing.T) {
 	}
 	if got.Type != ValueNumber || got.Num != -99 {
 		t.Errorf("IFERROR(A1:B2 D4:E5, -99) = %v (%g), want -99", got.Type, got.Num)
+	}
+}
+
+func TestEvalBuildRangeFromIndexFullColumn(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Sheet: "Sheet1", Col: 1, Row: 1}: NumberVal(10),
+			{Sheet: "Sheet1", Col: 1, Row: 2}: NumberVal(20),
+			{Sheet: "Sheet1", Col: 1, Row: 3}: NumberVal(30),
+			{Sheet: "Sheet1", Col: 1, Row: 4}: NumberVal(40),
+		},
+	}
+	ctx := &EvalContext{CurrentCol: 2, CurrentRow: 7, CurrentSheet: "Sheet1"}
+
+	cf := evalCompile(t, `ROWS(A1:INDEX(A:A,3))`)
+	got, err := Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval ROWS(A1:INDEX(A:A,3)): %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 3 {
+		t.Fatalf("ROWS(A1:INDEX(A:A,3)) = %#v, want 3", got)
+	}
+
+	cf = evalCompile(t, `SUM(A1:INDEX(A:A,3))`)
+	got, err = Eval(cf, resolver, ctx)
+	if err != nil {
+		t.Fatalf("Eval SUM(A1:INDEX(A:A,3)): %v", err)
+	}
+	if got.Type != ValueNumber || got.Num != 60 {
+		t.Fatalf("SUM(A1:INDEX(A:A,3)) = %#v, want 60", got)
 	}
 }
 

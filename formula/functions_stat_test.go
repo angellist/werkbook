@@ -38,6 +38,38 @@ func TestLargeSmall(t *testing.T) {
 	}
 }
 
+func TestLargeSmallArrayK(t *testing.T) {
+	resolver := &mockResolver{
+		cells: map[CellAddr]Value{
+			{Col: 1, Row: 1}: NumberVal(5),
+			{Col: 1, Row: 2}: NumberVal(2),
+			{Col: 1, Row: 3}: NumberVal(9),
+			{Col: 1, Row: 4}: NumberVal(1),
+			{Col: 1, Row: 5}: NumberVal(7),
+		},
+	}
+
+	t.Run("LARGE spills over array k", func(t *testing.T) {
+		got, err := Eval(evalCompile(t, `SUMPRODUCT(LARGE(A1:A5,{1;2;3}))`), resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 21 {
+			t.Fatalf(`SUMPRODUCT(LARGE(A1:A5,{1;2;3})) = %#v, want 21`, got)
+		}
+	})
+
+	t.Run("SMALL spills over array k", func(t *testing.T) {
+		got, err := Eval(evalCompile(t, `SUMPRODUCT(SMALL(A1:A5,{1;2;3}))`), resolver, nil)
+		if err != nil {
+			t.Fatalf("Eval: %v", err)
+		}
+		if got.Type != ValueNumber || got.Num != 8 {
+			t.Fatalf(`SUMPRODUCT(SMALL(A1:A5,{1;2;3})) = %#v, want 8`, got)
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // COUNTBLANK
 // ---------------------------------------------------------------------------
@@ -10374,7 +10406,6 @@ func TestPERCENTRANK(t *testing.T) {
 		{name: "inc_large_max", formula: "PERCENTRANK.INC(K1:K20,20)", resolver: largeResolver, wantNum: 1},
 		{name: "inc_large_mid", formula: "PERCENTRANK.INC(K1:K20,10)", resolver: largeResolver, wantNum: 0.473},
 		{name: "inc_large_interp", formula: "PERCENTRANK.INC(K1:K20,10.5)", resolver: largeResolver, wantNum: 0.5},
-
 	}
 
 	for _, tt := range tests {
@@ -12160,6 +12191,125 @@ func TestMAXIFS_NonArrayMaxRange(t *testing.T) {
 	}
 	if got.Type != ValueError || got.Err != ErrValVALUE {
 		t.Errorf("MAXIFS non-array max_range: got %v, want #VALUE!", got)
+	}
+}
+
+func TestCriteriaExtremaIFS_ArrayCriteriaSpill(t *testing.T) {
+	maxRange := Value{Type: ValueArray, Array: [][]Value{
+		{NumberVal(10)},
+		{NumberVal(20)},
+		{NumberVal(30)},
+		{NumberVal(40)},
+	}}
+	regionRange := Value{Type: ValueArray, Array: [][]Value{
+		{StringVal("East")},
+		{StringVal("West")},
+		{StringVal("East")},
+		{StringVal("West")},
+	}}
+	criteria := Value{Type: ValueArray, Array: [][]Value{{
+		StringVal("East"), StringVal("West"),
+	}}}
+
+	tests := []struct {
+		name string
+		fn   func([]Value) (Value, error)
+		want Value
+	}{
+		{
+			name: "MAXIFS",
+			fn:   fnMAXIFS,
+			want: Value{Type: ValueArray, Array: [][]Value{{
+				NumberVal(30), NumberVal(40),
+			}}},
+		},
+		{
+			name: "MINIFS",
+			fn:   fnMINIFS,
+			want: Value{Type: ValueArray, Array: [][]Value{{
+				NumberVal(10), NumberVal(20),
+			}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fn([]Value{maxRange, regionRange, criteria})
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+			assertLookupValueEqual(t, got, tt.want)
+		})
+	}
+}
+
+func TestCriteriaExtremaIFS_TrimmedRangeOriginLogicalTail(t *testing.T) {
+	criteriaRange := trimmedRangeValue([][]Value{{EmptyVal()}}, 2, 1, 2, 3)
+
+	tests := []struct {
+		name     string
+		fn       func([]Value) (Value, error)
+		rangeArg Value
+		want     Value
+	}{
+		{
+			name:     "MAXIFS",
+			fn:       fnMAXIFS,
+			rangeArg: trimmedRangeValue([][]Value{{NumberVal(-5)}}, 1, 1, 1, 3),
+			want:     NumberVal(0),
+		},
+		{
+			name:     "MINIFS",
+			fn:       fnMINIFS,
+			rangeArg: trimmedRangeValue([][]Value{{NumberVal(5)}}, 1, 1, 1, 3),
+			want:     NumberVal(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fn([]Value{tt.rangeArg, criteriaRange, StringVal("")})
+			if err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+			assertLookupValueEqual(t, got, tt.want)
+		})
+	}
+}
+
+func TestCriteriaExtremaIFS_FullColumnSparseRefLogicalTail(t *testing.T) {
+	tests := []struct {
+		name    string
+		formula string
+		value   Value
+	}{
+		{
+			name:    "MAXIFS",
+			formula: `MAXIFS(A:A,B:B,"")`,
+			value:   NumberVal(-5),
+		},
+		{
+			name:    "MINIFS",
+			formula: `MINIFS(A:A,B:B,"")`,
+			value:   NumberVal(5),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolver := &sparseResolver{
+				cells: map[CellAddr]Value{
+					{Col: 1, Row: 1}: tt.value,
+					{Col: 2, Row: 1}: EmptyVal(),
+				},
+			}
+			cf := evalCompile(t, tt.formula)
+			got, err := Eval(cf, resolver, nil)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			assertLookupValueEqual(t, got, NumberVal(0))
+		})
 	}
 }
 
@@ -21792,9 +21942,9 @@ func TestT_INV_2T(t *testing.T) {
 		{"roundtrip_p90_df20", "T.DIST.2T(T.INV.2T(0.9,20),20)", 0.9, false, 0},
 
 		// Boolean coercion: TRUE → 1, FALSE → 0
-		{"bool_p_true_df5", "T.INV.2T(TRUE,5)", 0, false, 0},             // T.INV.2T(1,5) = 0
-		{"bool_df_true", "T.INV.2T(0.05,TRUE)", 12.7062047, false, 0},    // T.INV.2T(0.05,1)
-		{"bool_p_false_err", "T.INV.2T(FALSE,10)", 0, true, ErrValNUM},   // p=0 → #NUM!
+		{"bool_p_true_df5", "T.INV.2T(TRUE,5)", 0, false, 0},           // T.INV.2T(1,5) = 0
+		{"bool_df_true", "T.INV.2T(0.05,TRUE)", 12.7062047, false, 0},  // T.INV.2T(0.05,1)
+		{"bool_p_false_err", "T.INV.2T(FALSE,10)", 0, true, ErrValNUM}, // p=0 → #NUM!
 
 		// Edge: p very close to 0 (but positive)
 		{"p_tiny", "T.INV.2T(0.0001,10)", 6.21105089, false, 0},
@@ -32013,8 +32163,8 @@ func TestTTEST(t *testing.T) {
 		{"paired_mixed_diff", "T.TEST({10,20,30},{5,12,35},2,1)", 0.567410, false, 0},
 
 		// Boolean coercion in tails/type
-		{"tails_bool_true", "T.TEST(A1:A9,B1:B9,TRUE,1)", 0.098008, false, 0},  // TRUE=1 → 1 tail
-		{"type_bool_true", "T.TEST(A1:A9,B1:B9,2,TRUE)", 0.196016, false, 0},   // TRUE=1 → paired
+		{"tails_bool_true", "T.TEST(A1:A9,B1:B9,TRUE,1)", 0.098008, false, 0},   // TRUE=1 → 1 tail
+		{"type_bool_true", "T.TEST(A1:A9,B1:B9,2,TRUE)", 0.196016, false, 0},    // TRUE=1 → paired
 		{"tails_bool_false", "T.TEST(A1:A9,B1:B9,FALSE,1)", 0, true, ErrValNUM}, // FALSE=0 → invalid
 
 		// Welch's unequal variance with very different variances
@@ -37714,14 +37864,14 @@ func TestCOUNTIF_ComparisonOperators(t *testing.T) {
 		want    float64
 		label   string
 	}{
-		{`COUNTIF(A1:A5,">5")`, 2, ">5"},       // 7, 9
-		{`COUNTIF(A1:A5,">=5")`, 3, ">=5"},      // 5, 7, 9
-		{`COUNTIF(A1:A5,"<5")`, 2, "<5"},        // 1, 3
-		{`COUNTIF(A1:A5,"<=5")`, 3, "<=5"},      // 1, 3, 5
-		{`COUNTIF(A1:A5,"<>5")`, 4, "<>5"},      // 1, 3, 7, 9
-		{`COUNTIF(A1:A5,"<=9")`, 5, "<=9"},      // all
-		{`COUNTIF(A1:A5,">0")`, 5, ">0"},        // all
-		{`COUNTIF(A1:A5,">=10")`, 0, ">=10"},    // none
+		{`COUNTIF(A1:A5,">5")`, 2, ">5"},     // 7, 9
+		{`COUNTIF(A1:A5,">=5")`, 3, ">=5"},   // 5, 7, 9
+		{`COUNTIF(A1:A5,"<5")`, 2, "<5"},     // 1, 3
+		{`COUNTIF(A1:A5,"<=5")`, 3, "<=5"},   // 1, 3, 5
+		{`COUNTIF(A1:A5,"<>5")`, 4, "<>5"},   // 1, 3, 7, 9
+		{`COUNTIF(A1:A5,"<=9")`, 5, "<=9"},   // all
+		{`COUNTIF(A1:A5,">0")`, 5, ">0"},     // all
+		{`COUNTIF(A1:A5,">=10")`, 0, ">=10"}, // none
 	}
 
 	for _, tt := range tests {
@@ -37898,7 +38048,7 @@ func TestCOUNTIF_BooleanCriteria(t *testing.T) {
 			{Col: 1, Row: 1}: BoolVal(true),
 			{Col: 1, Row: 2}: BoolVal(false),
 			{Col: 1, Row: 3}: BoolVal(true),
-			{Col: 1, Row: 4}: NumberVal(1), // 1 is not TRUE
+			{Col: 1, Row: 4}: NumberVal(1),      // 1 is not TRUE
 			{Col: 1, Row: 5}: StringVal("TRUE"), // string "TRUE" is not boolean TRUE
 		},
 	}

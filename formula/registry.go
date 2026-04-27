@@ -18,6 +18,12 @@ const (
 	FnKindArrayNative
 	FnKindLookup
 	FnKindStateful
+	// FnKindLookupArrayLift is for lookup functions (VLOOKUP, HLOOKUP,
+	// MATCH, LOOKUP, XLOOKUP, XMATCH) where arg 0 is a semantically scalar
+	// "lookup_value" but Excel evaluates per-element when called in array
+	// context. The FuncSpec dispatch fans out arg 0 and invokes the function
+	// once per element, assembling an anonymous array of results.
+	FnKindLookupArrayLift
 )
 
 // FuncMeta stores registration-time metadata for a formula function.
@@ -27,47 +33,42 @@ type FuncMeta struct {
 }
 
 var (
-	registry       = map[string]Func{}
-	funcMetaByName = map[string]FuncMeta{}
-	nameToID       = map[string]int{}
-	idToName       []string
+	registry = map[string]Func{}
+	nameToID = map[string]int{}
+	idToName []string
 )
 
 // Register adds a formula function to the global registry.
 // It is safe to call from init(). Duplicate names overwrite silently,
 // allowing external packages (e.g. werkbook-pro) to override or extend.
 func Register(name string, fn Func) {
-	upper := strings.ToUpper(name)
+	upper := normalizeFuncName(name)
 	if _, exists := nameToID[upper]; !exists {
 		id := len(idToName)
 		idToName = append(idToName, upper)
 		nameToID[upper] = id
 	}
-	delete(funcMetaByName, upper)
+	delete(funcSpecByName, upper)
 	registry[upper] = fn
 }
 
-// RegisterWithMeta adds a formula function and stores registration metadata
-// keyed by the function name.
+// RegisterWithMeta preserves the older metadata registration API by translating
+// the metadata into the unified function contract.
 func RegisterWithMeta(name string, fn Func, meta FuncMeta) {
-	Register(name, fn)
-	funcMetaByName[strings.ToUpper(name)] = cloneFuncMeta(meta)
+	RegisterWithSpec(name, fn, funcSpecFromMeta(name, meta))
 }
 
 // RegisterScalarLifted registers a scalar function that should inherit array
 // context for its first argument when the compiler is already in an inherited
 // array evaluation path.
 func RegisterScalarLifted(name string, fn Func) {
-	RegisterWithMeta(name, fn, FuncMeta{
-		Kind:               FnKindScalarLifted,
-		InheritedArrayArgs: map[int]bool{0: true},
-	})
+	RegisterWithSpec(name, fn, scalarLiftedFuncSpec(1, elementWiseCallFuncs[normalizeFuncName(name)], 0))
 }
 
 // LookupFunc returns the function ID for use by the compiler.
 // Returns -1 if the function is not registered.
 func LookupFunc(name string) int {
-	id, ok := nameToID[strings.ToUpper(name)]
+	id, ok := nameToID[normalizeFuncName(name)]
 	if !ok {
 		return -1
 	}
@@ -84,6 +85,9 @@ func CallFunc(funcID int, args []Value, ctx *EvalContext) (Value, error) {
 	if fn == nil {
 		return Value{}, fmt.Errorf("unimplemented function: %s", name)
 	}
+	if spec, ok := funcSpecForName(name); ok {
+		return callFuncWithSpec(name, fn, spec, args, ctx)
+	}
 	if elementWiseCallFuncs[name] && hasArrayArg(args) {
 		return callElementWise(args, ctx, fn)
 	}
@@ -95,26 +99,6 @@ func RegisteredFunctions() []string {
 	out := make([]string, len(idToName))
 	copy(out, idToName)
 	return out
-}
-
-func cloneFuncMeta(meta FuncMeta) FuncMeta {
-	if len(meta.InheritedArrayArgs) == 0 {
-		return meta
-	}
-	cloned := make(map[int]bool, len(meta.InheritedArrayArgs))
-	for idx, ok := range meta.InheritedArrayArgs {
-		cloned[idx] = ok
-	}
-	meta.InheritedArrayArgs = cloned
-	return meta
-}
-
-func funcMetaForName(name string) (FuncMeta, bool) {
-	meta, ok := funcMetaByName[strings.ToUpper(name)]
-	if !ok {
-		return FuncMeta{}, false
-	}
-	return cloneFuncMeta(meta), true
 }
 
 // NoCtx wraps a function that doesn't need EvalContext into a Func.
@@ -132,17 +116,10 @@ var elementWiseCallFuncs = map[string]bool{
 	"ERROR.TYPE": true,
 	"IFERROR":    true,
 	"IFNA":       true,
-	"ISBLANK":    true,
-	"ISERR":      true,
-	"ISERROR":    true,
 	"ISEVEN":     true,
 	"ISLOGICAL":  true,
-	"ISNA":       true,
 	"ISNONTEXT":  true,
-	"ISNUMBER":   true,
 	"ISODD":      true,
-	"ISTEXT":     true,
-	"N":          true,
 	"NOT":        true,
 
 	// Text.
@@ -541,15 +518,8 @@ var inheritedArrayArgFuncs = map[string]map[int]bool{
 	"DATEVALUE": {0: true},
 
 	// Info functions that also lift to arrays.
-	"ISNUMBER": {0: true},
-	"ISTEXT":   {0: true},
-	"ISBLANK":  {0: true},
-	"ISERROR":  {0: true},
-	"ISERR":    {0: true},
-	"ISNA":     {0: true},
-	"NOT":      {0: true},
-	"N":        {0: true},
-	"TYPE":     {0: true},
+	"NOT":  {0: true},
+	"TYPE": {0: true},
 }
 
 // arrayFirstArgFuncs evaluate the first argument in array context because it is
@@ -560,7 +530,9 @@ var arrayFirstArgFuncs = map[string]bool{
 	"CHOOSEROWS":  true,
 	"DROP":        true,
 	"EXPAND":      true,
+	"INDEX":       true,
 	"SORT":        true,
+	"SINGLE":      true,
 	"TAKE":        true,
 	"TOCOL":       true,
 	"TOROW":       true,
@@ -621,8 +593,9 @@ func ArgEvalModeForFuncArg(name string, argIndex int) FuncArgEvalMode {
 }
 
 func inheritedArrayEvalForFuncArg(name string, argIndex int) bool {
-	if meta, ok := funcMetaForName(name); ok && meta.InheritedArrayArgs != nil {
-		return meta.InheritedArrayArgs[argIndex]
+	if spec, ok := funcSpecForName(name); ok {
+		argSpec, ok := funcArgSpec(spec, argIndex)
+		return ok && argSpec.InheritArray
 	}
 	positions, ok := inheritedArrayArgFuncs[strings.ToUpper(name)]
 	return ok && positions[argIndex]
