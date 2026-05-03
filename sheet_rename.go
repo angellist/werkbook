@@ -164,15 +164,15 @@ func rewriteQuotedRef(src string, start int, oldEscaped, newName string) (int, s
 		if !lMatch && !rMatch {
 			return closingQuote + 1, "", false
 		}
-		start := unescapeSheetName(left)
+		lName := unescapeSheetName(left)
 		if lMatch {
-			start = newName
+			lName = newName
 		}
-		end := unescapeSheetName(right)
+		rName := unescapeSheetName(right)
 		if rMatch {
-			end = newName
+			rName = newName
 		}
-		return past, format3DSheetRef(start, end), true
+		return past, format3DSheetRef(lName, rName), true
 	}
 
 	// Simple quoted ref.
