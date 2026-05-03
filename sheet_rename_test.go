@@ -129,6 +129,70 @@ func TestRewriteSheetRefsInFormula_QuotedRefNotFollowedByBang(t *testing.T) {
 	}
 }
 
+func TestRewriteSheetRefsInFormula_CaseInsensitiveQuoted(t *testing.T) {
+	got := rewriteSheetRefsInFormula("'SHEET ONE'!A1", "Sheet One", "Data")
+	want := "Data!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Unquoted3D(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Sheet1:Sheet3!A1", "Sheet1", "Data")
+	want := "Data:Sheet3!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Unquoted3DBothEndpoints(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Sheet1:Sheet1!A1", "Sheet1", "Data")
+	want := "Data:Data!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Unquoted3DSecondOnly(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Other:Sheet1!A1", "Sheet1", "Data")
+	want := "Other:Data!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Unquoted3DNewNameNeedsQuoting(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Sheet1:Sheet3!A1", "Sheet1", "My Sheet")
+	want := "'My Sheet:Sheet3'!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Quoted3D(t *testing.T) {
+	got := rewriteSheetRefsInFormula("'Out - X:Out - Y'!A1", "Out - X", "X")
+	want := "'X:Out - Y'!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Quoted3DBothEndpoints(t *testing.T) {
+	got := rewriteSheetRefsInFormula("'Out - X:Out - X'!A1", "Out - X", "X")
+	want := "X:X!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_Unquoted3DNoMatch(t *testing.T) {
+	src := "Other:Another!A1"
+	got := rewriteSheetRefsInFormula(src, "Sheet1", "Data")
+	if got != src {
+		t.Fatalf("got %q, want %q (unchanged)", got, src)
+	}
+}
+
 // --- Integration tests for SetSheetName formula rewriting ---
 
 func TestSetSheetName_RewritesCrossSheetFormula(t *testing.T) {

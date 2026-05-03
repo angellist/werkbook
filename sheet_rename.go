@@ -19,9 +19,14 @@ func escapeSheetName(name string) string {
 	return strings.ReplaceAll(name, "'", "''")
 }
 
-// formatSheetRef returns the properly formatted sheet!-prefix for use in
-// formula text. The name is quoted only when necessary, and internal
-// apostrophes are doubled per Excel conventions.
+// unescapeSheetName reverses the doubling of apostrophes in a quoted sheet
+// name extracted from formula text.
+func unescapeSheetName(escaped string) string {
+	return strings.ReplaceAll(escaped, "''", "'")
+}
+
+// formatSheetRef returns the properly formatted sheet!-prefix for a simple
+// (non-3D) sheet reference.
 func formatSheetRef(name string) string {
 	if sheetRefNeedsQuoting(name) {
 		return "'" + escapeSheetName(name) + "'!"
@@ -29,11 +34,22 @@ func formatSheetRef(name string) string {
 	return name + "!"
 }
 
+// format3DSheetRef returns the properly formatted sheet!-prefix for a 3D
+// reference (Start:End!). Each endpoint is independently checked for quoting.
+func format3DSheetRef(start, end string) string {
+	if sheetRefNeedsQuoting(start) || sheetRefNeedsQuoting(end) {
+		return "'" + escapeSheetName(start) + ":" + escapeSheetName(end) + "'!"
+	}
+	return start + ":" + end + "!"
+}
+
 // rewriteSheetRefsInFormula rewrites every occurrence of old sheet name
 // references in a formula string to use the new name. It handles:
 //   - Quoted refs: 'Old Name'!A1 → 'New Name'!A1
 //   - Unquoted refs: OldName!A1 → NewName!A1
+//   - 3D refs: 'Start:End'!A1 and Start:End!A1
 //   - Doubled apostrophes in quoted names: 'Fund''s Data'!A1
+//   - Case-insensitive matching (Excel treats sheet refs as case-insensitive)
 //
 // Double-quoted string literals ("...") are skipped to avoid corrupting
 // text content inside formulas.
@@ -42,10 +58,7 @@ func rewriteSheetRefsInFormula(src, oldName, newName string) string {
 		return src
 	}
 
-	// Pre-compute the escaped form of the old name for matching inside
-	// single-quoted regions, and the formatted replacement prefix.
 	oldEscaped := escapeSheetName(oldName)
-	newPrefix := formatSheetRef(newName)
 
 	var b strings.Builder
 	b.Grow(len(src))
@@ -73,63 +86,32 @@ func rewriteSheetRefsInFormula(src, oldName, newName string) string {
 			continue
 		}
 
-		// Quoted sheet reference: 'Sheet Name'!
+		// Quoted sheet reference: 'Name'! or 'Start:End'!
 		if ch == '\'' {
-			j := i + 1
-			var name strings.Builder
-			matched := false
-			for j < len(src) {
-				if src[j] == '\'' {
-					if j+1 < len(src) && src[j+1] == '\'' {
-						// Doubled apostrophe — part of sheet name.
-						name.WriteString("''")
-						j += 2
-						continue
-					}
-					// Closing quote. Check for '!' following.
-					if j+1 < len(src) && src[j+1] == '!' {
-						escapedName := name.String()
-						if escapedName == oldEscaped {
-							b.WriteString(newPrefix)
-							j += 2 // skip past '!
-							matched = true
-						}
-					}
-					break
-				}
-				name.WriteByte(src[j])
-				j++
-			}
-			if matched {
-				i = j
+			end, replacement, ok := rewriteQuotedRef(src, i, oldEscaped, newName)
+			if ok {
+				b.WriteString(replacement)
+				i = end
 				continue
 			}
-			// Not a match — copy as-is and advance past closing quote.
-			if j < len(src) && src[j] == '\'' {
-				b.WriteString(src[i : j+1])
-				i = j + 1
-			} else {
-				// Unterminated quote — copy remainder.
-				b.WriteString(src[i:])
-				return b.String()
+			// Not a match — copy through closing quote.
+			if end <= len(src) {
+				b.WriteString(src[i:end])
 			}
+			i = end
 			continue
 		}
 
-		// Unquoted sheet reference: Identifier! (letters, digits, underscore, dot).
+		// Unquoted reference: Identifier! or Identifier:Identifier! (3D)
 		if isUnquotedSheetStart(ch) {
-			j := i + 1
-			for j < len(src) && isUnquotedSheetCont(src[j]) {
-				j++
-			}
-			word := src[i:j]
-			if j < len(src) && src[j] == '!' && strings.EqualFold(word, oldName) && !sheetRefNeedsQuoting(oldName) {
-				b.WriteString(newPrefix)
-				i = j + 1 // skip past !
+			end, replacement, ok := rewriteUnquotedRef(src, i, oldName, newName)
+			if ok {
+				b.WriteString(replacement)
+				i = end
 				continue
 			}
-			b.WriteString(word)
-			i = j
+			b.WriteString(src[i:end])
+			i = end
 			continue
 		}
 
@@ -138,6 +120,117 @@ func rewriteSheetRefsInFormula(src, oldName, newName string) string {
 	}
 
 	return b.String()
+}
+
+// rewriteQuotedRef attempts to rewrite a quoted sheet reference starting at
+// src[start] (which must be '\''). Returns the index past the consumed region,
+// the replacement string, and whether a rewrite occurred.
+func rewriteQuotedRef(src string, start int, oldEscaped, newName string) (int, string, bool) {
+	j := start + 1
+	var name strings.Builder
+	for j < len(src) {
+		if src[j] == '\'' {
+			if j+1 < len(src) && src[j+1] == '\'' {
+				name.WriteString("''")
+				j += 2
+				continue
+			}
+			break
+		}
+		name.WriteByte(src[j])
+		j++
+	}
+
+	// j at closing quote (or past end).
+	if j >= len(src) || src[j] != '\'' {
+		return len(src), "", false
+	}
+	closingQuote := j
+
+	// Must be followed by '!' to be a sheet reference.
+	if closingQuote+1 >= len(src) || src[closingQuote+1] != '!' {
+		return closingQuote + 1, "", false
+	}
+
+	escaped := name.String()
+	past := closingQuote + 2 // index past '!
+
+	// Check for 3D ref (colon inside the quoted name).
+	if idx := strings.Index(escaped, ":"); idx >= 0 {
+		left := escaped[:idx]
+		right := escaped[idx+1:]
+		lMatch := strings.EqualFold(left, oldEscaped)
+		rMatch := strings.EqualFold(right, oldEscaped)
+		if !lMatch && !rMatch {
+			return closingQuote + 1, "", false
+		}
+		start := unescapeSheetName(left)
+		if lMatch {
+			start = newName
+		}
+		end := unescapeSheetName(right)
+		if rMatch {
+			end = newName
+		}
+		return past, format3DSheetRef(start, end), true
+	}
+
+	// Simple quoted ref.
+	if !strings.EqualFold(escaped, oldEscaped) {
+		return closingQuote + 1, "", false
+	}
+	return past, formatSheetRef(newName), true
+}
+
+// rewriteUnquotedRef attempts to rewrite an unquoted sheet reference starting
+// at src[start]. Handles both simple (Identifier!) and 3D (Id1:Id2!) forms.
+// Returns the index past the consumed region, the replacement string, and
+// whether a rewrite occurred.
+func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, string, bool) {
+	j := start + 1
+	for j < len(src) && isUnquotedSheetCont(src[j]) {
+		j++
+	}
+	word := src[start:j]
+
+	// Only match unquoted old names that don't themselves need quoting.
+	canMatchUnquoted := !sheetRefNeedsQuoting(oldName)
+
+	// Check for 3D ref: Word:Word2!
+	if j < len(src) && src[j] == ':' && canMatchUnquoted {
+		k := j + 1
+		if k < len(src) && isUnquotedSheetStart(src[k]) {
+			m := k + 1
+			for m < len(src) && isUnquotedSheetCont(src[m]) {
+				m++
+			}
+			if m < len(src) && src[m] == '!' {
+				word2 := src[k:m]
+				w1 := strings.EqualFold(word, oldName)
+				w2 := strings.EqualFold(word2, oldName)
+				if w1 || w2 {
+					s, e := word, word2
+					if w1 {
+						s = newName
+					}
+					if w2 {
+						e = newName
+					}
+					return m + 1, format3DSheetRef(s, e), true
+				}
+				// 3D ref but no match — consume including !
+				return m + 1, "", false
+			}
+		}
+	}
+
+	// Simple ref: Word!
+	if j < len(src) && src[j] == '!' && canMatchUnquoted && strings.EqualFold(word, oldName) {
+		return j + 1, formatSheetRef(newName), true
+	}
+
+	// Not a sheet ref — just a bareword; return up to end of word only.
+	return j, "", false
 }
 
 func isUnquotedSheetStart(ch byte) bool {
