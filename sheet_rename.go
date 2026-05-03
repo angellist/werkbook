@@ -197,7 +197,11 @@ func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, st
 	canMatchUnquoted := !sheetRefNeedsQuoting(oldName)
 
 	// Check for 3D ref: Word:Word2!
-	if j < len(src) && src[j] == ':' && canMatchUnquoted {
+	// Only enter 3D detection when Word1 matches the old name. This prevents
+	// false positives in formulas like Sheet1!A1:Sheet1!B1 where, after
+	// rewriting the first Sheet1!, the scanner sees A1:Sheet1! and would
+	// incorrectly treat A1 as a 3D ref endpoint.
+	if j < len(src) && src[j] == ':' && canMatchUnquoted && strings.EqualFold(word, oldName) {
 		k := j + 1
 		if k < len(src) && isUnquotedSheetStart(src[k]) {
 			m := k + 1
@@ -206,20 +210,11 @@ func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, st
 			}
 			if m < len(src) && src[m] == '!' {
 				word2 := src[k:m]
-				w1 := strings.EqualFold(word, oldName)
-				w2 := strings.EqualFold(word2, oldName)
-				if w1 || w2 {
-					s, e := word, word2
-					if w1 {
-						s = newName
-					}
-					if w2 {
-						e = newName
-					}
-					return m + 1, format3DSheetRef(s, e), true
+				e := word2
+				if strings.EqualFold(word2, oldName) {
+					e = newName
 				}
-				// 3D ref but no match — consume including !
-				return m + 1, "", false
+				return m + 1, format3DSheetRef(newName, e), true
 			}
 		}
 	}

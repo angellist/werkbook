@@ -193,6 +193,30 @@ func TestRewriteSheetRefsInFormula_Unquoted3DNoMatch(t *testing.T) {
 	}
 }
 
+func TestRewriteSheetRefsInFormula_RangeWithRepeatedSheetRef(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Sheet1!A1:Sheet1!B1", "Sheet1", "My Sheet")
+	want := "'My Sheet'!A1:'My Sheet'!B1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_RangeWithRepeatedSheetRefNoQuoting(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Sheet1!A1:Sheet1!B1", "Sheet1", "Data")
+	want := "Data!A1:Data!B1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRewriteSheetRefsInFormula_SumRangeAcrossSheetRef(t *testing.T) {
+	got := rewriteSheetRefsInFormula("SUM(Sheet1!A1:Sheet1!A10)", "Sheet1", "My Sheet")
+	want := "SUM('My Sheet'!A1:'My Sheet'!A10)"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 // --- Integration tests for SetSheetName formula rewriting ---
 
 func TestSetSheetName_RewritesCrossSheetFormula(t *testing.T) {
