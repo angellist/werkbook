@@ -161,6 +161,14 @@ func TestRewriteSheetRefsInFormula_Unquoted3DSecondOnly(t *testing.T) {
 	}
 }
 
+func TestRewriteSheetRefsInFormula_Unquoted3DSecondOnlyNeedsQuoting(t *testing.T) {
+	got := rewriteSheetRefsInFormula("Other:Sheet1!A1", "Sheet1", "My Sheet")
+	want := "'Other:My Sheet'!A1"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestRewriteSheetRefsInFormula_Unquoted3DNewNameNeedsQuoting(t *testing.T) {
 	got := rewriteSheetRefsInFormula("Sheet1:Sheet3!A1", "Sheet1", "My Sheet")
 	want := "'My Sheet:Sheet3'!A1"

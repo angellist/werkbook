@@ -197,11 +197,11 @@ func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, st
 	canMatchUnquoted := !sheetRefNeedsQuoting(oldName)
 
 	// Check for 3D ref: Word:Word2!
-	// Only enter 3D detection when Word1 matches the old name. This prevents
-	// false positives in formulas like Sheet1!A1:Sheet1!B1 where, after
-	// rewriting the first Sheet1!, the scanner sees A1:Sheet1! and would
-	// incorrectly treat A1 as a 3D ref endpoint.
-	if j < len(src) && src[j] == ':' && canMatchUnquoted && strings.EqualFold(word, oldName) {
+	// To distinguish genuine 3D refs (Other:Sheet1!A1) from cell-range-colon-
+	// sheet patterns (A1:Sheet1!B1), skip 3D detection when Word1 looks like a
+	// cell reference (letters followed by digits, e.g. A1, BC23). This mirrors
+	// the disambiguation in formula/lexer.go:looksLikeCellRef.
+	if j < len(src) && src[j] == ':' && canMatchUnquoted && !barewordLooksCellRef(word) {
 		k := j + 1
 		if k < len(src) && isUnquotedSheetStart(src[k]) {
 			m := k + 1
@@ -210,11 +210,18 @@ func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, st
 			}
 			if m < len(src) && src[m] == '!' {
 				word2 := src[k:m]
-				e := word2
-				if strings.EqualFold(word2, oldName) {
-					e = newName
+				w1 := strings.EqualFold(word, oldName)
+				w2 := strings.EqualFold(word2, oldName)
+				if w1 || w2 {
+					s, e := word, word2
+					if w1 {
+						s = newName
+					}
+					if w2 {
+						e = newName
+					}
+					return m + 1, format3DSheetRef(s, e), true
 				}
-				return m + 1, format3DSheetRef(newName, e), true
 			}
 		}
 	}
@@ -226,6 +233,28 @@ func rewriteUnquotedRef(src string, start int, oldName, newName string) (int, st
 
 	// Not a sheet ref — just a bareword; return up to end of word only.
 	return j, "", false
+}
+
+// barewordLooksCellRef reports whether a bareword (no $ signs, no special
+// chars) looks like a cell reference — 1-3 letters followed by 1+ digits,
+// e.g. A1, BC23, XFD1048576. Used to disambiguate 3D refs from range
+// operators: in A1:Sheet1!B1, the A1 is a cell ref not a sheet name.
+// Simplified from formula/lexer.go:looksLikeCellRef (which also handles $).
+func barewordLooksCellRef(s string) bool {
+	i := 0
+	for i < len(s) && ((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+		i++
+	}
+	if i == 0 || i > 3 || i >= len(s) {
+		return false
+	}
+	for i < len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		i++
+	}
+	return true
 }
 
 func isUnquotedSheetStart(ch byte) bool {
