@@ -12,15 +12,23 @@ import (
 	"github.com/jpoz/werkbook/ooxml"
 )
 
+// FreezePane holds the freeze-pane configuration for a worksheet.
+type FreezePane struct {
+	XSplit      int    // number of columns frozen from the left
+	YSplit      int    // number of rows frozen from the top
+	TopLeftCell string // cell reference for top-left of scrollable area
+}
+
 // Sheet represents a single worksheet in the workbook.
 type Sheet struct {
-	file      *File
-	name      string
-	visible   bool
-	rows      map[int]*Row
-	colWidths map[int]float64
-	merges    []MergeRange
-	spill     spillOverlay
+	file       *File
+	name       string
+	visible    bool
+	rows       map[int]*Row
+	colWidths  map[int]float64
+	merges     []MergeRange
+	freezePane *FreezePane
+	spill      spillOverlay
 }
 
 func newSheet(name string, file *File) *Sheet {
@@ -267,6 +275,25 @@ func (s *Sheet) MergeCells() []MergeRange {
 	out := make([]MergeRange, len(s.merges))
 	copy(out, s.merges)
 	return out
+}
+
+// GetFreezePane returns the freeze-pane configuration, or nil if none is set.
+func (s *Sheet) GetFreezePane() *FreezePane {
+	if s.freezePane == nil {
+		return nil
+	}
+	cp := *s.freezePane
+	return &cp
+}
+
+// SetFreezePane sets the freeze-pane configuration. Pass nil to remove.
+func (s *Sheet) SetFreezePane(fp *FreezePane) {
+	if fp == nil {
+		s.freezePane = nil
+		return
+	}
+	cp := *fp
+	s.freezePane = &cp
 }
 
 // GetFormula returns the formula for a cell, or "" if none.
@@ -679,6 +706,21 @@ func (s *Sheet) toSheetData(styleMap map[string]int, styles *[]ooxml.StyleData) 
 				StartAxis: mr.Start,
 				EndAxis:   mr.End,
 			}
+		}
+	}
+	if s.freezePane != nil {
+		activePane := "bottomLeft"
+		if s.freezePane.XSplit > 0 && s.freezePane.YSplit > 0 {
+			activePane = "bottomRight"
+		} else if s.freezePane.XSplit > 0 {
+			activePane = "topRight"
+		}
+		sd.FreezePane = &ooxml.FreezePaneData{
+			XSplit:      s.freezePane.XSplit,
+			YSplit:      s.freezePane.YSplit,
+			TopLeftCell: s.freezePane.TopLeftCell,
+			ActivePane:  activePane,
+			State:       "frozen",
 		}
 	}
 	return sd

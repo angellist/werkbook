@@ -409,6 +409,15 @@ func fileFromData(data *ooxml.WorkbookData, cfg openConfig) (*File, error) {
 			}
 		}
 
+		// Restore freeze pane.
+		if sd.FreezePane != nil {
+			s.freezePane = &FreezePane{
+				XSplit:      sd.FreezePane.XSplit,
+				YSplit:      sd.FreezePane.YSplit,
+				TopLeftCell: sd.FreezePane.TopLeftCell,
+			}
+		}
+
 		for _, rd := range sd.Rows {
 			// Restore row height and hidden state.
 			if rd.Height != 0 || rd.Hidden {

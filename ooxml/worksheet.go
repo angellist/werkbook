@@ -6,13 +6,32 @@ import (
 )
 
 type xlsxWorksheet struct {
-	XMLName    xml.Name        `xml:"worksheet"`
-	Xmlns      string          `xml:"xmlns,attr"`
-	XmlnsR     string          `xml:"xmlns:r,attr,omitempty"`
-	Cols       *xlsxCols       `xml:"cols,omitempty"`
-	SheetData  xlsxSheetData   `xml:"sheetData"`
-	MergeCells *xlsxMergeCells `xml:"mergeCells,omitempty"`
-	TableParts *xlsxTableParts `xml:"tableParts,omitempty"`
+	XMLName    xml.Name         `xml:"worksheet"`
+	Xmlns      string           `xml:"xmlns,attr"`
+	XmlnsR     string           `xml:"xmlns:r,attr,omitempty"`
+	SheetViews *xlsxSheetViews  `xml:"sheetViews,omitempty"`
+	Cols       *xlsxCols        `xml:"cols,omitempty"`
+	SheetData  xlsxSheetData    `xml:"sheetData"`
+	MergeCells *xlsxMergeCells  `xml:"mergeCells,omitempty"`
+	TableParts *xlsxTableParts  `xml:"tableParts,omitempty"`
+}
+
+type xlsxSheetViews struct {
+	SheetView []xlsxSheetView `xml:"sheetView"`
+}
+
+type xlsxSheetView struct {
+	TabSelected   ooxmlBool  `xml:"tabSelected,attr,omitempty"`
+	WorkbookViewID int       `xml:"workbookViewId,attr"`
+	Pane           *xlsxPane `xml:"pane,omitempty"`
+}
+
+type xlsxPane struct {
+	XSplit      int    `xml:"xSplit,attr,omitempty"`
+	YSplit      int    `xml:"ySplit,attr,omitempty"`
+	TopLeftCell string `xml:"topLeftCell,attr,omitempty"`
+	ActivePane  string `xml:"activePane,attr,omitempty"`
+	State       string `xml:"state,attr,omitempty"`
 }
 
 type xlsxCols struct {

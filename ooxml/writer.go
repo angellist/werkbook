@@ -331,6 +331,22 @@ func writeSheet(zw *zip.Writer, num int, sd *SheetData, styleIndexMap []int, tab
 		}
 	}
 
+	// Emit sheetViews with freeze pane if present.
+	if sd.FreezePane != nil {
+		ws.SheetViews = &xlsxSheetViews{
+			SheetView: []xlsxSheetView{{
+				WorkbookViewID: 0,
+				Pane: &xlsxPane{
+					XSplit:      sd.FreezePane.XSplit,
+					YSplit:      sd.FreezePane.YSplit,
+					TopLeftCell: sd.FreezePane.TopLeftCell,
+					ActivePane:  sd.FreezePane.ActivePane,
+					State:       sd.FreezePane.State,
+				},
+			}},
+		}
+	}
+
 	// Populate column widths.
 	if len(sd.ColWidths) > 0 {
 		ws.Cols = &xlsxCols{}
