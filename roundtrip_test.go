@@ -110,3 +110,75 @@ func TestRoundTripDuplicateStrings(t *testing.T) {
 		t.Errorf("GetValue(A3) = %v, want other", v.Raw())
 	}
 }
+
+func TestRoundTripFreezePane(t *testing.T) {
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+	s.SetValue("A1", "header")
+	s.SetFreezePane(&werkbook.FreezePane{
+		XSplit:      0,
+		YSplit:      2,
+		TopLeftCell: "A3",
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "freeze.xlsx")
+	if err := f.SaveAs(path); err != nil {
+		t.Fatalf("SaveAs: %v", err)
+	}
+
+	f2, err := werkbook.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	s2 := f2.Sheet("Sheet1")
+	fp := s2.GetFreezePane()
+	if fp == nil {
+		t.Fatal("expected freeze pane, got nil")
+	}
+	if fp.YSplit != 2 {
+		t.Errorf("YSplit = %d, want 2", fp.YSplit)
+	}
+	if fp.XSplit != 0 {
+		t.Errorf("XSplit = %d, want 0", fp.XSplit)
+	}
+	if fp.TopLeftCell != "A3" {
+		t.Errorf("TopLeftCell = %q, want A3", fp.TopLeftCell)
+	}
+}
+
+func TestRoundTripFreezePaneBothAxes(t *testing.T) {
+	f := werkbook.New()
+	s := f.Sheet("Sheet1")
+	s.SetValue("A1", "corner")
+	s.SetFreezePane(&werkbook.FreezePane{
+		XSplit:      1,
+		YSplit:      3,
+		TopLeftCell: "B4",
+	})
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "freeze2.xlsx")
+	if err := f.SaveAs(path); err != nil {
+		t.Fatalf("SaveAs: %v", err)
+	}
+
+	f2, err := werkbook.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	s2 := f2.Sheet("Sheet1")
+	fp := s2.GetFreezePane()
+	if fp == nil {
+		t.Fatal("expected freeze pane, got nil")
+	}
+	if fp.XSplit != 1 {
+		t.Errorf("XSplit = %d, want 1", fp.XSplit)
+	}
+	if fp.YSplit != 3 {
+		t.Errorf("YSplit = %d, want 3", fp.YSplit)
+	}
+	if fp.TopLeftCell != "B4" {
+		t.Errorf("TopLeftCell = %q, want B4", fp.TopLeftCell)
+	}
+}

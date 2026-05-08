@@ -129,6 +129,22 @@ func ReadWorkbook(r io.ReaderAt, size int64) (*WorkbookData, error) {
 
 		sd := SheetData{Name: s.Name, State: s.State}
 
+		// Extract freeze pane from sheetViews.
+		if ws.SheetViews != nil {
+			for _, sv := range ws.SheetViews.SheetView {
+				if sv.Pane != nil && (sv.Pane.State == "frozen" || sv.Pane.State == "frozenSplit") {
+					sd.FreezePane = &FreezePaneData{
+						XSplit:      sv.Pane.XSplit,
+						YSplit:      sv.Pane.YSplit,
+						TopLeftCell: sv.Pane.TopLeftCell,
+						ActivePane:  sv.Pane.ActivePane,
+						State:       sv.Pane.State,
+					}
+					break
+				}
+			}
+		}
+
 		// Extract column widths.
 		if ws.Cols != nil {
 			for _, col := range ws.Cols.Col {

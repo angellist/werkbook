@@ -197,6 +197,15 @@ type ColWidthData struct {
 	Width float64 // column width in character units
 }
 
+// FreezePaneData holds the freeze-pane configuration for a worksheet.
+type FreezePaneData struct {
+	XSplit      int    // number of columns frozen from the left
+	YSplit      int    // number of rows frozen from the top
+	TopLeftCell string // cell reference for top-left of scrollable area
+	ActivePane  string // active pane identifier
+	State       string // "frozen" or "frozenSplit"
+}
+
 // SheetData holds the data for a single worksheet.
 type SheetData struct {
 	Name       string
@@ -204,6 +213,7 @@ type SheetData struct {
 	Rows       []RowData
 	ColWidths  []ColWidthData
 	MergeCells []MergeCellData
+	FreezePane *FreezePaneData
 }
 
 // RowData holds the data for a single row.
