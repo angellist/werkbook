@@ -287,6 +287,9 @@ func TestReRegistrationReplacesRangeSubscriptions(t *testing.T) {
 	g.Register(b1, "S", nil, []RangeAddr{
 		{FromCol: 1, FromRow: 1, ToCol: 2, ToRow: 1},
 	})
+	if deps, ok := g.dependsOn[b1]; !ok || len(deps) != 0 {
+		t.Fatalf("expected range-only formula to have an empty registered dependency set, got %v", deps)
+	}
 	g.Register(b1, "S", nil, []RangeAddr{
 		{FromCol: 1, FromRow: 5, ToCol: 2, ToRow: 5},
 	})
@@ -296,6 +299,35 @@ func TestReRegistrationReplacesRangeSubscriptions(t *testing.T) {
 	}
 	if deps := g.DirectDependents(QualifiedCell{Sheet: "S", Col: 1, Row: 5}); !qcEqual(deps, []QualifiedCell{b1}) {
 		t.Fatalf("expected [B1] in the new range, got %v", deps)
+	}
+}
+
+func TestReRegistrationReplacesPointAndRangeSubscriptions(t *testing.T) {
+	g := NewDepGraph()
+
+	b1 := QualifiedCell{Sheet: "S", Col: 2, Row: 1}
+	g.Register(b1, "S", []CellAddr{{Col: 1, Row: 1}}, []RangeAddr{
+		{FromCol: 1, FromRow: 2, ToCol: 2, ToRow: 2},
+	})
+	g.Register(b1, "S", []CellAddr{{Col: 1, Row: 5}}, []RangeAddr{
+		{FromCol: 1, FromRow: 6, ToCol: 2, ToRow: 6},
+	})
+
+	for _, oldCell := range []QualifiedCell{
+		{Sheet: "S", Col: 1, Row: 1},
+		{Sheet: "S", Col: 2, Row: 2},
+	} {
+		if deps := g.DirectDependents(oldCell); len(deps) != 0 {
+			t.Fatalf("expected old dependency on %v to be removed, got %v", oldCell, deps)
+		}
+	}
+	for _, newCell := range []QualifiedCell{
+		{Sheet: "S", Col: 1, Row: 5},
+		{Sheet: "S", Col: 2, Row: 6},
+	} {
+		if deps := g.DirectDependents(newCell); !qcEqual(deps, []QualifiedCell{b1}) {
+			t.Fatalf("expected [B1] to depend on %v, got %v", newCell, deps)
+		}
 	}
 }
 
@@ -315,6 +347,46 @@ func TestUnregisterUnregisteredCellPreservesOtherRangeSubscriptions(t *testing.T
 	}
 	if len(g.rangeSubs) != 1 {
 		t.Fatalf("expected the registered cell's range subscription to remain, got %d", len(g.rangeSubs))
+	}
+}
+
+func TestUnregisterClearsDynamicRangesWithoutStaticDependencies(t *testing.T) {
+	g := NewDepGraph()
+
+	formulaCell := QualifiedCell{Sheet: "S", Col: 2, Row: 1}
+	g.SetDynamicRanges(formulaCell, DynamicRangeKindSpillBlocker, []RangeAddr{
+		{Sheet: "S", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 3},
+	})
+
+	target := QualifiedCell{Sheet: "S", Col: 1, Row: 2}
+	if deps := g.DirectDependents(target); !qcEqual(deps, []QualifiedCell{formulaCell}) {
+		t.Fatalf("expected dynamic dependent before unregister, got %v", deps)
+	}
+
+	g.Unregister(formulaCell)
+
+	if deps := g.DirectDependents(target); len(deps) != 0 {
+		t.Fatalf("expected no dynamic dependents after unregister, got %v", deps)
+	}
+}
+
+func TestRegisterClearsDynamicRangesWithoutStaticDependencies(t *testing.T) {
+	g := NewDepGraph()
+
+	formulaCell := QualifiedCell{Sheet: "S", Col: 2, Row: 1}
+	g.SetDynamicRanges(formulaCell, DynamicRangeKindSpillBlocker, []RangeAddr{
+		{Sheet: "S", FromCol: 1, FromRow: 1, ToCol: 1, ToRow: 3},
+	})
+
+	target := QualifiedCell{Sheet: "S", Col: 1, Row: 2}
+	if deps := g.DirectDependents(target); !qcEqual(deps, []QualifiedCell{formulaCell}) {
+		t.Fatalf("expected dynamic dependent before register, got %v", deps)
+	}
+
+	g.Register(formulaCell, "S", nil, nil)
+
+	if deps := g.DirectDependents(target); len(deps) != 0 {
+		t.Fatalf("expected no dynamic dependents after register, got %v", deps)
 	}
 }
 
@@ -346,6 +418,9 @@ func TestUnregisterClearsRangeSubs(t *testing.T) {
 	g.Register(d1, "S", nil, []RangeAddr{
 		{FromCol: 1, FromRow: 1, ToCol: 3, ToRow: 3},
 	})
+	if deps, ok := g.dependsOn[d1]; !ok || len(deps) != 0 {
+		t.Fatalf("expected range-only formula to have an empty registered dependency set, got %v", deps)
+	}
 
 	g.Unregister(d1)
 
