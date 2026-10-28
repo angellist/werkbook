@@ -216,17 +216,17 @@ func (g *DepGraph) Unregister(formulaCell QualifiedCell) {
 			}
 		}
 		delete(g.dependsOn, formulaCell)
-	}
 
-	// Remove range subscriptions.
-	n := 0
-	for _, rs := range g.rangeSubs {
-		if rs.formulaCell != formulaCell {
-			g.rangeSubs[n] = rs
-			n++
+		// Register records dependsOn before appending any range subscriptions.
+		n := 0
+		for _, rs := range g.rangeSubs {
+			if rs.formulaCell != formulaCell {
+				g.rangeSubs[n] = rs
+				n++
+			}
 		}
+		g.rangeSubs = g.rangeSubs[:n]
 	}
-	g.rangeSubs = g.rangeSubs[:n]
 
 	if byKind := g.dynamicRanges[formulaCell]; byKind != nil {
 		for kind, ranges := range byKind {
