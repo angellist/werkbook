@@ -6,6 +6,15 @@ import (
 	"github.com/jpoz/werkbook/formula"
 )
 
+func depGraphNumber(t *testing.T, s *Sheet, cell string) float64 {
+	t.Helper()
+	v, err := s.GetValue(cell)
+	if err != nil {
+		t.Fatalf("GetValue(%s): %v", cell, err)
+	}
+	return v.Number
+}
+
 // TestDepGraphSingleDep verifies a single A1→B1 dependency.
 func TestDepGraphSingleDep(t *testing.T) {
 	f := New()
@@ -188,6 +197,76 @@ func TestDepGraphSetFormulaReplacesDeps(t *testing.T) {
 	}
 }
 
+func TestDepGraphSetFormulaReplacesMixedDeps(t *testing.T) {
+	f := New()
+	s := f.Sheet("Sheet1")
+	for cell, value := range map[string]float64{
+		"A1": 10,
+		"B1": 1,
+		"B2": 2,
+		"B3": 3,
+		"C1": 20,
+		"D1": 4,
+		"D2": 5,
+		"D3": 6,
+	} {
+		if err := s.SetValue(cell, value); err != nil {
+			t.Fatalf("SetValue(%s): %v", cell, err)
+		}
+	}
+
+	if err := s.SetFormula("E1", "A1+SUM(B1:B3)"); err != nil {
+		t.Fatalf("SetFormula old: %v", err)
+	}
+	if err := s.SetFormula("E1", "C1+SUM(D1:D3)"); err != nil {
+		t.Fatalf("SetFormula new: %v", err)
+	}
+	if got := depGraphNumber(t, s, "E1"); got != 35 {
+		t.Fatalf("E1 after formula replacement = %v, want 35", got)
+	}
+
+	for _, oldCell := range []string{"A1", "B2"} {
+		deps, err := f.DirectDependents("Sheet1", oldCell)
+		if err != nil {
+			t.Fatalf("DirectDependents(%s): %v", oldCell, err)
+		}
+		if len(deps) != 0 {
+			t.Fatalf("expected old dependency from %s to be removed, got %v", oldCell, deps)
+		}
+	}
+	for _, newCell := range []string{"C1", "D2"} {
+		deps, err := f.DirectDependents("Sheet1", newCell)
+		if err != nil {
+			t.Fatalf("DirectDependents(%s): %v", newCell, err)
+		}
+		if len(deps) != 1 || deps[0].Col != 5 || deps[0].Row != 1 {
+			t.Fatalf("expected E1 to depend on %s, got %v", newCell, deps)
+		}
+	}
+
+	if err := s.SetValue("A1", 100); err != nil {
+		t.Fatalf("SetValue old scalar ref: %v", err)
+	}
+	if err := s.SetValue("B2", 100); err != nil {
+		t.Fatalf("SetValue old range ref: %v", err)
+	}
+	f.Recalculate()
+	if got := depGraphNumber(t, s, "E1"); got != 35 {
+		t.Fatalf("E1 after changing old dependencies = %v, want 35", got)
+	}
+
+	if err := s.SetValue("C1", 30); err != nil {
+		t.Fatalf("SetValue new scalar ref: %v", err)
+	}
+	if err := s.SetValue("D2", 20); err != nil {
+		t.Fatalf("SetValue new range ref: %v", err)
+	}
+	f.Recalculate()
+	if got := depGraphNumber(t, s, "E1"); got != 60 {
+		t.Fatalf("E1 after changing new dependencies = %v, want 60", got)
+	}
+}
+
 // TestDepGraphSetValueClearsFormulaDeps verifies SetValue removes formula deps.
 func TestDepGraphSetValueClearsFormulaDeps(t *testing.T) {
 	f := New()
@@ -213,6 +292,51 @@ func TestDepGraphSetValueClearsFormulaDeps(t *testing.T) {
 	v, _ = s.GetValue("B1")
 	if v.Number != 99 {
 		t.Fatalf("expected 99, got %v", v.Number)
+	}
+}
+
+func TestDepGraphSetValueClearsRangeFormulaDeps(t *testing.T) {
+	f := New()
+	s := f.Sheet("Sheet1")
+	for cell, value := range map[string]float64{
+		"A1": 1,
+		"A2": 2,
+		"A3": 3,
+	} {
+		if err := s.SetValue(cell, value); err != nil {
+			t.Fatalf("SetValue(%s): %v", cell, err)
+		}
+	}
+	if err := s.SetFormula("B1", "SUM(A1:A3)"); err != nil {
+		t.Fatalf("SetFormula B1: %v", err)
+	}
+	if err := s.SetFormula("C1", "B1*2"); err != nil {
+		t.Fatalf("SetFormula C1: %v", err)
+	}
+	if got := depGraphNumber(t, s, "B1"); got != 6 {
+		t.Fatalf("B1 before clearing formula = %v, want 6", got)
+	}
+
+	if err := s.SetValue("B1", 99); err != nil {
+		t.Fatalf("SetValue B1: %v", err)
+	}
+	deps, err := f.DirectDependents("Sheet1", "A2")
+	if err != nil {
+		t.Fatalf("DirectDependents A2: %v", err)
+	}
+	if len(deps) != 0 {
+		t.Fatalf("expected cleared B1 formula to be removed from A2 dependents, got %v", deps)
+	}
+	if err := s.SetValue("A2", 20); err != nil {
+		t.Fatalf("SetValue A2: %v", err)
+	}
+	f.Recalculate()
+
+	if got := depGraphNumber(t, s, "B1"); got != 99 {
+		t.Fatalf("B1 after changing old range input = %v, want constant 99", got)
+	}
+	if got := depGraphNumber(t, s, "C1"); got != 198 {
+		t.Fatalf("C1 after recalculating dependent = %v, want 198", got)
 	}
 }
 
