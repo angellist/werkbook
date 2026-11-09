@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/jpoz/werkbook"
 )
@@ -910,6 +911,7 @@ func TestSUM_FullColumnSkipsUnrelatedSpillEval(t *testing.T) {
 // references inside IFERROR(DATEVALUE(...)) correctly propagates array context
 // through nested non-array functions.
 func TestFILTER_FullColumnWithDATEVALUE(t *testing.T) {
+	now := time.Now()
 	f := werkbook.New()
 	data := f.Sheet("Sheet1")
 	f.SetSheetName("Sheet1", "Data")
@@ -917,11 +919,11 @@ func TestFILTER_FullColumnWithDATEVALUE(t *testing.T) {
 
 	data.SetValue("E1", "Accrued On")
 	data.SetValue("I1", "Amount")
-	data.SetValue("E2", "2026-07-01")
+	data.SetValue("E2", now.AddDate(1, 0, 0).Format("2006-01-02"))
 	data.SetValue("I2", 216994.0)
-	data.SetValue("E3", "2026-10-01")
+	data.SetValue("E3", now.AddDate(2, 0, 0).Format("2006-01-02"))
 	data.SetValue("I3", 216994.0)
-	data.SetValue("E4", "2022-01-01")
+	data.SetValue("E4", now.AddDate(-1, 0, 0).Format("2006-01-02"))
 	data.SetValue("I4", 50000.0)
 
 	out, _ := f.NewSheet("Out")
@@ -942,6 +944,20 @@ func TestFILTER_FullColumnWithDATEVALUE(t *testing.T) {
 	}
 	if v.Number != 2169.94 {
 		t.Errorf("FILTER A1 = %g, want 2169.94", v.Number)
+	}
+	v, err = out.GetValue("A2")
+	if err != nil {
+		t.Fatalf("GetValue(A2): %v", err)
+	}
+	if v.Type != werkbook.TypeNumber || v.Number != 2169.94 {
+		t.Errorf("FILTER A2 = %v, want 2169.94", v)
+	}
+	v, err = out.GetValue("A3")
+	if err != nil {
+		t.Fatalf("GetValue(A3): %v", err)
+	}
+	if v.Type != werkbook.TypeEmpty {
+		t.Errorf("FILTER A3 type = %v, want TypeEmpty", v.Type)
 	}
 
 	// SUM should include both filtered rows.
