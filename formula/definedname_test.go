@@ -2,9 +2,96 @@ package formula
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestDefinedNameExpanderReuse(t *testing.T) {
+	names := []DefinedNameInfo{
+		{Name: "Rate", Value: "2", LocalSheetID: 0},
+		{Name: "RATE", Value: "1", LocalSheetID: -1},
+		{Name: "Rate", Value: "99", LocalSheetID: -1},
+		{Name: "rate", Value: "3", LocalSheetID: 0},
+		{Name: "Rate", Value: "4", LocalSheetID: 1},
+		{Name: "SUM", Value: "5", LocalSheetID: -1},
+		{Name: "A1", Value: "6", LocalSheetID: -1},
+		{Name: "Cube", Value: "LAMBDA(n,n*n*n)", LocalSheetID: -1},
+		{Name: "Cycle", Value: "Cycle", LocalSheetID: -1},
+		{Name: "Huge", Value: strings.Repeat("1", 100), LocalSheetID: -1},
+	}
+	e := NewDefinedNameExpander(names, []string{"North", "South Ops", "Summary"})
+	tests := []struct {
+		src   string
+		sheet int
+		want  string
+	}{
+		{"rAtE+North!RATE+'south ops'!rate", 0, "3+3+4"},
+		{"Rate", 1, "4"},
+		{"Rate", 2, "1"},
+		{"Rate", -1, "1"},
+		{`SUM(A1:A2)+SUM+A1+Sheet1!A1+"Rate"`, 0, `SUM(6:A2)+5+6+Sheet1!A1+"Rate"`},
+		{"Cube(2)", 0, "LAMBDA(n,n*n*n)(2)"},
+		{"Cycle", 0, "Cycle"},
+		{"North!B2:Rate", 0, "North!B2:Rate"},
+		{"", 0, ""},
+	}
+	for pass := 0; pass < 2; pass++ {
+		for _, tt := range tests {
+			got, err := e.ExpandBounded(tt.src, tt.sheet, MaxExpandedFormulaBytes)
+			if err != nil || got != tt.want {
+				t.Errorf("ExpandBounded(%q, %d) = %q, %v; want %q", tt.src, tt.sheet, got, err, tt.want)
+			}
+		}
+	}
+	for _, src := range []string{"Huge", strings.Repeat("x", 101)} {
+		if _, err := e.ExpandBounded(src, 0, 99); !errors.Is(err, ErrFormulaTooLarge) {
+			t.Errorf("ExpandBounded(%q): want ErrFormulaTooLarge, got %v", src, err)
+		}
+	}
+	if got, err := e.ExpandBounded("Huge", 0, 0); err != nil || len(got) != 100 {
+		t.Fatalf("unbounded expansion = %q, %v", got, err)
+	}
+	names[3].Value = "mutated"
+	if got, err := e.ExpandBounded("Rate", 0, 100); err != nil || got != "3" {
+		t.Fatalf("snapshot changed: %q, %v", got, err)
+	}
+	empty := NewDefinedNameExpander(nil, nil)
+	if got, err := empty.ExpandBounded("A1+1", 0, 10); err != nil || got != "A1+1" {
+		t.Fatalf("empty names = %q, %v", got, err)
+	}
+	if _, err := empty.ExpandBounded("A1+1", 0, 2); !errors.Is(err, ErrFormulaTooLarge) {
+		t.Fatalf("empty names size limit: %v", err)
+	}
+}
+
+func BenchmarkDefinedNameExpansion(b *testing.B) {
+	for _, count := range []int{100, 1000, 10000} {
+		names := make([]DefinedNameInfo, count)
+		for i := range names {
+			names[i] = DefinedNameInfo{Name: fmt.Sprintf("Name_%d", i), Value: "42", LocalSheetID: -1}
+		}
+		for _, reuse := range []bool{false, true} {
+			b.Run(fmt.Sprintf("names=%d/reuse=%t", count, reuse), func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					var e *DefinedNameExpander
+					if reuse {
+						e = NewDefinedNameExpander(names, nil)
+					}
+					for j := 0; j < 1000; j++ {
+						if !reuse {
+							e = NewDefinedNameExpander(names, nil)
+						}
+						if _, err := e.ExpandBounded("SUM(A1:A10)+Name_0", j%10, MaxExpandedFormulaBytes); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+			})
+		}
+	}
+}
 
 func TestExpandDefinedNames(t *testing.T) {
 	names := []DefinedNameInfo{

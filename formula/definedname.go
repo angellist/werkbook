@@ -44,39 +44,69 @@ func ExpandDefinedNamesBounded(src string, names []DefinedNameInfo, currentSheet
 	if err := checkExpandedFormulaSize(len(src), maxBytes); err != nil {
 		return "", err
 	}
-	if len(names) == 0 {
-		return src, nil
-	}
+	return NewDefinedNameExpander(names, sheetNames).ExpandBounded(src, currentSheetIdx, maxBytes)
+}
 
-	// Build case-insensitive lookups. Local names for the current sheet take
-	// precedence over global names, while qualified local names stay addressable
-	// as SheetName!LocalName from any sheet.
-	lookup := make(map[string]string, len(names))
-	qualified := make(map[string]string, len(names))
+// DefinedNameExpander indexes a snapshot of workbook and sheet-scoped names.
+// It can be reused across formulas and sheets until names or sheet names change.
+type DefinedNameExpander struct {
+	global    map[string]string
+	local     map[int]map[string]string
+	qualified map[string]string
+}
+
+// NewDefinedNameExpander builds case-insensitive lookups for defined names.
+func NewDefinedNameExpander(names []DefinedNameInfo, sheetNames []string) *DefinedNameExpander {
+	e := &DefinedNameExpander{}
+	if len(names) == 0 {
+		return e
+	}
+	e.global = make(map[string]string)
+	e.local = make(map[int]map[string]string)
+	e.qualified = make(map[string]string)
 	for _, n := range names {
 		key := strings.ToLower(n.Name)
 		if n.LocalSheetID >= 0 {
-			if n.LocalSheetID == currentSheetIdx {
-				lookup[key] = n.Value
+			if e.local[n.LocalSheetID] == nil {
+				e.local[n.LocalSheetID] = make(map[string]string)
 			}
+			e.local[n.LocalSheetID][key] = n.Value
 			if n.LocalSheetID < len(sheetNames) {
-				qualified[qualifiedDefinedNameKey(sheetNames[n.LocalSheetID], n.Name)] = n.Value
+				e.qualified[qualifiedDefinedNameKey(sheetNames[n.LocalSheetID], n.Name)] = n.Value
 			}
 			continue
 		}
-		if _, exists := lookup[key]; !exists {
-			lookup[key] = n.Value
+		if _, exists := e.global[key]; !exists {
+			e.global[key] = n.Value
 		}
 	}
-	if len(lookup) == 0 && len(qualified) == 0 {
+	return e
+}
+
+// ExpandBounded expands names in src using the indexed snapshot. A non-positive
+// maxBytes disables the expansion size check.
+func (e *DefinedNameExpander) ExpandBounded(src string, currentSheetIdx, maxBytes int) (string, error) {
+	if err := checkExpandedFormulaSize(len(src), maxBytes); err != nil {
+		return "", err
+	}
+	local := e.local[currentSheetIdx]
+	if len(e.global) == 0 && len(local) == 0 && len(e.qualified) == 0 {
 		return src, nil
+	}
+	lookup := func(ident string) (string, bool) {
+		key := strings.ToLower(ident)
+		if val, ok := local[key]; ok {
+			return val, true
+		}
+		val, ok := e.global[key]
+		return val, ok
 	}
 
 	var result strings.Builder
 	written := 0
 	i := 0
 	for i < len(src) {
-		if val, consumed, ok := matchQualifiedDefinedName(src, i, qualified); ok {
+		if val, consumed, ok := matchQualifiedDefinedName(src, i, e.qualified); ok {
 			if err := writeExpandedString(&result, &written, val, maxBytes); err != nil {
 				return "", err
 			}
@@ -146,7 +176,7 @@ func ExpandDefinedNamesBounded(src string, names []DefinedNameInfo, currentSheet
 			// CUBE(A1) into LAMBDA(n,n*n*n)(A1), which the parser desugars
 			// as an immediate lambda invocation.
 			if i < len(src) && src[i] == '(' {
-				if val, ok := lookup[strings.ToLower(ident)]; ok && isLambdaValue(val) {
+				if val, ok := lookup(ident); ok && isLambdaValue(val) {
 					if err := writeExpandedString(&result, &written, val, maxBytes); err != nil {
 						return "", err
 					}
@@ -175,7 +205,7 @@ func ExpandDefinedNamesBounded(src string, names []DefinedNameInfo, currentSheet
 			}
 
 			// Check if this identifier is a defined name.
-			if val, ok := lookup[strings.ToLower(ident)]; ok {
+			if val, ok := lookup(ident); ok {
 				// Wrap in parentheses to avoid precedence issues
 				// when the defined name value is a complex expression.
 				if err := writeExpandedString(&result, &written, val, maxBytes); err != nil {
