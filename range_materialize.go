@@ -108,12 +108,18 @@ func (g sheetRangeGrid) ForEachCell(
 	fromCol, fromRow, toCol, toRow int,
 	fn func(col, row int, value formula.Value, occupies bool),
 ) {
-	if g.sheet == nil || fn == nil {
+	if g.sheet == nil || fn == nil || fromCol > toCol || fromRow > toRow {
 		return
 	}
-	for rowNum, sheetRow := range g.sheet.rows {
-		if rowNum < fromRow || rowNum > toRow {
-			continue
+	visitRow := func(rowNum int, sheetRow *Row) {
+		if toCol-fromCol+1 < len(sheetRow.cells) {
+			for colNum := fromCol; colNum <= toCol; colNum++ {
+				if cell := sheetRow.cells[colNum]; cell != nil {
+					g.sheet.resolveCell(cell, colNum, rowNum)
+					fn(colNum, rowNum, valueToFormulaValue(cell.value), cellOccupiesSpillSlot(cell))
+				}
+			}
+			return
 		}
 		for colNum, cell := range sheetRow.cells {
 			if colNum < fromCol || colNum > toCol {
@@ -121,6 +127,19 @@ func (g sheetRangeGrid) ForEachCell(
 			}
 			g.sheet.resolveCell(cell, colNum, rowNum)
 			fn(colNum, rowNum, valueToFormulaValue(cell.value), cellOccupiesSpillSlot(cell))
+		}
+	}
+	if toRow-fromRow+1 < len(g.sheet.rows) {
+		for rowNum := fromRow; rowNum <= toRow; rowNum++ {
+			if row := g.sheet.rows[rowNum]; row != nil {
+				visitRow(rowNum, row)
+			}
+		}
+		return
+	}
+	for rowNum, row := range g.sheet.rows {
+		if rowNum >= fromRow && rowNum <= toRow {
+			visitRow(rowNum, row)
 		}
 	}
 }

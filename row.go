@@ -2,6 +2,7 @@ package werkbook
 
 // Row represents a row in a worksheet.
 type Row struct {
+	sheet  *Sheet
 	num    int
 	cells  map[int]*Cell
 	height float64

@@ -21,14 +21,17 @@ type FreezePane struct {
 
 // Sheet represents a single worksheet in the workbook.
 type Sheet struct {
-	file       *File
-	name       string
-	visible    bool
-	rows       map[int]*Row
-	colWidths  map[int]float64
-	merges     []MergeRange
-	freezePane *FreezePane
-	spill      spillOverlay
+	file         *File
+	name         string
+	visible      bool
+	rows         map[int]*Row
+	colWidths    map[int]float64
+	merges       []MergeRange
+	freezePane   *FreezePane
+	spill        spillOverlay
+	maxRow       int
+	maxCol       int
+	extentsValid bool
 }
 
 func newSheet(name string, file *File) *Sheet {
@@ -225,6 +228,7 @@ func (s *Sheet) RemoveRow(row int) error {
 		}
 	}
 	s.rows = newRows
+	s.extentsValid = false
 	s.adjustMergedRows(row)
 	s.file.rebuildFormulaState()
 	return nil
@@ -249,6 +253,7 @@ func (s *Sheet) RemoveRowsFrom(start int) error {
 	}
 	s.truncateMergedRows(start)
 	if removed {
+		s.extentsValid = false
 		s.file.rebuildFormulaState()
 	}
 	return nil
@@ -458,8 +463,9 @@ func cellOccupiesSpillSlot(c *Cell) bool {
 func (s *Sheet) ensureRow(num int) *Row {
 	r, ok := s.rows[num]
 	if !ok {
-		r = &Row{num: num, cells: make(map[int]*Cell)}
+		r = &Row{num: num, cells: make(map[int]*Cell), sheet: s}
 		s.rows[num] = r
+		s.extentsValid = false
 	}
 	return r
 }
@@ -469,6 +475,9 @@ func (r *Row) ensureCell(col int) *Cell {
 	if !ok {
 		c = &Cell{col: col}
 		r.cells[col] = c
+		if r.sheet != nil {
+			r.sheet.extentsValid = false
+		}
 	}
 	return c
 }
@@ -496,26 +505,34 @@ func (s *Sheet) Rows() iter.Seq[*Row] {
 
 // MaxRow returns the highest 1-based row number with data, or 0 if empty.
 func (s *Sheet) MaxRow() int {
-	max := 0
-	for n := range s.rows {
-		if n > max {
-			max = n
-		}
-	}
-	return max
+	s.refreshExtents()
+	return s.maxRow
 }
 
 // MaxCol returns the highest 1-based column number with data across all rows, or 0 if empty.
 func (s *Sheet) MaxCol() int {
-	max := 0
-	for _, r := range s.rows {
+	s.refreshExtents()
+	return s.maxCol
+}
+
+// Extents describe stored rows and cells, including empty or styled cells.
+// Logical spill bounds are tracked separately by the spill overlay.
+func (s *Sheet) refreshExtents() {
+	if s.extentsValid {
+		return
+	}
+	s.maxRow, s.maxCol = 0, 0
+	for row, r := range s.rows {
+		if row > s.maxRow {
+			s.maxRow = row
+		}
 		for c := range r.cells {
-			if c > max {
-				max = c
+			if c > s.maxCol {
+				s.maxCol = c
 			}
 		}
 	}
-	return max
+	s.extentsValid = true
 }
 
 // PrintTo writes a human-readable table of all cell values to w.
