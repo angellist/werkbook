@@ -41,16 +41,22 @@ func ExpandDefinedNames(src string, names []DefinedNameInfo, currentSheetIdx int
 // the expanded formula would exceed maxBytes. A non-positive maxBytes disables
 // the size check.
 func ExpandDefinedNamesBounded(src string, names []DefinedNameInfo, currentSheetIdx int, sheetNames []string, maxBytes int) (string, error) {
-	if err := checkExpandedFormulaSize(len(src), maxBytes); err != nil {
-		return "", err
-	}
-	if len(names) == 0 {
-		return src, nil
-	}
+	return NewDefinedNameIndex(names, currentSheetIdx, sheetNames).ExpandBounded(src, maxBytes)
+}
 
-	// Build case-insensitive lookups. Local names for the current sheet take
-	// precedence over global names, while qualified local names stay addressable
-	// as SheetName!LocalName from any sheet.
+// DefinedNameIndex holds the case-insensitive names visible from one sheet.
+// Rebuild it when defined names or sheet names change.
+type DefinedNameIndex struct {
+	lookup    map[string]string
+	qualified map[string]string
+}
+
+// NewDefinedNameIndex snapshots global, local, and qualified name lookups.
+func NewDefinedNameIndex(names []DefinedNameInfo, currentSheetIdx int, sheetNames []string) *DefinedNameIndex {
+	index := &DefinedNameIndex{}
+	if len(names) == 0 {
+		return index
+	}
 	lookup := make(map[string]string, len(names))
 	qualified := make(map[string]string, len(names))
 	for _, n := range names {
@@ -68,6 +74,17 @@ func ExpandDefinedNamesBounded(src string, names []DefinedNameInfo, currentSheet
 			lookup[key] = n.Value
 		}
 	}
+	index.lookup, index.qualified = lookup, qualified
+	return index
+}
+
+// ExpandBounded expands names using the snapshot, enforcing maxBytes as in
+// ExpandDefinedNamesBounded. A non-positive limit disables the size check.
+func (index *DefinedNameIndex) ExpandBounded(src string, maxBytes int) (string, error) {
+	if err := checkExpandedFormulaSize(len(src), maxBytes); err != nil {
+		return "", err
+	}
+	lookup, qualified := index.lookup, index.qualified
 	if len(lookup) == 0 && len(qualified) == 0 {
 		return src, nil
 	}

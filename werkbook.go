@@ -13,20 +13,21 @@ import (
 
 // File represents an XLSX workbook.
 type File struct {
-	sheets         []*Sheet
-	sheetNames     []string
-	date1904       bool // true if the workbook uses the 1904 date system
-	calcProps      CalcProperties
-	coreProps      CoreProperties
-	corePropsRaw   []byte
-	corePropsDirty bool
-	calcGen        uint64            // incremented on any cell mutation; starts at 1
-	batchWrites    int               // >0 while inside BeginBatchWrite/EndBatchWrite
-	evaluating     map[cellKey]bool  // tracks cells being evaluated (circular ref detection)
-	deps           *formula.DepGraph // cell dependency graph for incremental recalculation
-	tableDefs      []Table
-	tables         []formula.TableInfo       // table definitions for structured reference expansion
-	definedNames   []formula.DefinedNameInfo // defined names (named ranges) for formula expansion
+	sheets             []*Sheet
+	sheetNames         []string
+	date1904           bool // true if the workbook uses the 1904 date system
+	calcProps          CalcProperties
+	coreProps          CoreProperties
+	corePropsRaw       []byte
+	corePropsDirty     bool
+	calcGen            uint64            // incremented on any cell mutation; starts at 1
+	batchWrites        int               // >0 while inside BeginBatchWrite/EndBatchWrite
+	evaluating         map[cellKey]bool  // tracks cells being evaluated (circular ref detection)
+	deps               *formula.DepGraph // cell dependency graph for incremental recalculation
+	tableDefs          []Table
+	tables             []formula.TableInfo       // table definitions for structured reference expansion
+	definedNames       []formula.DefinedNameInfo // defined names (named ranges) for formula expansion
+	definedNameIndexes map[int]*formula.DefinedNameIndex
 }
 
 // cellKey identifies a cell across the entire workbook for circular ref detection.
@@ -162,6 +163,7 @@ func (f *File) DeleteSheet(name string) error {
 }
 
 func (f *File) addSheet(name string) *Sheet {
+	f.definedNameIndexes = nil
 	s := newSheet(name, f)
 	f.sheets = append(f.sheets, s)
 	f.sheetNames = append(f.sheetNames, name)
@@ -623,6 +625,7 @@ func (f *File) buildWorkbookData() *ooxml.WorkbookData {
 // registerAllFormulas iterates all cells and registers compiled formulas in
 // the dependency graph. Called at the end of fileFromData.
 func (f *File) rebuildFormulaState() {
+	f.definedNameIndexes = nil
 	f.calcGen++
 	f.deps = formula.NewDepGraph()
 	for _, s := range f.sheets {
@@ -646,7 +649,16 @@ func (f *File) expandFormula(src string, sheetName string, row int) (string, err
 	if len(src) > formula.MaxExpandedFormulaBytes {
 		return "", fmt.Errorf("%w: expanded formula exceeds %d bytes", formula.ErrFormulaTooLarge, formula.MaxExpandedFormulaBytes)
 	}
-	return formula.ExpandDefinedNamesBounded(src, f.definedNames, f.SheetIndex(sheetName), f.sheetNames, formula.MaxExpandedFormulaBytes)
+	sheetIdx := f.SheetIndex(sheetName)
+	if f.definedNameIndexes == nil {
+		f.definedNameIndexes = make(map[int]*formula.DefinedNameIndex)
+	}
+	index := f.definedNameIndexes[sheetIdx]
+	if index == nil {
+		index = formula.NewDefinedNameIndex(f.definedNames, sheetIdx, f.sheetNames)
+		f.definedNameIndexes[sheetIdx] = index
+	}
+	return index.ExpandBounded(src, formula.MaxExpandedFormulaBytes)
 }
 
 func (f *File) registerAllFormulas(strict bool) error {
