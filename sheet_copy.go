@@ -38,6 +38,7 @@ func (f *File) CloneSheetFrom(src *Sheet, dstName string) (*Sheet, error) {
 
 	for rowNum, srcRow := range src.rows {
 		dstRow := &Row{
+			sheet:  dst,
 			num:    rowNum,
 			cells:  make(map[int]*Cell, len(srcRow.cells)),
 			height: srcRow.height,

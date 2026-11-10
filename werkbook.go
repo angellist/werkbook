@@ -27,6 +27,7 @@ type File struct {
 	tableDefs      []Table
 	tables         []formula.TableInfo       // table definitions for structured reference expansion
 	definedNames   []formula.DefinedNameInfo // defined names (named ranges) for formula expansion
+	nameExpander   *formula.DefinedNameExpander
 }
 
 // cellKey identifies a cell across the entire workbook for circular ref detection.
@@ -162,6 +163,7 @@ func (f *File) DeleteSheet(name string) error {
 }
 
 func (f *File) addSheet(name string) *Sheet {
+	f.nameExpander = nil
 	s := newSheet(name, f)
 	f.sheets = append(f.sheets, s)
 	f.sheetNames = append(f.sheetNames, name)
@@ -623,6 +625,7 @@ func (f *File) buildWorkbookData() *ooxml.WorkbookData {
 // registerAllFormulas iterates all cells and registers compiled formulas in
 // the dependency graph. Called at the end of fileFromData.
 func (f *File) rebuildFormulaState() {
+	f.nameExpander = nil
 	f.calcGen++
 	f.deps = formula.NewDepGraph()
 	for _, s := range f.sheets {
@@ -646,7 +649,10 @@ func (f *File) expandFormula(src string, sheetName string, row int) (string, err
 	if len(src) > formula.MaxExpandedFormulaBytes {
 		return "", fmt.Errorf("%w: expanded formula exceeds %d bytes", formula.ErrFormulaTooLarge, formula.MaxExpandedFormulaBytes)
 	}
-	return formula.ExpandDefinedNamesBounded(src, f.definedNames, f.SheetIndex(sheetName), f.sheetNames, formula.MaxExpandedFormulaBytes)
+	if f.nameExpander == nil {
+		f.nameExpander = formula.NewDefinedNameExpander(f.definedNames, f.sheetNames)
+	}
+	return f.nameExpander.ExpandBounded(src, f.SheetIndex(sheetName), formula.MaxExpandedFormulaBytes)
 }
 
 func (f *File) registerAllFormulas(strict bool) error {
